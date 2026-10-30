@@ -1,0 +1,7 @@
+# Reading the recordings (Parakeet speech-to-text through NeMo), the vision library and the speaker tools. Large (about 5 GB with the CUDA build of torch).
+# Install the torch build for the machine first: https://pytorch.org/get-started/locally/ (developed with torch 2.11.0+cu128 on an Nvidia GPU).
+# Without an Nvidia GPU transcription still works on the CPU but is much slower: read a short recording or work from the saved transcripts.
+torch==2.11.0
+torchaudio==2.11.0
+transformers==5.20.1
+nemo-toolkit==3.0.0

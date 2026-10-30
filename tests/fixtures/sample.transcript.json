@@ -1,0 +1,17 @@
+{
+  "source": "clip.mkv",
+  "duration": 20.0,
+  "words": [
+    {"word": "so", "start": 0.5, "end": 1.0},
+    {"word": "today", "start": 1.2, "end": 2.0},
+    {"word": "we", "start": 2.2, "end": 3.0},
+    {"word": "so", "start": 8.0, "end": 9.0},
+    {"word": "today", "start": 9.2, "end": 10.0},
+    {"word": "again", "start": 15.0, "end": 16.0}
+  ],
+  "segments": [
+    {"start": 0.5, "end": 3.0, "text": "So today we build a shark"},
+    {"start": 8.0, "end": 10.0, "text": "So today we build a whale"},
+    {"start": 15.0, "end": 16.0, "text": "Something else entirely"}
+  ]
+}

@@ -1,0 +1,16 @@
+# Python packages for the app and its tests (the versions the app was developed and tested with).
+#   python -m venv .venv ; .venv\Scripts\pip install -r requirements.txt
+# Also needed on the machine, not from pip: ffmpeg + ffprobe on PATH, Node (for the HyperFrames graphics), and the Claude Code CLI.
+# Reading recordings (transcription) needs requirements-speech.txt as well; everything else, including the tests, runs without it.
+numpy==2.5.4
+scipy==1.18.1
+pillow==13.0.0
+opencv-python-headless==5.0.0.93
+librosa==1.0.0
+soundfile==0.14.0
+pyloudnorm==0.2.0
+mediapipe==1.1.1
+pytest==9.2.0
+playwright==1.64.1
+pytest-playwright==0.10.0
+faster-whisper==1.2.1          # the Whisper family: reads recordings where Parakeet cannot run (no Nvidia card); needs no extra download tool

@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+# your own settings and notes about particular machines or videos
+config.local.json
+*.log

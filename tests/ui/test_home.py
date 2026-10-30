@@ -1,0 +1,55 @@
+import pytest
+
+from playwright.sync_api import expect
+
+from conftest import clutter, visible_text
+
+pytestmark = pytest.mark.ui
+
+
+def make_video(title, outline=True):
+    import workflow
+    r = workflow.create(title)
+    if outline:
+        (workflow.WORK / r["work"] / f"{r['name']}.script.md").write_text("# outline", encoding="utf-8")
+    return r
+
+
+def test_home_shows_cards_with_a_sentence_and_one_button(screen):
+    make_video("ui card video")
+    page = screen("/v2/")
+    card = page.locator(".vcard", has_text="ui card video")
+    assert "Outline written: add your footage next" in card.inner_text()
+    assert card.locator("a.main").inner_text() == "Add footage"
+    assert clutter(visible_text(page)) == []
+
+
+def test_button_opens_the_video_page_with_the_step_bar(screen):
+    make_video("ui step video")
+    page = screen("/v2/")
+    page.locator(".vcard", has_text="ui step video").locator("a.main").click()
+    page.wait_for_selector(".stepbar")
+    assert page.locator(".step").all_inner_texts() == ["Outline", "Footage", "Rough cut", "Preview", "Final", "Shorts"]
+    assert page.locator(".step.current").inner_text() == "Footage"
+    assert page.locator('.step[data-dot="result"]').all_inner_texts() == ["Outline"]
+    assert clutter(visible_text(page)) == []
+
+
+def test_any_step_can_be_opened_and_new_video_works(screen):
+    page = screen("/v2/")
+    page.once("dialog", lambda d: d.accept("ui brand new"))
+    page.click("#newVideo")
+    page.wait_for_selector(".stepbar")
+    assert page.locator("h1").inner_text() == "ui brand new"
+    assert page.locator(".step.current").inner_text() == "Outline"
+    page.click("text=Shorts")
+    expect(page.locator(".step.current")).to_have_text("Shorts")
+    page.click("text=Your videos")
+    page.wait_for_selector(".vcard")
+    expect(page.locator(".vcard", has_text="ui brand new")).to_have_count(1)
+    assert clutter(visible_text(page)) == []
+
+
+def test_clutter_check_catches_forbidden_text():
+    assert clutter("see beat B12 in plan.json costs $0.42") != []
+    assert clutter("Rough cut 2 ready to watch, about 4 min") == []

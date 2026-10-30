@@ -1,0 +1,132 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!--
+  Difficulty-rating bar: transparent overlay across the bottom of the frame so faces stay visible.
+  Rendered with --format mov (alpha). Timing, copy and the rating values live in CONFIG (bottom);
+  the review app edits it (tools/review_app). Beats are graphic-local seconds (source - anchor).
+  To use: copy to graphics/<video>/<name>/index.html, fill in the CONFIG placeholder (example:
+  graphics/brain-transplant/rating-revo), then run
+      python tools\review_app\server.py --sync <that index.html>
+  which writes the markup text and data-duration from CONFIG (HyperFrames reads both from the markup).
+  Style: see youtube-edit skill "Motion graphics style guide".
+-->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;800&display=swap">
+<style>
+  :root { --navy:#142C44; --ink:#0B1724; --steel:#2C4A66; --blue:#68A3CF; --blue-lt:#A9CDE8;
+          --orange:#E2703A; --orange-dk:#C9603E; --cream:#F4EDE4; }
+  html, body { margin:0; background:transparent; }
+  #stage { position:relative; width:1920px; height:1080px; overflow:hidden; background:transparent;
+           font-family:Poppins, "Segoe UI", Arial, sans-serif; }
+  #panel { position:absolute; left:160px; top:820px; width:1600px; height:210px; border-radius:36px;
+           background:rgba(20,44,68,0.94); box-shadow:0 12px 0 rgba(0,0,0,0.30); }
+  #title { position:absolute; left:200px; top:684px; padding:12px 30px; border-radius:999px;
+           background:var(--orange); color:var(--cream); font-weight:800; font-size:40px;
+           box-shadow:0 8px 0 rgba(0,0,0,0.25); white-space:nowrap; }
+  .tick { position:absolute; top:915px; width:60px; margin-left:-30px; text-align:center;
+          color:var(--blue-lt); font-weight:800; font-size:30px; }
+  .end { position:absolute; top:968px; color:var(--cream); font-weight:600; font-size:28px; opacity:0; white-space:nowrap; }
+  #track { position:absolute; left:260px; top:882px; width:1400px; height:18px; border-radius:9px; background:var(--steel); }
+  #fill { position:absolute; left:260px; top:882px; width:0; height:18px; border-radius:9px; background:var(--orange); }
+  .marker { position:absolute; top:842px; width:96px; height:96px; margin-left:-48px; border-radius:50%;
+            display:flex; align-items:center; justify-content:center; font-weight:800; font-size:40px;
+            box-shadow:0 8px 0 rgba(0,0,0,0.30); opacity:0; }
+  #marker { background:var(--orange); color:var(--cream); border:6px solid var(--cream); }
+  #ghost { background:var(--blue); color:var(--ink); border:6px solid var(--cream); }
+  .mlabel { position:absolute; top:760px; transform:translateX(-50%); padding:8px 22px; border-radius:999px;
+            font-weight:800; font-size:32px; white-space:nowrap; opacity:0; box-shadow:0 6px 0 rgba(0,0,0,0.25); }
+  #mlabel { background:var(--cream); color:var(--ink); }
+  #glabel { background:var(--blue); color:var(--ink); }
+</style>
+</head>
+<body>
+<div id="stage" data-composition-id="rating" data-start="0" data-duration="__DURATION__"
+     data-width="1920" data-height="1080" data-fps="30">
+  <div id="bar" class="clip" data-start="0" data-duration="__DURATION__" data-track-index="0" style="opacity:0">
+    <div id="panel"></div>
+    <div id="title">__TITLE__</div>
+    <div id="track"></div>
+    <div id="fill"></div>
+    <div id="ticks"></div>
+    <div id="endL" class="end" style="left:230px;">1 = No way I could've done this</div>
+    <div id="endR" class="end" style="right:230px; text-align:right;">10 = Faster by myself</div>
+    <div id="ghost" class="marker"></div>
+    <div id="glabel" class="mlabel"></div>
+    <div id="marker" class="marker">?</div>
+    <div id="mlabel" class="mlabel"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script>
+    // CONFIG:BEGIN  Edited by tools/review_app. beats = graphic-local seconds (source time - anchor);
+    // beatWords = the words each beat is timed to; clips = scene windows [start, end] as seconds, a beat
+    // name or [beat, offset]; text = on-screen copy; tagColors / roles = brand tokens; pos = [left, top]
+    // in px; params: scanReps = drumroll scans, lands = [[beat, value, label], ...] (marker landings),
+    // verdict = label over the final landing (beat "verdict"), ghost = [value, label, text] (an earlier
+    // rating shown for comparison, beat "ghost"). Optional beats: wiggle, ghost, verdict. Keep it valid JSON.
+    const CONFIG = __CONFIG__;
+    // CONFIG:END
+    const B = CONFIG.beats, P = CONFIG.params;
+    (function applyConfig(c) {
+      const $ = id => document.getElementById(id);
+      for (const [id, html] of Object.entries(c.text || {})) $(id).innerHTML = html;
+      for (const [id, tok] of Object.entries(c.tagColors || {})) { $(id).classList.remove("orange", "blue", "cream"); $(id).classList.add(tok); }
+      for (const [role, tok] of Object.entries(c.roles || {})) document.documentElement.style.setProperty("--" + role, "var(--" + tok + ")");
+      for (const [id, [x, y]] of Object.entries(c.pos || {})) { $(id).style.left = x + "px"; $(id).style.top = y + "px"; }
+    })(CONFIG);
+
+    const X = v => 260 + (v - 1) / 9 * 1400;          // scale value -> px
+    const ticks = document.getElementById("ticks");
+    for (let v = 1; v <= 10; v++) {
+      const d = document.createElement("div");
+      d.className = "tick"; d.style.left = X(v) + "px"; d.textContent = v;
+      ticks.appendChild(d);
+    }
+    const tl = gsap.timeline({ paused: true });
+    const pop = (sel, t) => tl.fromTo(sel, { opacity: 0, scale: 0.4 },
+                                      { opacity: 1, scale: 1, duration: 0.6, ease: "elastic.out(1, 0.5)" }, t);
+
+    tl.fromTo("#bar", { opacity: 0, y: 260 }, { opacity: 1, y: 0, duration: 0.6, ease: "back.out(1.6)" }, B.in);
+    tl.fromTo("#endL", { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: 0.4, ease: "back.out(2)" }, B.endL);
+    tl.fromTo("#endR", { opacity: 0, x: 30 }, { opacity: 1, x: 0, duration: 0.4, ease: "back.out(2)" }, B.endR);
+
+    // "How would you rate it?" - marker appears and nervously scans the scale (drumroll).
+    tl.set("#marker", { left: X(5.5) }, B.ask);
+    pop("#marker", B.ask);
+    tl.to("#marker", { left: X(3), duration: 0.35, ease: "sine.inOut", yoyo: true, repeat: P.scanReps,
+                       repeatRefresh: false }, B.ask + 0.4);
+    tl.to("#marker", { left: X(8), duration: 0.35, ease: "sine.inOut" }, B.ask + 0.4 + 0.35 * (P.scanReps + 1));
+
+    // Landings: each [beat, value, label]
+    P.lands.forEach(([beat, v, label], i) => {
+      const t = B[beat];
+      tl.to("#marker", { left: X(v), duration: 0.45, ease: "back.out(2.2)" }, t);
+      tl.to("#fill", { width: X(v) - 260, duration: 0.45, ease: "back.out(2.2)" }, t);
+      tl.call(() => { document.getElementById("marker").textContent = label; }, null, t);
+      tl.fromTo("#marker", { scaleY: 0.7, scaleX: 1.25 }, { scaleY: 1, scaleX: 1, duration: 0.5, ease: "elastic.out(1, 0.4)" }, t + 0.4);
+    });
+    // Reverse each label swap so scrubbing backwards shows the right text.
+    tl.call(() => { document.getElementById("marker").textContent = "?"; }, null, B.ask);
+
+    if (P.verdict) {
+      const t = B.verdict, text = P.verdict;
+      tl.set("#mlabel", { left: X(P.lands.at(-1)[1]), textContent: text }, t);
+      pop("#mlabel", t);
+    }
+    if (B.wiggle !== undefined) tl.to("#marker", { rotation: 12, duration: 0.12, yoyo: true, repeat: 5, ease: "sine.inOut" }, B.wiggle);
+    if (P.ghost) {
+      const t = B.ghost, [v, label, text] = P.ghost;
+      tl.set("#ghost", { left: X(v), textContent: label }, t);
+      pop("#ghost", t);
+      tl.set("#glabel", { left: X(v), textContent: text }, t + 0.3);
+      pop("#glabel", t + 0.3);
+    }
+    tl.to("#bar", { opacity: 0, y: 260, duration: 0.5, ease: "back.in(1.6)" }, B.out);
+
+    window.__timelines = window.__timelines || {};
+    window.__timelines.rating = tl;
+  </script>
+</div>
+</body>
+</html>

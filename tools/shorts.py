@@ -1,0 +1,591 @@
+"""Shorts: cut vertical YouTube Shorts (1080x1920) out of a finished video.
+
+Usage:
+    python shorts.py plan   <shorts.json> <id>            # build the pieces, print them, write <id>.plan.json
+    python shorts.py sheet  <shorts.json> <id>            # contact sheet: each piece's frame with its crop box drawn
+    python shorts.py render <shorts.json> <id> [--out F]  # render the vertical preview (NVENC)
+
+<shorts.json> (one per finished video, in its work folder):
+    {"source": "<final.mp4>", "transcript": "<transcript.json>", "speakers": "<speakers.json>",
+     "shorts": [{"id": "s1", "title": "...", "hook": "NEVER USE A COLD IRON",
+                 "ranges": [[20.6, 40.6], [58.3, 71.8]],      # source seconds, played in this order
+                 "drop": [[24.4, 25.0]],                      # source seconds to cut out of the ranges
+                 "words": {"24.5": "Spheres."},               # caption fixes by word start time
+                 "crops": [{"t": 22.0, "cx": 0.27, "cy": 0.4, "zoom": 1.1}]}]}   # per-piece overrides, by source time
+
+How a short is made (all local and free):
+  * Dead air is cut: only the words are kept, with 0.05 s before and 0.12 s after each phrase.
+  * Fast cuts: a continuous run longer than ~3 s is split at a comma or the biggest gap, and the picture alternates between
+    two zoom levels at each split (the audio does not jump), so something changes every 2 to 3 seconds.
+  * Live shots are cropped to a 9:16 window on the speaker; graphics (navy full-screen cards) are fitted on a navy
+    background in the upper middle. Crops are guesses (face finder plus "The host on the right, the co-host on the left"); the contact
+    sheet is how they are checked, and "crops" overrides them.
+  * Captions: ASS, big uppercase, 1 to 3 words at a time, the spoken word turns orange and pops. A hook title shows in the
+    first 2.8 s, a thin orange progress bar runs along the bottom, audio is loudness-matched to -14 LUFS.
+"""
+import argparse
+import hashlib
+import json
+import os
+import re
+import shutil
+import time
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import channel  # noqa: E402
+
+W, H = 1080, 1920
+SRC_W, SRC_H = 1920, 1080
+NAVY_BGR = (66, 43, 20)            # #142C44 in OpenCV's BGR
+ORANGE_ASS = "&H003A70E2&"         # #E2703A as ASS BGR
+CREAM_ASS = "&H00E4EDF4&"
+# How the short is paced. gap = a silence longer than this is cut out; zooms = at every real cut (silence removed, words cut out) the picture steps to the next
+# of these crop zooms, a small step like a jump cut (gzooms: the same for graphic cards); speed = the whole short is played this much faster (voice pitch is kept);
+# before/after = seconds kept around each phrase. "natural" is the default. (An earlier "aggressive" pace pulsed the zoom every 1.8 s inside sentences: The creator hated it,
+# 2026-10-23. Aggressive CUTTING means cutting words and sentences out of the content: see the "drop" list and shortsapp's tighten.)
+PACES = {
+    "relaxed": {"gap": 0.40, "zooms": (1.0,), "gzooms": (1.0,), "speed": 1.0, "before": 0.06, "after": 0.15, "label": "Relaxed (keeps most pauses, no zoom steps)"},
+    "natural": {"gap": 0.28, "zooms": (1.0, 1.08), "gzooms": (1.0,), "speed": 1.0, "before": 0.05, "after": 0.12, "label": "Natural (small zoom step at each cut)"},
+    "tight":   {"gap": 0.18, "zooms": (1.0, 1.08), "gzooms": (1.0,), "speed": 1.05, "before": 0.03, "after": 0.08, "label": "Tight (shorter pauses, 5 % faster)"},
+}
+LEGACY_PACE = {"calm": "relaxed", "fast": "natural", "aggressive": "tight"}
+
+
+def pace_of(short):
+    k = short.get("pace") or "natural"
+    return PACES.get(LEGACY_PACE.get(k, k), PACES["natural"])
+
+
+FONT_FILE = "Oswald-Bold.ttf"      # brand headline font, _editor/fonts (static Bold made from the Google Fonts variable file)
+FONT_NAME = "Oswald"
+FILLERS = {"okay", "yeah", "right", "yes", "mm", "hmm", "uh", "um", "alright"}
+# the channel's own words that speech recognition mishears come from the profile's terms (channel.corrections), applied to every caption
+
+
+def load(path):
+    p = Path(path)
+    cfg = json.loads(p.read_text(encoding="utf-8"))
+    base = p.parent
+    cfg["_base"] = base
+    cfg["_tr"] = json.loads(Path(cfg["transcript"]).read_text(encoding="utf-8"))
+    sp = cfg.get("speakers")
+    cfg["_spk"] = json.loads(Path(sp).read_text(encoding="utf-8")) if sp and Path(sp).exists() else []
+    return cfg
+
+
+def speaker_at(cfg, t):
+    for s in cfg["_spk"]:
+        if s["start"] - 0.05 <= t <= s["end"] + 0.05:
+            return s["speaker"]
+    return channel.host()
+
+
+def fix_word(w):
+    core = re.sub(r"[^\w']", "", w)
+    for pat, rep in channel.corrections():
+        if re.match(pat, core, re.I):
+            return w.replace(core, rep) if core in w else rep
+    return w
+
+
+def kept_words(cfg, short, flag=False):
+    """Words of the short in play order, backchannel and dropped spans removed. With flag=True every word of the ranges comes back,
+    each with 'cut' (True for a removed word) and 'why' (filler, drop or caption fix), for the Words panel."""
+    words = cfg["_tr"]["words"]
+    segs = cfg["_tr"]["segments"]
+    filler_spans = []
+    for s in segs:
+        toks = re.findall(r"[\w']+", s["text"].lower())
+        if 0 < len(toks) <= 2 and all(t in FILLERS for t in toks):
+            filler_spans.append((s["start"] - 0.05, s["end"] + 0.05))
+    drops = [tuple(d) for d in short.get("drop", [])]
+    over = {round(float(k), 2): v for k, v in short.get("words", {}).items()}
+    out = []
+    for ri, (a, b) in enumerate(short["ranges"]):
+        skipped = False
+        for w in words:
+            if w["start"] < a - 0.06 or w["end"] > b + 0.04:   # a word that starts a hair before the range still belongs to it
+                continue
+            why = ""
+            if any(fa <= w["start"] and w["end"] <= fb for fa, fb in filler_spans):
+                why = "backchannel"
+            elif any(fa <= w["start"] and w["end"] <= fb for fa, fb in drops):
+                why = "cut"
+            txt = over.get(round(w["start"], 2), fix_word(w["word"]))
+            if not why and txt == "":
+                why = "removed"
+            if why and not flag:
+                skipped = True
+                continue
+            item = {"w": txt or w["word"], "s": w["start"], "e": w["end"], "r": ri, "cb": skipped}
+            if flag:
+                item.update(cut=bool(why), why=why)
+            elif skipped:
+                item["cb"] = True
+            skipped = False
+            out.append(item)
+    return out
+
+
+def build_pieces(cfg, short):
+    pace = pace_of(short)
+    ws = kept_words(cfg, short)
+    runs, cur = [], []
+    for w in ws:
+        if cur and (w["r"] != cur[-1]["r"] or w.get("cb") or w["s"] - cur[-1]["e"] > pace["gap"]):   # a removed word in between is a cut, whatever the gap
+            runs.append(cur)
+            cur = []
+        cur.append(w)
+    if cur:
+        runs.append(cur)
+    pieces = []
+    for run in runs:
+        parts = [run]
+        while True:
+            longest = max(parts, key=lambda p: p[-1]["e"] - p[0]["s"])
+            if longest[-1]["e"] - longest[0]["s"] <= pace.get("run", 999) or len(longest) < 5:
+                break
+            i = parts.index(longest)
+            mid = (longest[0]["s"] + longest[-1]["e"]) / 2
+            best, bi = None, None
+            for k in range(2, len(longest) - 1):
+                gap = longest[k]["s"] - longest[k - 1]["e"]
+                comma = 0.15 if longest[k - 1]["w"].endswith((",", ".", "?", "!")) else 0
+                score = abs(longest[k]["s"] - mid) - gap * 2 - comma
+                if best is None or score < best:
+                    best, bi = score, k
+            parts[i:i + 1] = [longest[:bi], longest[bi:]]
+        for j, p in enumerate(parts):
+            pieces.append({"words": p, "cont": j > 0})
+    t0 = 0.0
+    for i, pc in enumerate(pieces):
+        ws_ = pc["words"]
+        pc["a"] = ws_[0]["s"] - (0.0 if pc["cont"] else pace["before"])
+        if not pc["cont"]:
+            pc["a"] = max(pc["a"], short["ranges"][ws_[0]["r"]][0])   # never reach back before the range (title card, other shot)
+        nxt = pieces[i + 1] if i + 1 < len(pieces) else None
+        tail = pace["after"]
+        pc["b"] = ws_[-1]["e"] + (0.0 if nxt and nxt["cont"] else tail)
+        if pc["cont"]:
+            pc["a"] = pieces[i - 1]["b"]
+        pc["t0"] = t0
+        pc["dur"] = pc["b"] - pc["a"]
+        t0 += pc["dur"]
+    return pieces
+
+
+def motion_cx(cap, pc, speaker, prior):
+    """Where the speaker is in a wide two-shot: the column with the most movement (head, hands) on the speaker's side.
+    The host stands right of the printer, the co-host left of it, in every angle of the sphere video."""
+    import cv2
+    import numpy as np
+    lo, hi = (0.40, 0.92) if speaker == channel.host() else (0.05, 0.40)
+    n = 10
+    prev, acc = None, None
+    for k in range(n):
+        t = pc["a"] + (pc["b"] - pc["a"]) * (k + 0.5) / n
+        cap.set(cv2.CAP_PROP_POS_MSEC, t * 1000)
+        ok, fr = cap.read()
+        if not ok:
+            continue
+        g = cv2.GaussianBlur(cv2.cvtColor(cv2.resize(fr, (480, 270)), cv2.COLOR_BGR2GRAY), (5, 5), 0).astype(np.float32)
+        if prev is not None:
+            d = np.abs(g - prev)[: int(270 * 0.85)].sum(axis=0)
+            acc = d if acc is None else acc + d
+        prev = g
+    if acc is None or acc.max() <= 0:
+        return prior
+    acc = np.convolve(acc, np.ones(41) / 41, mode="same")
+    a, b = int(lo * 480), int(hi * 480)
+    return float((a + int(np.argmax(acc[a:b]))) / 480)
+
+
+OVERRIDE_KEYS = ("cx", "cy", "zoom", "layout", "gzoom", "gcx", "gcy")
+
+
+def pick_face(fs, speaker, sides):
+    """Which detected face is the speaker's, from mpfaces.faces() output [(cx, cy, width, score)]: a big face is a close-up; with two or more
+    faces the host stands on one side (cfg 'sides', default the host right and the co-host left); one small face counts only if it is on the speaker's side."""
+    good = [f for f in fs if f[1] < 0.55]                      # lower than that is the bench and the props
+    if not good:
+        return None
+    f = max(good, key=lambda f: f[2])
+    if f[2] >= 0.11 and all(o[2] < 0.6 * f[2] for o in good if o is not f):      # one clearly biggest face: a close-up of that person
+        return f[0], f[1], True
+    side = sides.get(speaker) or ("right" if speaker == channel.host() else "left")
+    f = sorted(good, key=lambda f: f[0])[-1 if side == "right" else 0]
+    if (f[0] >= 0.4) if side == "right" else (f[0] <= 0.45):     # the host's face must be on the host's side, or it is somebody else's
+        return f[0], f[1], False
+    return None
+
+
+def auto_classify(cfg, pieces):
+    """Layout, crop centre and zoom for every piece: the guesses (short['crops'] is applied afterwards by apply_overrides)."""
+    import cv2
+    import numpy as np
+    sys.path.insert(0, str(Path(__file__).parent))
+    import facedet
+    import mpfaces
+    zooms = pace_of(cfg_short(cfg))["zooms"]
+    gzooms = pace_of(cfg_short(cfg))["gzooms"]
+    gi = 0
+    sides = cfg.get("sides", {})
+    cap = cv2.VideoCapture(cfg["source"])
+    zi = 0
+    for i, pc in enumerate(pieces):
+        mid = (pc["a"] + pc["b"]) / 2
+        cap.set(cv2.CAP_PROP_POS_MSEC, mid * 1000)
+        ok, fr = cap.read()
+        pc["layout"], pc["cx"], pc["cy"] = "live", 0.5, 0.42
+        pc["speaker"] = speaker_at(cfg, mid)
+        if not ok:
+            continue
+        corner = [fr[y, x].astype(int) for x, y in ((8, 8), (SRC_W - 9, 8), (8, SRC_H - 9), (SRC_W - 9, SRC_H - 9))]
+        if sum(1 for c in corner if max(abs(int(c[k]) - NAVY_BGR[k]) for k in range(3)) < 16) >= 3:
+            pc["layout"] = "graphic"
+            pc["zoom"] = 1.0
+            pc["gzoom"], pc["gcy"] = gzooms[gi % len(gzooms)], 0.55
+            gi += 1
+            continue
+        prior = 0.78 if pc["speaker"] == channel.host() else 0.27
+        picks = []
+        if mpfaces.available():                                 # three frames across the piece, the median of what the face finder says
+            for f in (0.25, 0.5, 0.75):
+                cap.set(cv2.CAP_PROP_POS_MSEC, (pc["a"] + (pc["b"] - pc["a"]) * f) * 1000)
+                ok2, fr2 = cap.read()
+                if ok2:
+                    got = pick_face(mpfaces.faces(fr2), pc["speaker"], sides)
+                    if got:
+                        picks.append(got)
+        else:
+            big = [f for f in facedet.faces(fr, 0.02) if f[2] / SRC_W >= 0.11]
+            if big:
+                x, y, w, h = big[0]
+                picks.append(((x + w / 2) / SRC_W, y / SRC_H + 0.08, True))
+        if picks:
+            cx, cy = float(np.median([p[0] for p in picks])), float(np.median([p[1] for p in picks]))
+            pc["close"] = sum(1 for p in picks if p[2]) * 2 > len(picks)
+            pc["cx"], pc["cy"] = cx, min(0.5, max(0.35, cy + (0.12 if pc["close"] else 0.08)))
+            pc["face"] = True
+        else:
+            pc["cx"], pc["cy"] = motion_cx(cap, pc, pc["speaker"], prior), 0.4
+            pc["close"], pc["face"] = False, False
+        pc["zoom"] = zooms[zi % len(zooms)]
+        zi += 1
+    cap.release()
+    # no face found for this speaker (turned away, profile): take the position from the nearest piece of the same speaker where one was found
+    for i, pc in enumerate(pieces):
+        if pc.get("face") is False and not pc.get("close"):
+            near = sorted((abs(j - i) + (0.5 if j > i else 0), j) for j, q in enumerate(pieces)
+                          if q.get("face") and not q.get("close") and q.get("speaker") == pc["speaker"] and abs(q["a"] - pc["a"]) < 12)
+            if near:
+                q = pieces[near[0][1]]
+                pc["cx"], pc["cy"], pc["face"] = q["cx"], q["cy"], "carried"
+    return pieces
+
+
+def apply_overrides(short, pieces):
+    """The host's (or Claude's) crop choices on top of the guesses: layout_all for the whole short, then per-piece crops by source time."""
+    pieces = [dict(p) for p in pieces]
+    if short.get("layout_all"):
+        for pc in pieces:
+            if pc["layout"] != "graphic":
+                pc["layout"] = short["layout_all"]
+    for ov in short.get("crops", []):
+        for pc in pieces:
+            if pc["a"] - 0.05 <= ov["t"] <= pc["b"] + 0.05:
+                for k in OVERRIDE_KEYS:
+                    if k in ov:
+                        pc[k] = ov[k]
+    return pieces
+
+
+def classify(cfg, pieces):
+    return apply_overrides(cfg_short(cfg), auto_classify(cfg, pieces))
+
+
+PIECES_VER = 6                                                                   # bump when build_pieces / auto_classify change, so cached guesses are redone
+SIG_AUTO = ("ranges", "drop", "words", "pace")                                           # what the automatic guesses depend on
+SIG_ALL = ("ranges", "drop", "words", "hook", "crops", "layout_all", "pace")             # what a render depends on
+
+
+def sig(obj):
+    return hashlib.md5(json.dumps(obj, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:12]
+
+
+def short_sig(short, keys):
+    return sig([short.get(k) for k in keys])
+
+
+def auto_pieces(cfg, short, wd):
+    """The pieces with the automatic guesses (slow: reads frames), cached in <work>/shorts/<id>.auto.json. When only the cuts or words changed (the host clicking words
+    out), the crops are taken over from the earlier pieces that covered the same moment, so a click does not wait for the face finder again."""
+    st = Path(cfg["source"]).stat()
+    src_key = [st.st_size, int(st.st_mtime), PIECES_VER]
+    key = sig([short_sig(short, SIG_AUTO), src_key])
+    cache = Path(wd) / "shorts" / f"{short['id']}.auto.json"
+    old = None
+    try:
+        c = json.loads(cache.read_text(encoding="utf-8"))
+        if c.get("sig") == key:
+            return c["pieces"]
+        if c.get("src") == src_key and c.get("pace") == short.get("pace"):
+            old = c["pieces"]
+    except (OSError, ValueError, KeyError):
+        pass
+    pieces = build_pieces(cfg, short)
+    if old:
+        todo = []
+        for pc in pieces:
+            mid = (pc["a"] + pc["b"]) / 2
+            o = next((q for q in old if q["a"] - 0.02 <= mid <= q["b"] + 0.02), None)
+            if o is None:
+                todo.append(pc)
+                continue
+            for k in ("layout", "cx", "cy", "speaker", "face", "close", "gcy"):
+                if k in o:
+                    pc[k] = o[k]
+        if todo:
+            auto_classify(cfg, todo)                     # only the moments that were not looked at before
+        zooms, gzooms = pace_of(short)["zooms"], pace_of(short)["gzooms"]
+        zi = gi = 0
+        for pc in pieces:                                # the zoom steps follow the new order of cuts
+            if pc["layout"] == "graphic":
+                pc["zoom"], pc["gzoom"] = 1.0, gzooms[gi % len(gzooms)]
+                gi += 1
+            else:
+                pc["zoom"] = zooms[zi % len(zooms)]
+                zi += 1
+    else:
+        pieces = auto_classify(cfg, pieces)
+    cache.parent.mkdir(exist_ok=True)
+    tmp = cache.with_name(cache.name + f".{os.getpid()}.tmp")
+    tmp.write_text(json.dumps({"sig": key, "src": src_key, "pace": short.get("pace"), "pieces": pieces}), encoding="utf-8")
+    os.replace(tmp, cache)
+    return pieces
+
+
+def cached_pieces(cfg, short, wd):
+    return apply_overrides(short, auto_pieces(cfg, short, wd))
+
+
+def cfg_short(cfg):
+    return cfg["_short"]
+
+
+def crop_box(pc):
+    z = pc.get("zoom", 1.0)
+    ch = int(round(SRC_H / z / 2) * 2)
+    cw = int(round(ch * 9 / 16 / 2) * 2)
+    x = int(round(min(max(pc["cx"] * SRC_W - cw / 2, 0), SRC_W - cw)))
+    y = int(round(min(max(pc["cy"] * SRC_H - ch / 2, 0), SRC_H - ch)))
+    return cw, ch, x - x % 2, y - y % 2
+
+
+def ass_time(t):
+    cs = int(round(t * 100))
+    return f"{cs // 360000}:{cs // 6000 % 60:02d}:{cs // 100 % 60:02d}.{cs % 100:02d}"
+
+
+def chunks_of(words):
+    out, cur = [], []
+    for w in words:
+        cur.append(w)
+        n = sum(len(x["w"]) for x in cur) + len(cur)
+        if len(cur) >= 3 or n > 17 or w["w"].endswith((",", ".", "?", "!")):
+            out.append(cur)
+            cur = []
+    if cur:
+        out.append(cur)
+    return out
+
+
+def make_ass(short, pieces):
+    sp = pace_of(short)["speed"]                           # the whole short is played faster: caption times follow
+    ev = []
+    for pc in pieces:
+        y = 1500 if pc["layout"] == "graphic" else 1290
+        ws = [dict(w, o=pc["t0"] + w["s"] - pc["a"]) for w in pc["words"]]
+        for ch in chunks_of(ws):
+            for k, w in enumerate(ch):
+                start = max(0.0, w["o"])
+                end = ch[k + 1]["o"] - 0.012 if k + 1 < len(ch) else min(ch[-1]["o"] + (ch[-1]["e"] - ch[-1]["s"]) + 0.12, pc["t0"] + pc["dur"])
+                if end <= start:
+                    continue
+                parts = []
+                for j, x in enumerate(ch):
+                    t = re.sub(r"[.,;:]+$", "", x["w"]).upper().replace("{", "").replace("}", "")
+                    if j == k:
+                        parts.append("{\\c" + ORANGE_ASS + "\\fscx135\\fscy135\\t(0,110,\\fscx118\\fscy118)}" + t + "{\\r}")
+                    else:
+                        parts.append(t)
+                ev.append(f"Dialogue: 1,{ass_time(start / sp)},{ass_time(end / sp)},Cap,,0,0,0,,{{\\an5\\pos(540,{y})}}" + " ".join(parts))
+    hook = short.get("hook")
+    if hook:
+        lines = "\\N".join(hook.upper().split("|"))
+        ev.append(f"Dialogue: 2,{ass_time(0.0)},{ass_time(2.8)},Hook,,0,0,0,,{{\\an5\\pos(540,230)\\fad(120,200)\\fscx60\\fscy60\\t(0,160,\\fscx100\\fscy100)}}{lines}")
+    head = f"""[Script Info]
+ScriptType: v4.00+
+PlayResX: {W}
+PlayResY: {H}
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Cap,{FONT_NAME},122,&H00FFFFFF,&H00FFFFFF,&H00000000,&H96000000,-1,0,0,0,100,100,2,0,1,9,5,5,40,40,0,1
+Style: Hook,{FONT_NAME},100,&H00FFFFFF,&H00FFFFFF,{ORANGE_ASS[:-1]}&,{ORANGE_ASS[:-1]}&,-1,0,0,0,100,100,2,0,3,22,0,5,60,60,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+    return head + "\n".join(ev) + "\n"
+
+
+def ev(v):
+    """An even pixel count (video wants even sizes)."""
+    return int(round(v / 2) * 2)
+
+
+def filter_graph(pieces, base, speed=1.0, f=1.0):
+    """f = size factor: 1.0 = 1080x1920 (final), 0.5 = 540x960 (the quick preview)."""
+    w, h = ev(W * f), ev(H * f)
+    fv, fa, vs, as_ = [], [], [], []
+    for i, pc in enumerate(pieces):
+        a, b = pc["a"] - base, pc["b"] - base
+        if pc["layout"] == "graphic":
+            gz = pc.get("gzoom", 1.0)
+            gw = int(round(1600 / gz / 2) * 2)
+            gh = int(round(1080 / gz / 2) * 2)
+            gx = int(round(min(max(pc.get("gcx", 0.5) * SRC_W - gw / 2, 0), SRC_W - gw)))
+            gy = int(round(min(max(pc.get("gcy", 0.5) * SRC_H - gh / 2, 0), SRC_H - gh)))
+            chain = f"crop={gw}:{gh}:{gx}:{gy},scale={w}:{ev(730 * f)}:flags=lanczos,pad={w}:{h}:0:{ev(400 * f)}:color=0x142C44"
+        elif pc["layout"] == "blur":
+            # B-roll that should stay whole: sharp 16:9 in the middle, a blurred, enlarged copy fills the rest
+            fv.append(f"[0:v]trim=start={a:.3f}:end={b:.3f},setpts=PTS-STARTPTS,split[vb{i}][vf{i}];"
+                      f"[vb{i}]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},boxblur={max(2, int(40 * f))}:{max(1, int(4 * f))},eq=brightness=-0.1[bb{i}];"
+                      f"[vf{i}]scale={w}:-2:flags=lanczos[ff{i}];[bb{i}][ff{i}]overlay=0:(H-h)/2-{int(90 * f)},setsar=1,fps=30[v{i}]")
+            chain = None
+        else:
+            cw, ch, x, y = crop_box(pc)
+            chain = f"crop={cw}:{ch}:{x}:{y},scale={w}:{h}:flags=lanczos" + (",unsharp=5:5:0.5" if f >= 1.0 else "")
+        if chain:
+            fv.append(f"[0:v]trim=start={a:.3f}:end={b:.3f},setpts=PTS-STARTPTS,{chain},setsar=1,fps=30[v{i}]")
+        af = f"[0:a]atrim=start={a:.3f}:end={b:.3f},asetpts=PTS-STARTPTS"
+        d = 0.012
+        if not pc["cont"]:
+            af += f",afade=t=in:d={d}"
+        if not (i + 1 < len(pieces) and pieces[i + 1]["cont"]):
+            af += f",afade=t=out:st={max(pc['dur'] - d, 0):.3f}:d={d}"
+        fa.append(af + f"[a{i}]")
+        vs.append(f"[v{i}]")
+        as_.append(f"[a{i}]")
+    n = len(pieces)
+    fv.append("".join(vs) + f"concat=n={n}:v=1:a=0" + (f",setpts=PTS/{speed}" if speed != 1.0 else "") + "[vc]")
+    fa.append("".join(as_) + f"concat=n={n}:v=0:a=1" + (f",atempo={speed}" if speed != 1.0 else "") + ",loudnorm=I=-14:TP=-1.5:LRA=11[aout]")
+    return fv, fa
+
+
+ENCODE = {
+    # preview: quick look while editing, half size; final: for approved shorts, full 1080x1920, the slowest NVENC preset and a high quality target
+    "preview": {"f": 0.5, "v": ["-preset", "p4", "-cq", "26", "-b:v", "0"], "audio": "160k"},
+    "final": {"f": 1.0, "v": ["-preset", "p7", "-tune", "hq", "-rc", "vbr", "-cq", "15", "-b:v", "0", "-maxrate", "16M", "-bufsize", "32M",
+                              "-spatial-aq", "1", "-temporal-aq", "1", "-rc-lookahead", "24", "-profile:v", "high"], "audio": "256k"},
+}
+
+
+def render(cfg, short, out, pieces=None, quality="preview"):
+    enc = ENCODE[quality]
+    f = enc["f"]
+    pieces = pieces or classify(cfg, build_pieces(cfg, short))
+    speed = pace_of(short)["speed"]
+    total = (pieces[-1]["t0"] + pieces[-1]["dur"]) / speed          # length of the finished short
+    base = max(0.0, min(p["a"] for p in pieces) - 1.0)
+    span_end = max(p["b"] for p in pieces) + 1.0
+    fv, fa = filter_graph(pieces, base, speed, f)
+    tmp = Path(tempfile.mkdtemp(prefix="short_", dir=tempfile.gettempdir()))
+    try:
+        (tmp / "c.ass").write_text(make_ass(short, pieces), encoding="utf-8")
+        fontsrc = Path(__file__).parent.parent / "fonts" / FONT_FILE
+        if not fontsrc.exists():
+            fontsrc = Path("C:/Windows/Fonts") / FONT_FILE
+        shutil.copy(fontsrc, tmp / FONT_FILE)
+        graph = ";".join(fv + fa + [
+            f"color=c=0xE2703A:s={ev(W * f)}x{ev(14 * f)}:r=30:d={total:.2f}[bar]",
+            f"[vc][bar]overlay=x='-w+w*t/{total:.2f}':y=H-h:shortest=1[vb]",
+            "[vb]subtitles=c.ass:fontsdir=.[vout]"])
+        (tmp / "g.txt").write_text(graph, encoding="utf-8")
+        cmd = ["ffmpeg", "-y", "-v", "error", "-stats", "-ss", f"{base:.3f}", "-t", f"{span_end - base:.3f}", "-i", cfg["source"],
+               "-/filter_complex", "g.txt", "-map", "[vout]", "-map", "[aout]", "-t", f"{total:.2f}",
+               "-c:v", "h264_nvenc", *enc["v"], "-pix_fmt", "yuv420p", "-r", "30",
+               "-c:a", "aac", "-b:a", enc["audio"], "-movflags", "+faststart", str(Path(out).resolve())]
+        subprocess.run(cmd, cwd=tmp, check=True)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return total, pieces
+
+
+def sheet(cfg, short, out, pieces=None):
+    import cv2
+    import numpy as np
+    pieces = pieces or classify(cfg, build_pieces(cfg, short))
+    cap = cv2.VideoCapture(cfg["source"])
+    tiles = []
+    for i, pc in enumerate(pieces):
+        mid = (pc["a"] + pc["b"]) / 2
+        cap.set(cv2.CAP_PROP_POS_MSEC, mid * 1000)
+        ok, fr = cap.read()
+        if not ok:
+            continue
+        if pc["layout"] != "graphic":
+            cw, ch, x, y = crop_box(pc)
+            cv2.rectangle(fr, (x, y), (x + cw, y + ch), (0, 140, 255), 8)
+        fr = cv2.resize(fr, (480, 270))
+        label = f"{i} {pc['a']:.1f}-{pc['b']:.1f} {pc['layout']} z{pc.get('zoom', 1)} {pc['speaker']}"
+        cv2.putText(fr, label, (6, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1, cv2.LINE_AA)
+        tiles.append(fr)
+    cols = 4
+    while len(tiles) % cols:
+        tiles.append(np.zeros_like(tiles[0]))
+    rows = [np.hstack(tiles[r:r + cols]) for r in range(0, len(tiles), cols)]
+    cv2.imwrite(str(out), np.vstack(rows))
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("cmd", choices=["plan", "sheet", "render"])
+    ap.add_argument("cfg")
+    ap.add_argument("id")
+    ap.add_argument("--out")
+    ap.add_argument("--quality", choices=sorted(ENCODE), default="preview")
+    a = ap.parse_args()
+    cfg = load(a.cfg)
+    short = next(s for s in cfg["shorts"] if s["id"] == a.id)
+    cfg["_short"] = short
+    base = Path(a.cfg).parent
+    (base / "shorts").mkdir(exist_ok=True)
+    if a.cmd == "plan":
+        pcs = cached_pieces(cfg, short, base)
+        for i, p in enumerate(pcs):
+            print(i, f"{p['a']:.2f}-{p['b']:.2f}", p["layout"], p["speaker"], f"cx{p['cx']:.2f} cy{p['cy']:.2f} z{p.get('zoom', 1)}", " ".join(w["w"] for w in p["words"]))
+        print("total", round(pcs[-1]["t0"] + pcs[-1]["dur"], 1), "s")
+    elif a.cmd == "sheet":
+        out = a.out or str(base / "shorts" / f"{a.id}.sheet.png")
+        sheet(cfg, short, out, cached_pieces(cfg, short, base))
+        print(out)
+    else:
+        suffix = "" if a.quality == "preview" else ".final"
+        out = Path(a.out or base / "shorts" / f"{a.id}{suffix}.mp4")
+        part = out.with_name(out.stem + ".part.mp4")           # the app serves the file while it is being replaced: never write into it directly
+        total, _ = render(cfg, short, str(part), cached_pieces(cfg, short, base), a.quality)
+        os.replace(part, out)
+        (out.parent / f"{a.id}{suffix}.render.json").write_text(json.dumps({"sig": short_sig(short, SIG_ALL), "dur": round(total, 2), "at": time.time(), "quality": a.quality}), encoding="utf-8")
+        print(out, round(total, 1), "s")
+
+
+if __name__ == "__main__":
+    main()

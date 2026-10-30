@@ -1,0 +1,11 @@
+{
+  "no_drops": {
+    "keeps": [[0.3, 3.35], [7.8, 10.35], [14.8, 16.35]],
+    "flags": [{"start": 0.5, "end": 3.0, "note": "possible retake of: So today we build a whale"}],
+    "pieces": 3
+  },
+  "with_drops": {
+    "keeps": [[0.3, 3.35], [7.8, 8.5], [9.0, 10.35], [14.8, 16.35]],
+    "pieces": 4
+  }
+}
