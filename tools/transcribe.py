@@ -37,6 +37,13 @@ def extract_audio(src: Path, dst: Path, track: int) -> float:
     return float(out.stdout.strip())
 
 
+def compute_type(device: str, vram_gb: float) -> str:
+    """How faster-whisper holds the model: 8-bit weights on a card under 8 GB (large-v3 in float16 needs about 4 GB before it has read a word), 8-bit on the processor."""
+    if device != "cuda":
+        return "int8"
+    return "float16" if vram_gb >= 8 else "int8_float16"
+
+
 class Whisper:
     """The Whisper family (faster-whisper): runs on an Nvidia card or on the CPU, gives a time for every word. Same job as Parakeet for computers without Parakeet's requirements."""
     is_whisper = True
@@ -49,11 +56,19 @@ class Whisper:
                 os.add_dll_directory(str(lib))
         except ImportError:
             pass
+        try:                                                     # a CPU build of torch has no CUDA libraries: use the pip ones (nvidia-cublas-cu12, nvidia-cudnn-cu12)
+            import nvidia
+            for d in Path(list(nvidia.__path__)[0]).glob("*/bin"):
+                if hasattr(os, "add_dll_directory"):
+                    os.add_dll_directory(str(d))
+        except ImportError:
+            pass
         from faster_whisper import WhisperModel
         import hardware
-        device = device or ("cuda" if hardware.gpus() else "cpu")
+        gpus = hardware.gpus()
+        device = device or ("cuda" if gpus else "cpu")
         self.repo, self.device = repo, device
-        self.model = WhisperModel(repo, device=device, compute_type="float16" if device == "cuda" else "int8")
+        self.model = WhisperModel(repo, device=device, compute_type=compute_type(device, max((g["vram_gb"] for g in gpus), default=0)))
 
     def transcribe(self, wav: str, prompt: str = ""):
         import soundfile as sf                                   # the 16 kHz mono file we made: no need for faster-whisper's own decoder (it needs a newer `av`)

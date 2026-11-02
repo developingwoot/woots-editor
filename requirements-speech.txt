@@ -5,3 +5,8 @@ torch==2.11.0
 torchaudio==2.11.0
 transformers==5.20.1
 nemo-toolkit==3.0.0
+
+# Whisper on an Nvidia card WITHOUT the CUDA build of torch above (for example a small card that cannot run Parakeet): these two give faster-whisper its CUDA libraries.
+# Not needed with the CUDA build of torch, and not needed without an Nvidia card. Windows and Linux only.
+# nvidia-cublas-cu12 ; sys_platform == "win32" or sys_platform == "linux"
+# nvidia-cudnn-cu12==9.* ; sys_platform == "win32" or sys_platform == "linux"

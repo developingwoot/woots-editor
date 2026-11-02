@@ -14,8 +14,8 @@ import hardware
 CATALOG = [
     {"id": "parakeet-0.6b", "job": "speech", "name": "Parakeet 0.6B (Nvidia)", "repo": "nvidia/parakeet-tdt-0.6b-v2", "gb": 2.5, "min_vram": 6, "needs_gpu": True,
      "built": True, "note": "Fast, with a time for every word. Needs an Nvidia graphics card."},
-    {"id": "whisper-large-v3", "job": "speech", "name": "Whisper large-v3", "repo": "Systran/faster-whisper-large-v3", "gb": 3.1, "min_vram": 6, "needs_gpu": True,
-     "built": True, "runner": "whisper", "note": "Accurate, with a time for every word. Runs on an Nvidia card; use it where Parakeet does not work."},
+    {"id": "whisper-large-v3", "job": "speech", "name": "Whisper large-v3", "repo": "Systran/faster-whisper-large-v3", "gb": 3.1, "min_vram": 4, "needs_gpu": True,
+     "built": True, "runner": "whisper", "note": "Accurate, with a time for every word. Runs on an Nvidia card (8-bit weights on a 4 to 6 GB card); use it where Parakeet does not work."},
     {"id": "whisper-small", "job": "speech", "name": "Whisper small (any computer)", "repo": "Systran/faster-whisper-small", "gb": 0.5, "min_vram": 0, "needs_gpu": False,
      "built": True, "runner": "whisper", "note": "For computers without an Nvidia card: runs on the processor, slower than real time on long recordings and less exact on technical words."},
     {"id": "qwen3-vl-8b", "job": "vision", "name": "Qwen3-VL 8B", "repo": "Qwen/Qwen3-VL-8B-Instruct", "gb": 17.6, "min_vram": 10, "needs_gpu": True,
