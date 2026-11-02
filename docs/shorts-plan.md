@@ -1,6 +1,6 @@
 # Shorts: the plan
 
-Status: planned 2026-11-02; Phases 0 to 3 are done (see "as built" below); nothing else is built yet. Work through the phases in order; each one ends in something the
+Status: planned 2026-11-02; Phases 0 to 5 are done (see "as built" below); nothing else is built yet. Work through the phases in order; each one ends in something the
 host can use and a green test run. Read `CLAUDE.md` first: its rules (no approval gates, plan files through `projectstore`, channel data only in the
 profile, a test for every behaviour change) all apply here.
 
@@ -224,6 +224,42 @@ main video as before (a regression test on synthetic audio).
 - Finished shorts of a standalone project go to a `Shorts` folder next to the source file (the existing delivery); change it if you would rather have one folder in the workspace.
 - **Not built**: looking at frames with the vision model (the colour test stands in for it), and a score that uses what is on screen.
 
+## Phase 4 as built (2026-11-02)
+
+- "A short from raw footage" on the Shorts area: choose a folder (the files stay where they are; sub-folders are not entered). Every file with sound is read word by word; a recording with at least
+  `raw_min_words` words said at `raw_min_words_per_s` or faster is a talking recording, anything else is b-roll. The project is `<name>.shorts.json` with `mode: "raw"`, talking sources `t1, t2 ...`,
+  b-roll `b1, b2 ...`, and per talking source `mistakes` (`rawshorts.mistakes`: recut's restart / repeated phrase / repeated sentence / stammer finders; the later take stays).
+- Claude (`rawshorts.prompt`) gets each talking recording's transcript with the mistakes marked and, for each b-roll clip, a strip of four frames (`shorts/_find/broll/<id>.jpg`) to look at.
+  It answers with `ranges` ({src, a, b}: the best take of each line), `overlays` and an optional `missing` line. Up to `raw_max_shorts` shorts.
+- `rawshorts.check` stops a short whose range is not in a talking recording, runs past its file, is mostly an abandoned take, is too short / long, plays one part twice or has no setup / point / payoff.
+  An overlay that does not fit (not a b-roll clip, used twice, outside the clip, under `overlay_min_s`, at a word that is not in the short, over the first two seconds) is left out alone;
+  one over `overlay_max_s` is shortened. What was left out is shown in `last_find`. The mistakes inside a short's ranges are written into its `drop`, so a click on the word brings them back.
+- Rendering: `shorts.apply_overlays` splits the pieces at the overlay and gives the covered part `over` (b-roll file and seconds, `blur` layout). `filter_graph` takes that part's picture from the
+  b-roll input and its sound from the talking recording, so the voice never breaks. Captions and the other pieces keep their times. Overlays are part of the render signature.
+- **J and L cuts**: the b-roll picture comes in `overlay_lead_s` (0.15 s) before the word it illustrates (a J cut), and it can run on past the end of a sentence (an L cut) because Claude sets its length.
+  A shift between two talking-head pieces (different takes) is **not** built: the frames either side of such a cut show the speaker's mouth moving to other words, so it only works with a cutaway.
+- **Pickup lines**: the app only uses what is there. When Claude says a line is missing it is added to the short's "why" as "Missing: ..." and nothing is requested from the host.
+- **Not built**: the notes box and per-piece layout of Phase 2, picking a different b-roll clip for an overlay in the UI, searching b-roll by meaning (`brolllib`, SigLIP: Claude looks at the strip instead),
+  and a real run on the host's raw footage.
+
+## Phase 5 as built (2026-11-02)
+
+- **Shared mix**: `tools/audiomix.py` holds `mix`, `decode`, `ff` and `SR`; `finalrender` imports them, so the main video's output is unchanged (checked on synthetic audio: identical samples before and after the move).
+- **Captions**: four styles picked per short in the Sound panel (`caption_style`; default `caption_style` in the skill): `pop`, `box` (accent box behind the spoken word), `bounce` (each line drops in), `plain`.
+  **Emphasis** (`shorts.emphasis`): numbers, the profile's terms and the words in the short's `emphasis` list get the accent colour and a bigger size for the whole line, at most one per `emphasis_gap_s`.
+  **Safe zone** (`caption_pos`, `caption_size`): lines sit between y = 1050 and 380 px above the bottom; a line stays centred when its right edge clears the right 150 px, moves left when it does not,
+  and shrinks (its own ASS style) when it is too wide for the zone. The hook is placed with the same rule. One caption at a time: a line ends where the next starts (the Phase 0 overlap).
+- **Sound effects** (`tools/sfxkit.py`): roles whoosh, pop, ding, hit, riser guessed from the file names in the SFX folder; the user's choice per role is saved in `<state>/sfx_kit.json`
+  (`POST /api/v2/shorts/kit`, `GET /api/v2/shorts/sounds`). Placed by code (`sfxkit.place`, events from `shortsaudio.events`): a whoosh on each cut or zoom step, a hit when a graphic lands,
+  a pop on an emphasised word, a ding on a number, a riser a second before the last piece. Rules from the skill: `sfx_gap_s` apart, at most `sfx_max_per_10s` in ten seconds, nothing on the first word
+  after a cut; when there is no room the more important sound wins; the same role rotates through its files.
+- **Music** (`tools/shortsaudio.py`): the host's choice, "No music", or a track the app picks (steady, near 110 bpm, different from short to short) from the Music folder. A track the catalog marks as
+  having vocals is never offered or used. The bed is mixed with the main video's recipe: `music_below_speech_db` under the voice, `duck_db` further down while the host talks, faded in and out, then -14 LUFS again.
+- Rendering (`shorts.render`) mixes after the picture is made and reports what it did (`audio`: track, number of SFX, what was missing) into `<id>.render.json`; the Sound panel shows it.
+  A missing Music or SFX folder is said, never a failure.
+- **Not built**: the SFX list on the word strip with remove / swap per sound (the kit is per role), a kit editor in Settings (the API and the file exist), Claude choosing the track or the emphasis words in
+  the find / tighten step (the `emphasis` list exists and is used when something fills it), a swell in music where nobody talks, `glitch` and `typing` roles, and a real run on a real Music / SFX library.
+
 ## Ideas to think about (from the host)
 
 - **Cuts timed to the music's beat.** With a music bed (Phase 5), snap cut points and zoom steps to the nearest beat when a beat is within a few tenths of a second, and keep SFX on the beat.
@@ -235,7 +271,7 @@ main video as before (a regression test on synthetic audio).
 ## Open questions (ask the host when the phase starts)
 
 - Phase 3: where should standalone projects' finished shorts go: next to the source file, or a Shorts folder in the workspace?
-- Phase 4: is a pickup-line request useful, or should the app only use what is there?
+- Phase 4: is a pickup-line request useful? (Built as: the app only uses what is there, and shows Claude's "missing line" note. Say if you want a recording request.)
 - Phase 5: which caption style should be the default? Any SFX that must never be used?
 - Transcription speed on small cards: phase 0 showed Whisper large-v3 in 8-bit runs fine on a 4 GB card (about 6x faster than real time).
 

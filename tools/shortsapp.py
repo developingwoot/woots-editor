@@ -25,6 +25,7 @@ import brandstyle
 import channel
 import config
 import projectstore
+import skillrules
 WORK = config.WORK
 STATUSES = ("", "kept", "dropped")          # not looked at yet / the host wants it / the host does not (hidden, never deleted)
 LEGACY_STATUS = {"proposed": "", "approved": "kept", "rejected": "dropped"}         # older project files
@@ -82,6 +83,7 @@ def projects() -> list:
             except (OSError, ValueError):
                 continue
             out.append({"work": d.name, "name": f.name[: -len(".shorts.json")], "source": Path(raw.get("source", "")).name,
+                        "title": Path(raw["folder"]).name if raw.get("mode") == "raw" and raw.get("folder") else Path(raw.get("source", "")).stem,
                         "shorts": len(raw.get("shorts", [])), "kept": sum(1 for s in raw.get("shorts", []) if status_of(s) == "kept")})
     return out
 
@@ -95,7 +97,7 @@ def _render_one(wd: Path, short: dict, suffix: str) -> dict:
         meta = json.loads((wd / "shorts" / f"{short['id']}{suffix}.render.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         pass
-    return {"exists": True, "file": mp4.name, "mtime": int(mp4.stat().st_mtime), "dur": meta.get("dur"),
+    return {"exists": True, "file": mp4.name, "mtime": int(mp4.stat().st_mtime), "dur": meta.get("dur"), "audio": meta.get("audio"),
             "stale": meta.get("sig") != sh.short_sig(short, sh.SIG_ALL)}
 
 
@@ -226,6 +228,18 @@ def apply_op(work, name, op, b) -> dict:
                 if b["pace"] not in sh.PACES:
                     raise ValueError("pace is " + ", ".join(sh.PACES))
                 s["pace"] = b["pace"]
+            if "caption_style" in b:
+                if b["caption_style"] and b["caption_style"] not in sh.CAPTION_STYLES:
+                    raise ValueError("caption style is " + ", ".join(sh.CAPTION_STYLES))
+                s["caption_style"] = b["caption_style"] or ""
+            if "music" in b:                                       # '' = the app picks, 'none', or a track's name
+                s["music"] = str(b["music"]).strip()[:120]
+            if "sfx" in b:
+                if b["sfx"] not in ("", "on", "off"):
+                    raise ValueError("sfx is on, off or empty")
+                s["sfx"] = b["sfx"]
+            if "emphasis" in b:
+                s["emphasis"] = [str(x).strip()[:30] for x in (b["emphasis"] or []) if str(x).strip()][:30]
             if "layout_all" in b:
                 if b["layout_all"] and b["layout_all"] not in ("blur", "live"):
                     raise ValueError("layout_all is blur, live or empty")
@@ -312,10 +326,11 @@ def apply_op(work, name, op, b) -> dict:
     return state(work, name)
 
 
-def frame_jpeg(work, name, t: float, width: int = 960) -> bytes:
+def frame_jpeg(work, name, t: float, width: int = 960, src: str = "") -> bytes:
     import cv2
     raw = read_raw(work, name)
-    cap = cv2.VideoCapture(raw["source"])
+    path = next((s["path"] for s in raw.get("sources", []) if s["id"] == src), raw["source"])
+    cap = cv2.VideoCapture(path)
     cap.set(cv2.CAP_PROP_POS_MSEC, float(t) * 1000)
     ok, fr = cap.read()
     cap.release()
@@ -393,6 +408,9 @@ def standalone_names(src: Path) -> tuple:
 
 def video_plan(work: str, name: str, cfg: dict | None = None) -> dict:
     """The recommendation for this video: how many shorts, and where its strong visual moments are (shortsplan.py)."""
+    if read_raw(work, name).get("mode") == "raw":
+        n = skillrules.shorts()["raw_max_shorts"]
+        return {"recommended": n, "strong": 0, "moments": [], "runtime_s": 0.0, "has_beatmap": False, "raw": True}
     rec = shortsplan.for_video(work, name)
     if not rec["runtime_s"]:                                         # no beat map for this project: length from the transcript
         cfg = cfg or sh.load(cfg_file(work, name))
@@ -402,6 +420,9 @@ def video_plan(work: str, name: str, cfg: dict | None = None) -> dict:
 
 
 def find_prompt(work: str, name: str, count: int | None = None) -> str:
+    if read_raw(work, name).get("mode") == "raw":
+        import rawshorts
+        return rawshorts.prompt(work, name, count)
     cfg = sh.load(cfg_file(work, name))
     rec = video_plan(work, name, cfg)
     count = count or rec["recommended"] or 3
@@ -419,6 +440,9 @@ def find_prompt(work: str, name: str, count: int | None = None) -> str:
 
 def import_candidates(work: str, name: str, path: Path, count: int | None = None) -> int:
     """Add Claude's proposed shorts that follow the rules (shortsplan.validate); what was skipped, and why, is kept in raw['last_find']."""
+    if read_raw(work, name).get("mode") == "raw":
+        import rawshorts
+        return rawshorts.import_candidates(work, name, path, count)
     data = json.loads(path.read_text(encoding="utf-8-sig"))
     raw = read_raw(work, name)
     runtime = float((sh.load(cfg_file(work, name))["_tr"] or {}).get("duration") or 0)

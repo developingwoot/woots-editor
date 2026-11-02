@@ -15,5 +15,21 @@
   "moment_max_s": 55,
   "moment_min_score": 3.0,
   "soft_below_px": 1080,
-  "broll_similarity": 0.5
+  "broll_similarity": 0.5,
+  "raw_min_words": 20,
+  "raw_min_words_per_s": 0.8,
+  "raw_max_shorts": 3,
+  "overlay_lead_s": 0.15,
+  "overlay_min_s": 1.0,
+  "overlay_max_s": 4.0,
+  "caption_style": "pop",
+  "emphasis_gap_s": 3.0,
+  "safe_top_px": 1050,
+  "safe_bottom_px": 380,
+  "safe_right_px": 150,
+  "sfx_gap_s": 0.4,
+  "sfx_max_per_10s": 6,
+  "sfx_cut_lead_s": 0.08,
+  "music_below_speech_db": 26,
+  "duck_db": 9
 }

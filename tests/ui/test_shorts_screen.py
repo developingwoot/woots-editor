@@ -165,3 +165,43 @@ def test_shorts_made_from_a_video_file_open_under_their_own_heading(screen, tmp_
     assert clutter(visible_text(page)) == []
     page.click("text=← Shorts")
     page.wait_for_selector(".shortsItem")
+
+
+def test_a_short_from_raw_footage_asks_for_a_folder(screen, tmp_path):
+    (tmp_path / "Raw Day").mkdir()
+    (tmp_path / "Raw Day" / "take1.mp4").write_bytes(b"x" * 3000)
+    page = screen("/v2/#/shorts")
+    page.wait_for_selector("#fromFolder")
+    assert page.inner_text("#fromFolder") == "A short from raw footage"
+    page.evaluate("p => localStorage.setItem('wr.rawDir', p)", str(tmp_path))
+    page.click("#fromFolder")
+    page.wait_for_selector("#folderDlg")
+    expect(page.locator("#folderDlg")).to_contain_text("Raw Day", timeout=60000)
+    assert "Choose the folder with the raw footage" in page.inner_text("#folderDlg") and page.locator("#fdUse").is_visible()
+    assert not page.locator(".fdFile").count()
+    page.keyboard.press("Escape")
+    expect(page.locator("#folderDlg")).to_have_count(0)
+
+
+def test_the_sound_panel_saves_the_caption_style_music_and_effects_choices(screen):
+    r, key = video_with_shorts("ui shorts sound")
+    page = screen(f"/v2/#/v/{key}/shorts")
+    page.wait_for_selector(".shortCard")
+    page.locator(".shortCard[data-id=s1] .openBtn").click()
+    page.wait_for_selector("#styleSelect")
+    assert page.input_value("#styleSelect") == "pop" and page.input_value("#sfxSelect") == "on" and page.input_value("#musicSelect") == ""
+    assert [o.inner_text() for o in page.locator("#styleSelect option").all()] == ["Pop", "Box", "Bounce", "Plain"]
+    page.select_option("#styleSelect", "box")
+    page.wait_for_function("() => document.querySelector('#styleSelect').value === 'box'")
+    page.select_option("#sfxSelect", "off")
+    page.wait_for_function("() => document.querySelector('#sfxSelect').value === 'off'")
+    page.select_option("#musicSelect", "none")
+    page.wait_for_function("() => document.querySelector('#musicSelect').value === 'none'")
+    import time
+    for _ in range(50):                                        # the choice is on the page at once and in the file a moment later
+        s = raw_of(r)["shorts"][0]
+        if (s.get("caption_style"), s.get("sfx"), s.get("music")) == ("box", "off", "none"):
+            break
+        time.sleep(0.1)
+    assert (s["caption_style"], s["sfx"], s["music"]) == ("box", "off", "none")
+    assert clutter(visible_text(page)) == []

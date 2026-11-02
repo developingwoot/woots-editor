@@ -14,14 +14,23 @@ export async function render(root, args, setBusy) {
     try { localStorage.setItem('wr.videoDir', path.replace(/[\\/][^\\/]*$/, '')); } catch { /* private mode */ }
     try { await api('/api/v2/shorts/fromfile', { path }); setBusy(); } catch (e) { alert(e.message); }
   };
+  const fromFolder = async () => {
+    let start = '';
+    try { start = localStorage.getItem('wr.rawDir') || ''; } catch { /* private mode */ }
+    const path = await pickFolder({ start, title: 'Choose the folder with the raw footage' });
+    if (!path) return;
+    try { localStorage.setItem('wr.rawDir', path.replace(/[\\/][^\\/]*$/, '')); } catch { /* private mode */ }
+    try { await api('/api/v2/shorts/fromfolder', { path }); setBusy(); } catch (e) { alert(e.message); }
+  };
   root.replaceChildren(
-    h('div', { class: 'headrow' }, h('h1', {}, 'Shorts'), h('button', { class: 'main', id: 'fromFile', onclick: fromFile }, 'Shorts from a video file')),
+    h('div', { class: 'headrow' }, h('h1', {}, 'Shorts'),
+      h('button', { class: 'quiet', id: 'fromFolder', onclick: fromFolder }, 'A short from raw footage'),
+      h('button', { class: 'main', id: 'fromFile', onclick: fromFile }, 'Shorts from a video file')),
     ...(d.items.length
       ? d.items.map(v => h('div', { class: 'vcard shortsItem' },
         h('div', { class: 'vbody' }, h('div', { class: 'vtitle' }, v.title), h('div', { class: 'muted' }, v.sentence)),
         h('a', { class: 'main', href: v.standalone ? `#/shorts/${v.key}` : `#/v/${v.key}/shorts` }, v.button)))
-      : [h('div', { class: 'card empty', id: 'noShorts' }, h('p', {}, 'No shorts yet.'), h('p', { class: 'muted' }, 'Render the final of a video and its shorts will be made from it.'))]),
-    h('p', { class: 'muted small' }, 'A short from a pile of raw footage is coming next.'));
+      : [h('div', { class: 'card empty', id: 'noShorts' }, h('p', {}, 'No shorts yet.'), h('p', { class: 'muted' }, 'Render the final of a video and its shorts will be made from it, or start from a video file or a folder of raw footage.'))]));
 }
 
 // Shorts made from a video file that is not one of the app's videos: the same project screen under its own heading.
@@ -50,6 +59,21 @@ export async function renderStep(root, key, setBusy) {
     drawWords(w);
   }
 
+  async function soundPanel(box, d, s) {
+    const o = await api('/api/v2/shorts/sounds');
+    const set = (op, body) => async () => { try { draw(await post(op, { id: s.id, ...body })); } catch (e) { alert(e.message); } };
+    const pick = (id, label, cur, opts, op, key) => h('div', { class: 'soundRow' }, h('label', { class: 'glabel', for: id }, label),
+      h('select', { id, onchange: e => set(op, { [key]: e.target.value })() }, ...opts.map(([v, t]) => h('option', { value: v, selected: v === cur }, t))));
+    const made = s.sound.made || {};
+    const notes = [made.track ? `Music: ${made.track}.` : '', made.sfx ? `${made.sfx} sound effects.` : '', ...(made.missing || [])].filter(Boolean);
+    box.replaceChildren(...[
+      h('div', { class: 'glabel' }, 'Sound'),
+      pick('styleSelect', 'Captions', s.sound.style || o.default_style, o.styles.map(x => [x.id, x.label]), 'style', 'style'),
+      pick('musicSelect', 'Music', s.sound.music, [['', 'Picked for you'], ['none', 'No music'], ...o.tracks.map(t => [t, t])], 'music', 'music'),
+      pick('sfxSelect', 'Sound effects', s.sound.sfx, [['on', 'On'], ['off', 'Off']], 'sfx', 'sfx'),
+      notes.length ? h('div', { class: 'muted small', id: 'soundNotes' }, notes.join(' ')) : null].filter(Boolean));
+  }
+
   function openPanel(d, s) {
     const hook = h('input', { id: 'hookInput', type: 'text', value: s.hook, placeholder: 'Words shown over the first seconds', autocomplete: 'off' });
     hook.addEventListener('change', async () => { try { draw(await post('hook', { id: s.id, hook: hook.value })); } catch (e) { alert(e.message); } });
@@ -62,12 +86,15 @@ export async function renderStep(root, key, setBusy) {
       s.preview.url ? (s.preview.old ? 'Update the preview' : 'Make the preview again') : 'Make a preview');
     const words = h('div', { class: 'shortWords', id: 'shortWords' });
     wordsPanel(words, s.id);
+    const sound = h('div', { class: 'shortSound', id: 'shortSound' });
+    soundPanel(sound, d, s);
     return h('div', { class: 'card shortOpen', 'data-id': s.id },
       h('div', { class: 'openCols' },
         h('div', { class: 'openPreview' }, preview, s.preview.old ? h('div', { class: 'muted small' }, 'This preview is from before your last change.') : null, make),
         h('div', { class: 'openEdit' },
           h('label', { class: 'glabel' }, 'Hook'), hook,
           h('label', { class: 'glabel' }, 'Pace'), pace,
+          sound,
           h('div', { class: 'row' }, h('button', { class: 'quiet', id: 'tightenBtn', disabled: d.busy, onclick: () => run('tighten', { id: s.id }) }, s.tightened ? 'Tighten it again' : 'Tighten it'),
             h('span', { class: 'muted small' }, 'Claude cuts the filler and tangents out of this short.')),
           words)));

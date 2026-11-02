@@ -96,6 +96,7 @@ import finalrender                                # noqa: E402  (stage 8: the fu
 import accuracy                                   # noqa: E402  (Beat map tab: Opus checks what is taught for accuracy)
 import shortsapp                                  # noqa: E402  (Shorts tab: vertical shorts from a finished video)
 import shortsplan                                 # noqa: E402  (how many shorts a video deserves, and the rules for them: ADR 0006)
+import skillrules                                # noqa: E402  (the numbers shorts are made with)
 import shortsview                                 # noqa: E402  (the v2 Shorts screen)
 
 _lock = threading.Lock()                     # one writer at a time (PC + phone)
@@ -702,7 +703,11 @@ SHORTS_V2_EDITS = {"keep": lambda b: {"id": b["id"], "status": "kept" if b.get("
                    "drop": lambda b: {"id": b["id"], "status": "dropped" if b.get("drop", True) else ""},
                    "hook": lambda b: {"id": b["id"], "hook": str(b.get("hook", ""))[:90].upper()},
                    "title": lambda b: {"id": b["id"], "title": str(b.get("title", ""))[:90]},
-                   "pace": lambda b: {"id": b["id"], "pace": b.get("pace", "")}}
+                   "pace": lambda b: {"id": b["id"], "pace": b.get("pace", "")},
+                   "style": lambda b: {"id": b["id"], "caption_style": b.get("style", "")},
+                   "music": lambda b: {"id": b["id"], "music": b.get("music", "")},
+                   "sfx": lambda b: {"id": b["id"], "sfx": b.get("sfx", "")},
+                   "emphasis": lambda b: {"id": b["id"], "emphasis": b.get("words", [])}}
 
 
 def shorts_v2_post(op, b):
@@ -712,8 +717,16 @@ def shorts_v2_post(op, b):
         if done:
             job["done_sentence"] = done
         return {"id": job["id"]}
-    if op == "fromfile":
-        job = started(start_shorts_from_file(b["path"]), "Reading your video, then choosing shorts", "Shorts ready")
+    if op == "kit":                                            # which sound effects play each role, saved for this user
+        import sfxkit
+        with _lock:
+            sfxkit.save_kit(b.get("roles") or {})
+        return shortsview.sounds()
+    if op in ("fromfile", "fromfolder"):
+        if op == "fromfile":
+            job = started(start_shorts_from_file(b["path"]), "Reading your video, then choosing shorts", "Shorts ready")
+        else:
+            job = started(start_shorts_from_folder(b["path"]), "Reading your recordings, then choosing a short", "Shorts ready")
         return {**job, "key": _jobs[job["id"]]["key"]}
     work, name = views.split_key(b["key"])
     sid = b.get("id", "")
@@ -1229,6 +1242,32 @@ def start_shorts_from_file(path):
     return _job_run(job, [([str(PY), str(TOOLS / "transcribe.py"), str(src), "--out", str(wd)], TOOLS)], after)
 
 
+def start_shorts_from_folder(path):
+    """A short from a folder of raw footage: read every recording that has sound word by word, tell the talking ones from the b-roll, write the project
+    (the files stay where they are), then Claude chooses. Returns the job; job['key'] is the project's key."""
+    import rawshorts
+    folder = Path(path)
+    files = rawshorts.scan(folder)
+    if not files:
+        raise ValueError("there are no video files in that folder")
+    work, name = shortsapp.standalone_names(folder)
+    wd = WORK / work
+    wd.mkdir(parents=True, exist_ok=True)
+    job = _job("shorts", ["read the recordings word by word", "tell the talking from the b-roll, write the project", "Claude chooses the shorts"])
+    job["key"] = views.key_of(work, name)
+    todo = [f for f in files if shortsapp.sh.has_audio(f)]
+
+    def after():
+        job["step"] = 1
+        info = rawshorts.tell_apart(files, wd)
+        with _lock:
+            rawshorts.new_project(work, name, folder, info)
+        job["step"] = 2
+        _claude_find(job, work, name, skillrules.shorts()["raw_max_shorts"])
+    cmds = [([str(PY), str(TOOLS / "transcribe.py"), *map(str, todo), "--out", str(wd)], TOOLS)] if todo else []
+    return _job_run(job, cmds, after)
+
+
 def start_shorts_tighten(work, name, ids):
     """Claude cuts content out of each short (filler, tangents, repeats, slow set-ups) so it is dense; one headless run per short, one after another."""
     import usage
@@ -1499,6 +1538,8 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/api/v2/shorts":
                 work, name = views.split_key(q["key"])
                 return self.send_json(shortsview.project(work, name, bool(_busy())))
+            if u.path == "/api/v2/shorts/sounds":
+                return self.send_json(shortsview.sounds())
             if u.path == "/api/v2/shorts/words":
                 work, name = views.split_key(q["key"])
                 return self.send_json(shortsview.words(work, name, q["id"]))
@@ -1614,7 +1655,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(body)
                 return
             if u.path == "/api/shorts/frame":
-                body = shortsapp.frame_jpeg(q["work"], q["name"], float(q["t"]), int(q.get("w", 960)))
+                body = shortsapp.frame_jpeg(q["work"], q["name"], float(q["t"]), int(q.get("w", 960)), q.get("src", ""))
                 self.send_response(200)
                 self.send_header("Content-Type", "image/jpeg")
                 self.send_header("Content-Length", str(len(body)))

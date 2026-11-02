@@ -76,7 +76,7 @@ def test_the_font_lookup_by_name(monkeypatch):
 
 
 def test_the_captions_use_the_profile_colours_and_font(monkeypatch):
-    monkeypatch.setattr(brandstyle.channel, "load", lambda: {"colors": "primary #102030, accent #FF8800", "headline_font": ""})
+    monkeypatch.setattr(brandstyle.channel, "load", lambda: {"colors": "primary #102030, accent #FF8800", "headline_font": "", "terms": ""})
     monkeypatch.setattr(brandstyle.sysfonts, "family_of_file", lambda p: "Test Family")
     word = {"w": "Hello", "s": 0.0, "e": 0.4}
     piece = {"layout": "live", "t0": 0.0, "a": 0.0, "b": 1.0, "dur": 1.0, "words": [word]}

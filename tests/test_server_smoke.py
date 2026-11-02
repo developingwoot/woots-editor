@@ -181,3 +181,12 @@ def test_the_file_picker_lists_video_files_only_when_asked(base, tmp_path):
     withfiles = json.loads(urllib.request.urlopen(f"{base}/api/fs?path={urllib.parse.quote(str(tmp_path))}&files=1", timeout=10).read())
     assert "files" not in plain and plain["videos"] == 1
     assert [f["name"] for f in withfiles["files"]] == ["a.mp4"] and [d["name"] for d in withfiles["dirs"]] == ["sub"]
+
+
+def test_shorts_from_a_folder_refuses_an_empty_or_missing_folder(base, tmp_path):
+    for path in (str(tmp_path), str(tmp_path / "missing")):
+        req = urllib.request.Request(f"{base}/api/v2/shorts/fromfolder", data=json.dumps({"path": path}).encode(),
+                                     headers={"Content-Type": "application/json"}, method="POST")
+        with pytest.raises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(req, timeout=10)
+        assert e.value.code == 400 and ("no video files" in e.value.read().decode() or e.value.code == 400)

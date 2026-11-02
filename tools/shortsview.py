@@ -22,6 +22,11 @@ def clock(seconds) -> str:
     return views.time_text(seconds)
 
 
+def _first_src(short) -> str:
+    r = (short.get("ranges") or [[0, 0]])[0]
+    return r["src"] if isinstance(r, dict) else ""
+
+
 def _first_t(short) -> float:
     r = (short.get("ranges") or [[0, 0]])[0]
     return float(r["a"] if isinstance(r, dict) else r[0])
@@ -67,10 +72,20 @@ def card(work: str, name: str, wd, short: dict) -> dict:
     sid = short["id"]
     return {"id": sid, "title": short.get("title") or "A short", "hook": (short.get("hook") or "").replace("|", " "), "why": short.get("why", ""),
             "status": shortsapp.status_of(short), "length": clock(_length(short)), "seconds": round(_length(short), 1), "pace": short.get("pace") or "natural",
-            "frame": f"/api/shorts/frame?work={quote(work)}&name={quote(name)}&t={_first_t(short):.1f}&w=360",
+            "frame": f"/api/shorts/frame?work={quote(work)}&name={quote(name)}&t={_first_t(short):.1f}&w=360&src={quote(_first_src(short))}",
             "preview": {"url": f"/shortmedia/{quote(work)}/{quote(sid)}.mp4?v={prev['mtime']}" if prev.get("exists") else "", "old": bool(prev.get("stale"))},
             "final": {"made": bool(fin.get("exists")) and not fin.get("stale")},
-            "tightened": bool(short.get("before_tighten"))}
+            "tightened": bool(short.get("before_tighten")),
+            "sound": {"style": short.get("caption_style") or "", "music": short.get("music") or "", "sfx": short.get("sfx") or "on",
+                      "emphasis": short.get("emphasis") or [], "made": prev.get("audio") or {}}}
+
+
+def sounds() -> dict:
+    """What the Sound panel of an open short offers: caption styles, the music (steadiest first, never a track with vocals) and the sound-effect kit."""
+    import sfxkit
+    import shortsaudio
+    return {"styles": [{"id": k, "label": v} for k, v in sh.CAPTION_STYLES.items()], "default_style": skillrules.shorts()["caption_style"],
+            "tracks": [t["name"] for t in shortsaudio.tracks()], "kit": sfxkit.view()}
 
 
 def project(work: str, name: str, busy: bool = False) -> dict:
@@ -88,8 +103,8 @@ def project(work: str, name: str, busy: bool = False) -> dict:
         return out
     raw = shortsapp.read_raw(work, name)
     shorts = raw.get("shorts", [])
-    out["title"] = Path(raw.get("source", "")).stem
-    height = sh.probe_size(raw["source"])[1] if Path(raw.get("source", "")).is_file() else 0
+    out["title"] = Path(raw["folder"]).name if raw.get("mode") == "raw" and raw.get("folder") else Path(raw.get("source", "")).stem
+    height = sh.probe_size(raw["source"])[1] if raw.get("mode") != "raw" and Path(raw.get("source", "")).is_file() else 0
     if height and height < skillrules.shorts()["soft_below_px"]:
         out["note"] = f"The video is {height}p, so close crops look soft."
     out["shorts"] = [card(work, name, wd, s) for s in shorts if shortsapp.status_of(s) != "dropped"]
@@ -124,7 +139,7 @@ def area() -> dict:
     for p in projects:                                    # shorts made from a video file that is not one of the app's videos
         if (p["work"], p["name"]) not in own:
             sentence = f"{p['shorts']} short{'s' if p['shorts'] != 1 else ''}" + (f", {p['kept']} kept" if p["kept"] else "")
-            items.append({"key": views.key_of(p["work"], p["name"]), "title": Path(p["source"]).stem, "sentence": sentence, "button": "Open the shorts", "standalone": True})
+            items.append({"key": views.key_of(p["work"], p["name"]), "title": p["title"], "sentence": sentence, "button": "Open the shorts", "standalone": True})
     return {"items": items}
 
 

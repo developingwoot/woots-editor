@@ -406,13 +406,59 @@ def apply_overrides(short, pieces):
     return pieces
 
 
+def split_piece(pc, x0, x1, first):
+    """The part of a piece from timeline second x0 to x1 (the piece starts at pc['t0']); `first` = it opens the piece, so it keeps the piece's own cut."""
+    a = pc["a"] + (x0 - pc["t0"])
+    b = pc["a"] + (x1 - pc["t0"])
+    part = dict(pc, a=a, b=b, dur=b - a, t0=x0, cont=pc["cont"] if first else True)
+    part["words"] = [w for w in pc["words"] if a - 1e-6 <= w["s"] < b - 1e-6]
+    return part
+
+
+def apply_overlays(cfg, short, pieces):
+    """B-roll over talking: short['overlays'] = [{"src": b-roll source, "a", "b": seconds of it, "at": {"src": talking source, "t": the word where it comes in}}].
+    The picture is the b-roll (shown whole, `blur` layout) and the sound stays the talking recording's, so the pieces it covers are split and given
+    `over`. The picture comes in `overlay_lead_s` before the word (a J cut: the eye is there when the word lands). A clip shorter than asked is cut short."""
+    ovs = short.get("overlays") or []
+    if not ovs or not pieces:
+        return pieces
+    lead = skillrules.shorts()["overlay_lead_s"]
+    out = [dict(p) for p in pieces]
+    for o in ovs:
+        at = o.get("at") or {}
+        i = next((i for i, p in enumerate(out) if p["src"] == at.get("src") and p["a"] - 1e-6 <= float(at.get("t", -1)) <= p["b"] + 1e-6 and not p.get("over")), None)
+        if i is None or o["src"] not in srcs(cfg):
+            continue
+        ts = max(0.0, out[i]["t0"] + (float(at["t"]) - out[i]["a"]) - lead)
+        te = min(ts + (float(o["b"]) - float(o["a"])), out[-1]["t0"] + out[-1]["dur"])
+        res = []
+        for p in out:
+            lo, hi = max(ts, p["t0"]), min(te, p["t0"] + p["dur"])
+            if hi - lo < 0.1 or p.get("over"):
+                res.append(p)
+                continue
+            if lo - p["t0"] < 0.1:                                    # a sliver of the piece before the picture: not worth a cut
+                lo = p["t0"]
+            if p["t0"] + p["dur"] - hi < 0.1:
+                hi = p["t0"] + p["dur"]
+            if lo > p["t0"]:
+                res.append(split_piece(p, p["t0"], lo, True))
+            mid = split_piece(p, lo, hi, lo == p["t0"])
+            mid.update(over={"src": o["src"], "a": float(o["a"]) + (lo - ts), "b": float(o["a"]) + (hi - ts)}, layout="blur", zoom=1.0, broll=True)
+            res.append(mid)
+            if hi < p["t0"] + p["dur"]:
+                res.append(split_piece(p, hi, p["t0"] + p["dur"], False))
+        out = res
+    return out
+
+
 def classify(cfg, pieces):
-    return apply_overrides(cfg_short(cfg), auto_classify(cfg, pieces))
+    return apply_overlays(cfg, cfg_short(cfg), apply_overrides(cfg_short(cfg), auto_classify(cfg, pieces)))
 
 
 PIECES_VER = 7                                                                   # bump when build_pieces / auto_classify change, so cached guesses are redone
 SIG_AUTO = ("ranges", "drop", "words", "pace")                                           # what the automatic guesses depend on
-SIG_ALL = ("ranges", "drop", "words", "hook", "crops", "layout_all", "pace")             # what a render depends on
+SIG_ALL = ("ranges", "drop", "words", "hook", "crops", "layout_all", "pace", "overlays", "caption_style", "emphasis", "music", "sfx")             # what a render depends on
 
 
 def sig(obj):
@@ -471,7 +517,7 @@ def auto_pieces(cfg, short, wd):
 
 
 def cached_pieces(cfg, short, wd):
-    return apply_overrides(short, auto_pieces(cfg, short, wd))
+    return apply_overlays(cfg, short, apply_overrides(short, auto_pieces(cfg, short, wd)))
 
 
 def cfg_short(cfg):
@@ -507,17 +553,74 @@ def chunks_of(words):
     return out
 
 
+CAPTION_STYLES = {"pop": "Pop", "box": "Box", "bounce": "Bounce", "plain": "Plain"}
+
+
+def caption_style(short) -> str:
+    k = short.get("caption_style") or skillrules.shorts()["caption_style"]
+    return k if k in CAPTION_STYLES else "pop"
+
+
+CHAR_PX = 61                                   # width of one capital of the caption font at 122 px, near enough to keep a line inside the zone
+
+
+def caption_pos(layout, chars=0) -> tuple:
+    """(x, y) of the centre of a caption line, inside YouTube's safe zone: below `safe_top_px`, above the bottom `safe_bottom_px`, left of the right `safe_right_px`.
+    A line that fits stays centred; a wide one moves left just enough to keep its right edge out of the buttons."""
+    r = skillrules.shorts()
+    y = 1500 if layout == "graphic" else 1290
+    half = min(chars * CHAR_PX, W - r["safe_right_px"]) / 2
+    x = W // 2 if W // 2 + half <= W - r["safe_right_px"] else int(W - r["safe_right_px"] - half)
+    return x, min(max(y, r["safe_top_px"] + 95), H - r["safe_bottom_px"] - 95)
+
+
+CAP_SIZE = 122
+
+
+def caption_size(chars) -> int:
+    """The caption font size: 122 px, smaller (in steps of 4) for a line too wide for the safe zone."""
+    room = W - skillrules.shorts()["safe_right_px"]
+    return CAP_SIZE if chars * CHAR_PX <= room else max(40, int(CAP_SIZE * room / (chars * CHAR_PX)) // 4 * 4)
+
+
+def emphasis(pieces, short) -> list:
+    """The words that stand out in the captions and get a sound: [{"i": piece, "t": seconds in the short, "s": word start, "w": text, "num": bool}] in time order.
+    Numbers, the channel's own terms (the profile) and the words the short lists in `emphasis`; at most one per `emphasis_gap_s` seconds (the marked words first, then numbers)."""
+    terms = {re.sub(r"[^\w']", "", t).lower() for t in channel.spellings() if t}
+    marked = {re.sub(r"[^\w']", "", str(x)).lower() for x in short.get("emphasis") or []}
+    cands = []
+    for i, pc in enumerate(pieces):
+        for w in pc["words"]:
+            core = re.sub(r"[^\w']", "", w["w"]).lower()
+            if not core:
+                continue
+            num = bool(re.search(r"\d", core))
+            rank = 0 if core in marked else 1 if num else 2 if core in terms else None
+            if rank is not None:
+                cands.append((rank, pc["t0"] + w["s"] - pc["a"], i, w, num))
+    gap = skillrules.shorts()["emphasis_gap_s"]
+    kept = []
+    for c in sorted(cands, key=lambda c: (c[0], c[1])):
+        if all(abs(c[1] - k[1]) >= gap for k in kept):
+            kept.append(c)
+    return [{"i": i, "t": t, "s": w["s"], "w": w["w"], "num": num} for _, t, i, w, num in sorted(kept, key=lambda c: c[1])]
+
+
 def make_ass(short, pieces):
     pal = brandstyle.palette()
     accent, fnt = brandstyle.ass(pal["accent"]), brandstyle.font("headline")
     text_c, outline_c, bold = brandstyle.ass(pal["light"]), brandstyle.ass(pal["dark"]), -1 if fnt["bold"] else 0
     on_accent = outline_c if brandstyle.luminance(pal["accent"]) > 0.6 else text_c            # the hook text sits on a box in the accent colour
+    style = caption_style(short)
+    emph = {(e["i"], round(e["s"], 2)) for e in emphasis(pieces, short)}
     sp = pace_of(short)["speed"]                           # the whole short is played faster: caption times follow
-    ev = []
-    for pc in pieces:
-        y = 1500 if pc["layout"] == "graphic" else 1290
-        ws = [dict(w, o=pc["t0"] + w["s"] - pc["a"]) for w in pc["words"]]
+    ev, caps = [], []
+    for pi, pc in enumerate(pieces):
+        ws = [dict(w, o=pc["t0"] + w["s"] - pc["a"], em=(pi, round(w["s"], 2)) in emph) for w in pc["words"]]
         for ch in chunks_of(ws):
+            nchars = sum(len(re.sub(r"[.,;:]+$", "", x["w"])) for x in ch) + len(ch) - 1
+            cx, y = caption_pos(pc["layout"], nchars)
+            size = caption_size(nchars)
             for k, w in enumerate(ch):
                 start = max(0.0, w["o"])
                 end = ch[k + 1]["o"] - 0.012 if k + 1 < len(ch) else min(ch[-1]["o"] + (ch[-1]["e"] - ch[-1]["s"]) + 0.12, pc["t0"] + pc["dur"])
@@ -526,15 +629,30 @@ def make_ass(short, pieces):
                 parts = []
                 for j, x in enumerate(ch):
                     t = re.sub(r"[.,;:]+$", "", x["w"]).upper().replace("{", "").replace("}", "")
-                    if j == k:
+                    big = "{\\c" + accent + "\\fscx120\\fscy120}" if x["em"] else ""
+                    if j == k and style == "pop":
                         parts.append("{\\c" + accent + "\\fscx135\\fscy135\\t(0,110,\\fscx118\\fscy118)}" + t + "{\\r}")
+                    elif j == k and style == "box":
+                        parts.append("{\\c" + on_accent + "\\3c" + accent + "\\bord16}" + t + "{\\r}")
+                    elif big:
+                        parts.append(big + t + "{\\r}")
                     else:
                         parts.append(t)
-                ev.append(f"Dialogue: 1,{ass_time(start / sp)},{ass_time(end / sp)},Cap,,0,0,0,,{{\\an5\\pos(540,{y})}}" + " ".join(parts))
+                where = f"\\move({cx},{y - 70},{cx},{y},0,140)" if style == "bounce" and k == 0 else f"\\pos({cx},{y})"
+                caps.append([start, end, f"{{\\an5{where}}}" + " ".join(parts), size])
+    caps.sort(key=lambda c: c[0])
+    for c, nxt in zip(caps, caps[1:]):                     # one line at a time: a line ends where the next begins (the held last word of a line used to run into the next one)
+        c[1] = min(c[1], nxt[0])
+    sizes = sorted({c[3] for c in caps} | {CAP_SIZE})
+    for start, end, text, size in caps:
+        if end > start:
+            ev.append(f"Dialogue: 1,{ass_time(start / sp)},{ass_time(end / sp)},{'Cap' if size == CAP_SIZE else f'Cap{size}'},,0,0,0,,{text}")
     hook = short.get("hook")
     if hook:
         lines = "\\N".join(hook.upper().split("|"))
-        ev.append(f"Dialogue: 2,{ass_time(0.0)},{ass_time(skillrules.shorts()["hook_s"])},Hook,,0,0,0,,{{\\an5\\pos(540,230)\\fad(120,200)\\fscx60\\fscy60\\t(0,160,\\fscx100\\fscy100)}}{lines}")
+        ev.append(f"Dialogue: 2,{ass_time(0.0)},{ass_time(skillrules.shorts()["hook_s"])},Hook,,0,0,0,,{{\\an5\\pos({caption_pos("live")[0]},230)\\fad(120,200)\\fscx60\\fscy60\\t(0,160,\\fscx100\\fscy100)}}{lines}")
+    styles = "".join(f'Style: {"Cap" if n == CAP_SIZE else f"Cap{n}"},{fnt["family"]},{n},{text_c},{text_c},{outline_c},&H96000000,{bold},0,0,0,100,100,2,0,1,9,5,5,40,40,0,1\n'
+                     for n in sizes)
     head = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {W}
@@ -544,8 +662,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Cap,{fnt["family"]},122,{text_c},{text_c},{outline_c},&H96000000,{bold},0,0,0,100,100,2,0,1,9,5,5,40,40,0,1
-Style: Hook,{fnt["family"]},100,{on_accent},{on_accent},{accent},{accent},{bold},0,0,0,100,100,2,0,3,22,0,5,60,60,0,1
+{styles}Style: Hook,{fnt["family"]},100,{on_accent},{on_accent},{accent},{accent},{bold},0,0,0,100,100,2,0,3,22,0,5,60,60,0,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -568,6 +685,13 @@ def filter_graph(pieces, base, speed=1.0, f=1.0, inputs=None):
         k = (inputs or {}).get(pc.get("src"), 0)
         t_in = base[pc["src"]] if isinstance(base, dict) else base
         a, b = pc["a"] - t_in, pc["b"] - t_in
+        ov = pc.get("over")                                      # b-roll over talking: the picture comes from another file, the sound stays this one's
+        if ov:
+            kv = (inputs or {}).get(ov["src"], 0)
+            va = ov["a"] - (base[ov["src"]] if isinstance(base, dict) else base)
+            vb = va + (ov["b"] - ov["a"])
+        else:
+            kv, va, vb = k, a, b
         if pc["layout"] == "graphic":
             gz = pc.get("gzoom", 1.0)
             gw = int(round(1600 / gz / 2) * 2)
@@ -579,7 +703,7 @@ def filter_graph(pieces, base, speed=1.0, f=1.0, inputs=None):
             chain = f"crop={gw}:{gh}:{gx}:{gy},scale={w}:{ev(730 * f)}:flags=lanczos,pad={w}:{h}:0:{ev(400 * f)}:color={card}"
         elif pc["layout"] == "blur":
             # B-roll that should stay whole: sharp 16:9 in the middle, a blurred, enlarged copy fills the rest
-            fv.append(f"[{k}:v]trim=start={a:.3f}:end={b:.3f},setpts=PTS-STARTPTS,split[vb{i}][vf{i}];"
+            fv.append(f"[{kv}:v]trim=start={va:.3f}:end={vb:.3f},setpts=PTS-STARTPTS,split[vb{i}][vf{i}];"
                       f"[vb{i}]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},boxblur={max(2, int(40 * f))}:{max(1, int(4 * f))},eq=brightness=-0.1[bb{i}];"
                       f"[vf{i}]scale={w}:-2:flags=lanczos[ff{i}];[bb{i}][ff{i}]overlay=0:(H-h)/2-{int(90 * f)},setsar=1,fps=30[v{i}]")
             chain = None
@@ -587,7 +711,7 @@ def filter_graph(pieces, base, speed=1.0, f=1.0, inputs=None):
             cw, ch, x, y = crop_box(pc)
             chain = f"crop={cw}:{ch}:{x}:{y},scale={w}:{h}:flags=lanczos" + (",unsharp=5:5:0.5" if f >= 1.0 else "")
         if chain:
-            fv.append(f"[{k}:v]trim=start={a:.3f}:end={b:.3f},setpts=PTS-STARTPTS,{chain},setsar=1,fps=30[v{i}]")
+            fv.append(f"[{kv}:v]trim=start={va:.3f}:end={vb:.3f},setpts=PTS-STARTPTS,{chain},setsar=1,fps=30[v{i}]")
         if pc.get("noaudio"):                                    # a file with no sound (most b-roll): silence for as long as the piece
             af = f"anullsrc=r=48000:cl=stereo,atrim=duration={b - a:.3f},asetpts=PTS-STARTPTS"
         else:
@@ -614,15 +738,17 @@ ENCODE = {
 }
 
 
-def render(cfg, short, out, pieces=None, quality="preview"):
+def render(cfg, short, out, pieces=None, quality="preview", report=None):
+    """Render one short to `out`. `report` (a dict) gets "audio": what was mixed under the voice (the track, the SFX, and what was missing)."""
     enc = ENCODE[quality]
     f = enc["f"]
     pieces = pieces or classify(cfg, build_pieces(cfg, short))
     speed = pace_of(short)["speed"]
     total = (pieces[-1]["t0"] + pieces[-1]["dur"]) / speed          # length of the finished short
-    used = list(dict.fromkeys(p["src"] for p in pieces))                  # the sources the pieces come from, in order of first use
-    base = {sid: max(0.0, min(p["a"] for p in pieces if p["src"] == sid) - 1.0) for sid in used}
-    span_end = {sid: max(p["b"] for p in pieces if p["src"] == sid) + 1.0 for sid in used}
+    spans = [(p["src"], p["a"], p["b"]) for p in pieces] + [(p["over"]["src"], p["over"]["a"], p["over"]["b"]) for p in pieces if p.get("over")]
+    used = list(dict.fromkeys(s for s, _, _ in spans))                    # the files the pieces come from (picture or sound), in order of first use
+    base = {sid: max(0.0, min(a for s, a, _ in spans if s == sid) - 1.0) for sid in used}
+    span_end = {sid: max(b for s, _, b in spans if s == sid) + 1.0 for sid in used}
     fv, fa = filter_graph(pieces, base, speed, f, {sid: n for n, sid in enumerate(used)})
     tmp = Path(tempfile.mkdtemp(prefix="short_", dir=tempfile.gettempdir()))
     try:
@@ -641,6 +767,12 @@ def render(cfg, short, out, pieces=None, quality="preview"):
         subprocess.run(cmd, cwd=tmp, check=True)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+    import shortsaudio
+    extras = shortsaudio.plan(short, pieces, total, speed)
+    if extras["beds"] or extras["sfx"]:
+        shortsaudio.mix_into(Path(out), extras)
+    if report is not None:
+        report["audio"] = {"track": extras["track"], "sfx": len(extras["sfx"]), "missing": extras["missing"]}
     return total, pieces
 
 
@@ -697,9 +829,10 @@ def main():
         suffix = "" if a.quality == "preview" else ".final"
         out = Path(a.out or base / "shorts" / f"{a.id}{suffix}.mp4")
         part = out.with_name(out.stem + ".part.mp4")           # the app serves the file while it is being replaced: never write into it directly
-        total, _ = render(cfg, short, str(part), cached_pieces(cfg, short, base), a.quality)
+        report = {}
+        total, _ = render(cfg, short, str(part), cached_pieces(cfg, short, base), a.quality, report)
         os.replace(part, out)
-        (out.parent / f"{a.id}{suffix}.render.json").write_text(json.dumps({"sig": short_sig(short, SIG_ALL), "dur": round(total, 2), "at": time.time(), "quality": a.quality}), encoding="utf-8")
+        (out.parent / f"{a.id}{suffix}.render.json").write_text(json.dumps({"sig": short_sig(short, SIG_ALL), "dur": round(total, 2), "at": time.time(), "quality": a.quality, **report}), encoding="utf-8")
         print(out, round(total, 1), "s")
 
 

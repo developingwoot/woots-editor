@@ -38,17 +38,16 @@ import config
 WORK = config.WORK
 MUSIC_DIR = config.MUSIC_DIR
 SFX_DIR = config.SFX_DIR
-SR = 48000
 FPS = 30
 SIZE = [1920, 1080]
 FADE = 0.008
-AUDIO_EXT = {".mp3", ".wav", ".ogg", ".flac", ".m4a", ".aac"}
 # The creator-approved "V2: warmer, less bright" (SKILL.md, Voice processing)
 VOICE_CHAIN = ("highpass=f=70:poles=2,afftdn=nr=6:nf=-55:tn=1,equalizer=f=100:t=q:w=6:g=-4,lowshelf=f=220:g=1.5,"
                "equalizer=f=160:t=q:w=1.0:g=2.5,equalizer=f=450:t=q:w=1.4:g=-2.5,equalizer=f=3200:t=q:w=1.2:g=1.5,"
                "highshelf=f=7500:g=-1.5,deesser=i=0.4,acompressor=threshold=-26dB:ratio=3:attack=10:release=180:makeup=3dB:knee=5")
 sys.path.insert(0, str(HERE))
 import workflow  # noqa: E402
+from audiomix import SR, AUDIO_EXT  # noqa: E402,F401
 
 
 def read_json(p: Path, default=None):
@@ -296,27 +295,7 @@ def state(work: str, name: str) -> dict:
 
 
 # ----------------------------------------------------------------------------- audio rendering
-def _np():
-    import numpy as np
-    import soundfile as sf
-    return np, sf
-
-
-def ff(*a):
-    import sectionrender
-    return subprocess.run([sectionrender.FFMPEG, "-nostdin", "-y", "-v", "error", *map(str, a)], capture_output=True, text=True)
-
-
-def decode(path: Path, cache: Path):
-    np, sf = _np()
-    key = hashlib.sha1(f"{path}|{path.stat().st_size}|{int(path.stat().st_mtime)}".encode()).hexdigest()[:12]
-    wav = cache / f"dec_{key}.wav"
-    if not wav.exists():
-        r = ff("-i", path, "-ac", 2, "-ar", SR, "-c:a", "pcm_f32le", wav)
-        if r.returncode != 0:
-            raise RuntimeError(f"could not decode {path.name}: {r.stderr.strip()[-200:]}")
-    a, _ = sf.read(str(wav), dtype="float32", always_2d=True)
-    return a
+from audiomix import _np, ff, decode, mix  # noqa: E402,F401  (moved to audiomix.py; shorts mix with the same recipe)
 
 
 def chain_latency(chain: str) -> int:
@@ -406,68 +385,6 @@ def build_speech(segs: list[dict], frames: list[int], cache: Path, voice: bool):
         g = gains.get(asrc, 0.0)
         out_pieces.append(p * np.float32(10 ** (g / 20)) if abs(g) >= 0.5 else p)
     return np.concatenate(out_pieces)
-
-
-def mix(speech, plan: dict, st: dict, cache: Path):
-    """Music beds (-26 LU under the speech, ducked 9 dB while the host talks, crossfaded) + SFX. The recipe is render.mix_audio's."""
-    import pyloudnorm as pyln
-    np, _ = _np()
-    n = len(speech)
-    meter = pyln.Meter(SR)
-    speech_lufs = meter.integrated_loudness(speech)
-    hop = SR // 100
-    mono = speech.mean(axis=1)
-    rms = np.sqrt(np.convolve((mono[: n // hop * hop].reshape(-1, hop) ** 2).mean(1), np.ones(5) / 5, "same"))
-    db = 20 * np.log10(rms + 1e-9)
-    active = db > np.percentile(db, 90) - 25
-    duck_db = float(st["duck_db"])
-    duck = np.zeros(len(active), np.float32)
-    g = 0.0
-    for i, on in enumerate(active):
-        target = -duck_db if on else 0.0
-        g += (target - g) * (0.35 if target < g else 0.03)           # attack ~30 ms, release ~350 ms
-        duck[i] = g
-    duck = np.repeat(10 ** (duck / 20), hop)
-    duck = np.pad(duck, (0, max(0, n - len(duck))), constant_values=1.0)[:n, None]
-    music = np.zeros_like(speech)
-    xf = int(1.5 * SR)
-    beds = plan["beds"]
-    for k, bed in enumerate(beds):
-        a, b = int(bed["start"] * SR), min(n, int(bed["end"] * SR))
-        if k > 0 and bed["start"] - beds[k - 1]["end"] < 1.5:
-            a = max(0, a - xf // 2)
-        if k < len(beds) - 1 and beds[k + 1]["start"] - bed["end"] < 1.5:
-            b = min(n, b + xf // 2)
-        if b - a < SR:
-            continue
-        track = decode(Path(bed["file"]), cache)
-        loud = meter.integrated_loudness(track[: min(len(track), 60 * SR)])
-        track = track * 10 ** ((speech_lufs - float(st["music_below_speech_db"]) - loud) / 20)
-        need = b - a
-        out = track[:need].copy()
-        while len(out) < need:                                        # short track: loop with a crossfade
-            nxt = track[: need - len(out) + xf]
-            ramp = np.linspace(0, 1, min(xf, len(nxt), len(out)), dtype=np.float32)[:, None]
-            m_ = len(ramp)
-            out[-m_:] = out[-m_:] * (1 - ramp) + nxt[:m_] * ramp
-            out = np.concatenate([out, nxt[m_:]])
-        out = out[:need]
-        fin = np.linspace(0, 1, min(xf, need), dtype=np.float32)[:, None]
-        out[: len(fin)] *= fin
-        out[-len(fin):] *= fin[::-1]
-        music[a:b] += out
-    music *= duck
-    sfx = np.zeros_like(speech)
-    speech_peak = np.percentile(np.abs(speech), 99.9)
-    for s in plan["sfx"]:
-        clip = decode(Path(s["file"]), cache)
-        peak = np.abs(clip).max() or 1.0
-        clip = clip * (speech_peak / peak) * 10 ** (-12 / 20)          # -4 dB under the speech peak was too loud (the creator, 2026-10-25)
-        a = int(s["t"] * SR)
-        e = min(n, a + len(clip))
-        if a < n:
-            sfx[a:e] += clip[: e - a]
-    return speech + music + sfx, speech_lufs
 
 
 def loudnorm(raw: Path, dst: Path) -> dict:
