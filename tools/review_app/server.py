@@ -1367,6 +1367,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(engines.view())
             if u.path == "/api/v2/channel":
                 return self.send_json(channel.view())
+            if u.path == "/api/v2/fonts":
+                import sysfonts
+                return self.send_json({"fonts": sysfonts.installed()})
             if u.path == "/api/v2/claude":
                 import appsetup
                 return self.send_json(appsetup.claude_status())
@@ -2012,7 +2015,7 @@ def main():
         print("  warning: ffprobe not found; assuming 30 fps")
     if args.open:
         import webbrowser
-        webbrowser.open(url)
+        webbrowser.open(url + "v2")
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

@@ -1,5 +1,6 @@
 import { h, api } from './util.js';
 import { pickFolder } from './folder.js';
+import { fontPicker, palettePicker } from './brandpickers.js';
 
 // Settings and first run: where the app keeps its files, and whether Claude is signed in.
 // Folders are saved per user (not in the code); the app restarts to use them.
@@ -53,9 +54,13 @@ export async function render(root) {
     headline_font: 'Headline font', label_font: 'Label font', colors: 'Brand colours', tone: 'Tone', always: 'Every video', never: 'No video' };
   const LONG = ['audience', 'voice', 'terms', 'colors', 'always', 'never'];
   const STYLE = ['headline_font', 'label_font', 'colors', 'tone', 'always', 'never'];
+  const edited = value => { return v => { value.value = v; document.getElementById('saveChannel').disabled = false; }; };
+  const channelName = () => (channel.fields.find(x => x.key === 'channel') || {}).value;
   const channelRow = f => h('div', { class: 'setRow' },
     h('label', {}, h('b', {}, LABELS[f.key] || f.key), h('div', { class: 'muted small' }, f.help)),
-    LONG.includes(f.key) ? h('textarea', { rows: 2, class: 'setPath', 'data-key': f.key, placeholder: f.default, oninput: e => { f.value = e.target.value; document.getElementById('saveChannel').disabled = false; } }, f.value)
+    f.key.endsWith('_font') ? fontPicker({ value: f.value, sample: channelName, onChange: edited(f) })
+      : f.key === 'colors' ? palettePicker({ value: f.value, onChange: edited(f) })
+      : LONG.includes(f.key) ? h('textarea', { rows: 2, class: 'setPath', 'data-key': f.key, placeholder: f.default, oninput: e => { f.value = e.target.value; document.getElementById('saveChannel').disabled = false; } }, f.value)
       : h('input', { type: 'text', class: 'setPath', 'data-key': f.key, placeholder: f.default, value: f.value, oninput: e => { f.value = e.target.value; document.getElementById('saveChannel').disabled = false; } }));
   const channelCard = () => {
     if (!channel) return h('section', { class: 'card setCard', id: 'channelCard' }, h('h2', {}, 'Your channel'), h('p', { class: 'muted' }, 'Loading…'));
