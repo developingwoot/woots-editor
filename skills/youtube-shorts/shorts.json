@@ -10,5 +10,10 @@
   "max_moment_s": 90,
   "caption_max_words": 3,
   "caption_max_chars": 17,
-  "hook_s": 2.8
+  "hook_s": 2.8,
+  "moment_min_s": 20,
+  "moment_max_s": 55,
+  "moment_min_score": 3.0,
+  "soft_below_px": 1080,
+  "broll_similarity": 0.5
 }

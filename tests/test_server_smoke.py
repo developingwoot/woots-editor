@@ -7,6 +7,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -160,3 +161,23 @@ def test_v2_notes_make_and_stop_refuse_bad_requests(base):
         post("/api/v2/notes", {"key": key, "stage": "preview", "op": "add", "text": " ", "t": 1})
     assert e.value.code == 400 and "write the note first" in e.value.read().decode()
     assert _json.loads(post("/api/v2/job/stop", {"id": "nope"}).read()) == {"ok": True}
+
+
+def test_shorts_from_a_file_refuses_what_is_not_a_video(base, tmp_path):
+    (tmp_path / "notes.txt").write_text("hi", encoding="utf-8")
+    for path in (str(tmp_path / "notes.txt"), str(tmp_path / "missing.mp4")):
+        req = urllib.request.Request(f"{base}/api/v2/shorts/fromfile", data=json.dumps({"path": path}).encode(),
+                                     headers={"Content-Type": "application/json"}, method="POST")
+        with pytest.raises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(req, timeout=10)
+        assert e.value.code == 400 and "pick a video file" in e.value.read().decode()
+
+
+def test_the_file_picker_lists_video_files_only_when_asked(base, tmp_path):
+    (tmp_path / "a.mp4").write_bytes(b"x" * 2000)
+    (tmp_path / "b.txt").write_text("no", encoding="utf-8")
+    (tmp_path / "sub").mkdir()
+    plain = json.loads(urllib.request.urlopen(f"{base}/api/fs?path={urllib.parse.quote(str(tmp_path))}", timeout=10).read())
+    withfiles = json.loads(urllib.request.urlopen(f"{base}/api/fs?path={urllib.parse.quote(str(tmp_path))}&files=1", timeout=10).read())
+    assert "files" not in plain and plain["videos"] == 1
+    assert [f["name"] for f in withfiles["files"]] == ["a.mp4"] and [d["name"] for d in withfiles["dirs"]] == ["sub"]

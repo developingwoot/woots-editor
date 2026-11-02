@@ -381,12 +381,23 @@ def new_project(work: str, name: str, source: str, transcript: str, speakers: st
     save_raw(work, name, {"source": source, "transcript": transcript, "speakers": speakers or "", "shorts": []})
 
 
+def standalone_names(src: Path) -> tuple:
+    """(work folder, project name) for shorts made from a video file that is not one of the app's videos: `_shorts-<slug>` / `<slug>`, a new pair if that one is taken."""
+    slug = re.sub(r"[^a-z0-9]+", "-", Path(src).stem.lower()).strip("-")[:40] or "video"
+    k, name = 1, slug
+    while (WORK / f"_shorts-{name}").exists():
+        k += 1
+        name = f"{slug}-{k}"
+    return f"_shorts-{name}", name
+
+
 def video_plan(work: str, name: str, cfg: dict | None = None) -> dict:
     """The recommendation for this video: how many shorts, and where its strong visual moments are (shortsplan.py)."""
     rec = shortsplan.for_video(work, name)
     if not rec["runtime_s"]:                                         # no beat map for this project: length from the transcript
         cfg = cfg or sh.load(cfg_file(work, name))
-        rec = dict(shortsplan.recommend(None, runtime_s=float(cfg["_tr"].get("duration") or 0)), has_beatmap=False)
+        rec = dict(shortsplan.recommend(None, runtime_s=float(cfg["_tr"].get("duration") or 0), spoken=shortsplan.spoken_moments(cfg["_tr"].get("segments") or [])),
+                   has_beatmap=False)
     return rec
 
 

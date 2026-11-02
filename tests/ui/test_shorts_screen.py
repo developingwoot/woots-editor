@@ -119,3 +119,49 @@ def test_making_a_preview_shows_the_vertical_video(screen):
     import shorts
     assert shorts.probe_size(r["dir"] / "shorts" / "s1.mp4") == (540, 960)                  # the file is the vertical preview (the test browser cannot play h264 itself)
     assert clutter(visible_text(page)) == []
+
+
+def test_the_video_file_picker_lists_folders_and_videos(screen, tmp_path):
+    import shutil
+    (tmp_path / "Finished Video.mp4").write_bytes(b"x" * 3000)
+    (tmp_path / "notes.txt").write_text("no", encoding="utf-8")
+    (tmp_path / "More").mkdir()
+    page = screen("/v2/#/shorts")
+    page.wait_for_selector("#fromFile")
+    page.evaluate("p => localStorage.setItem('wr.videoDir', p)", str(tmp_path))          # the picker starts in the folder used last
+    page.click("#fromFile")
+    page.wait_for_selector("#folderDlg")
+    expect(page.locator("#fdInfo")).to_contain_text("1 video file", timeout=60000)
+    page.wait_for_selector(".fdFile")
+    text = page.inner_text("#folderDlg")
+    assert "Finished Video.mp4" in text and "More" in text and "notes.txt" not in text
+    assert not page.locator("#fdUse").is_visible()
+    page.keyboard.press("Escape")
+    expect(page.locator("#folderDlg")).to_have_count(0)
+
+
+def test_shorts_made_from_a_video_file_open_under_their_own_heading(screen, tmp_path):
+    import shortsapp
+    import subprocess
+    import workflow
+    src = tmp_path / "Own File Video.mp4"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "testsrc=size=640x360:rate=15:duration=3", "-f", "lavfi", "-i", "sine=duration=3",
+                    "-pix_fmt", "yuv420p", "-shortest", str(src)], check=True)
+    work, name = shortsapp.standalone_names(src)
+    wd = workflow.WORK / work
+    wd.mkdir(parents=True)
+    tr = wd / "t.json"
+    tr.write_text(json.dumps({"duration": 3, "words": [], "segments": [{"start": 0, "end": 3, "text": "hello"}]}), encoding="utf-8")
+    shortsapp.new_project(work, name, str(src).replace("\\", "/"), str(tr).replace("\\", "/"), None)
+    raw = shortsapp.read_raw(work, name)
+    raw["shorts"] = [{"id": "s1", "title": "Hello there", "hook": "HELLO", "status": "", "ranges": [[0.0, 3.0]]}]
+    shortsapp.save_raw(work, name, raw)
+    page = screen("/v2/#/shorts")
+    row = page.locator(".shortsItem", has_text="Own File Video")
+    row.locator("a.main").click()
+    page.wait_for_selector(".shortCard")
+    assert page.locator("h1").inner_text() == "Own File Video"
+    assert "← Shorts" in visible_text(page) and "Hello there" in visible_text(page)
+    assert clutter(visible_text(page)) == []
+    page.click("text=← Shorts")
+    page.wait_for_selector(".shortsItem")

@@ -1,6 +1,6 @@
 # Shorts: the plan
 
-Status: planned 2026-11-02; Phase 0 and Phase 1 are done (see "Phase 1 as built"); nothing else is built yet. Work through the phases in order; each one ends in something the
+Status: planned 2026-11-02; Phases 0 to 3 are done (see "as built" below); nothing else is built yet. Work through the phases in order; each one ends in something the
 host can use and a green test run. Read `CLAUDE.md` first: its rules (no approval gates, plan files through `projectstore`, channel data only in the
 profile, a test for every behaviour change) all apply here.
 
@@ -212,6 +212,25 @@ main video as before (a regression test on synthetic audio).
   the hook, the pace, "Tighten it", and the words (click to cut or restore). Shorts nobody kept or dropped are still made, with a line saying so.
 - **Not built yet**: notes to Claude on a short, layout per piece, caption style / music / SFX / graphics panels (Phases 5 and 6), and the two buttons for a video file (Phase 3) and raw footage (Phase 4).
 - Also fixed: `channel.save` and the settings writer retry `os.replace` (`config.replace_retry`), which failed intermittently on Windows while the server read the file.
+
+## Phase 3 as built (2026-11-02)
+
+- "Shorts from a video file" on the Shorts area opens a file picker (`pickFolder({files: true})`, starting in the folder used last), then a job: read the file word by word (the chosen speech
+  engine), write a project in `WORK/_shorts-<slug>/` (the file stays where it is), and Claude chooses the shorts. The project opens at `#/shorts/<key>`.
+- No beat map: `shortsplan.spoken_moments()` scores windows of speech (questions, numbers, a turn such as "but" / "the fix", a payoff at the end) and the best non-overlapping ones become
+  the moments in the sentence and in Claude's prompt. Numbers (`moment_*`, `soft_below_px`, `broll_similarity`) are in the `youtube-shorts` skill.
+- A frame with no face that looks nothing like the frames where the speaker was found (colour histogram) is b-roll and gets the `blur` layout instead of a guessed crop.
+- A source under 1080p shows "The video is 720p, so close crops look soft."
+- Finished shorts of a standalone project go to a `Shorts` folder next to the source file (the existing delivery); change it if you would rather have one folder in the workspace.
+- **Not built**: looking at frames with the vision model (the colour test stands in for it), and a score that uses what is on screen.
+
+## Ideas to think about (from the host)
+
+- **Cuts timed to the music's beat.** With a music bed (Phase 5), snap cut points and zoom steps to the nearest beat when a beat is within a few tenths of a second, and keep SFX on the beat.
+  Needs a beat tracker (librosa is already a dependency); the rule and its tolerance belong in the `youtube-shorts` skill.
+- **J and L cuts.** The sound leads the picture (J) or trails it (L): the next line's voice starts under the end of the last shot, or the last line's voice keeps going over the next shot.
+  The renderer already treats audio and picture of a piece separately in places; Phase 4 needs `audio_from` (b-roll over talking), which is the same mechanism. Plan: add an `audio_offset`
+  per cut in the piece (a few tenths of a second, set by rule in the skill, adjustable per short), use it between a talking piece and the next, and always for b-roll over speech.
 
 ## Open questions (ask the host when the phase starts)
 

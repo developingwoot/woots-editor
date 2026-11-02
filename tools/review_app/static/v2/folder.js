@@ -2,7 +2,7 @@ import { h, api } from './util.js';
 
 // A folder chooser: a dialog that walks the drives and folders (the server lists them), with "Use this folder".
 // pickFolder({ start, suggest: [paths] }) resolves to the chosen path, or null if the dialog was closed.
-export function pickFolder({ start = '', suggest = [], title = 'Choose the folder you recorded into' } = {}) {
+export function pickFolder({ start = '', suggest = [], title = 'Choose the folder you recorded into', files = false } = {}) {
   return new Promise(resolve => {
     const dlg = h('dialog', { class: 'folderDlg', id: 'folderDlg' });
     const path = h('input', { id: 'fdPath', type: 'text', autocomplete: 'off' });
@@ -16,24 +16,26 @@ export function pickFolder({ start = '', suggest = [], title = 'Choose the folde
     async function browse(p) {
       const mine = ++seq;
       try {
-        const r = await api(`/api/fs?path=${encodeURIComponent(p || '')}`);
+        const r = await api(`/api/fs?path=${encodeURIComponent(p || '')}${files ? '&files=1' : ''}`);
         if (mine !== seq) return;
         current = r.path;
         path.value = r.path;
         list.replaceChildren(
           ...(r.path ? [h('div', { class: 'fdRow', onclick: () => browse(r.parent) }, '⬑ Up')] : []),
           ...r.dirs.map(d => h('div', { class: 'fdRow', onclick: () => browse(d.path) }, `📁 ${d.name}`)),
-          ...(r.dirs.length ? [] : [h('div', { class: 'muted small' }, 'No folders in here.')]));
+          ...(files ? (r.files || []).map(f => h('div', { class: 'fdRow fdFile', onclick: () => done(f.path) }, `🎞 ${f.name}`, h('span', { class: 'muted small' }, ` ${f.mb} MB`))) : []),
+          ...(r.dirs.length || (files && (r.files || []).length) ? [] : [h('div', { class: 'muted small' }, files ? 'No folders or videos in here.' : 'No folders in here.')]));
         info.textContent = r.path ? `${r.videos} video file${r.videos === 1 ? '' : 's'} directly in this folder` : 'Choose a drive';
         use.disabled = !r.path;
+        use.hidden = files;
       } catch (e) { info.textContent = e.message; }
     }
     path.addEventListener('keydown', e => { if (e.key === 'Enter') browse(path.value.trim()); });
     use.addEventListener('click', () => done(current));
     dlg.addEventListener('cancel', () => done(null));
-    dlg.append(h('h3', {}, title),
+    dlg.append(...[h('h3', {}, title),
       suggest.length ? h('div', { class: 'fdSuggest' }, h('span', { class: 'muted small' }, 'Suggestion: '), ...suggest.map(s => h('button', { class: 'quiet', onclick: () => browse(s) }, s))) : null,
-      path, list, info, h('div', { class: 'row' }, use, h('button', { class: 'quiet', onclick: () => done(null) }, 'Cancel')));
+      path, list, info, h('div', { class: 'row' }, use, h('button', { class: 'quiet', onclick: () => done(null) }, 'Cancel'))].filter(Boolean));
     document.body.append(dlg);
     dlg.showModal();
     browse(start || suggest[0] || '');

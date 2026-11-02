@@ -8,6 +8,7 @@ Everything here is plain Python on the beat map (no Claude, no tokens): the page
 Times are main-video (output) seconds, the same clock as the beat map's start/end.
 """
 import json
+import re
 from pathlib import Path
 
 import config
@@ -83,12 +84,71 @@ def moments(beats: list[dict]) -> list[dict]:
     return sorted(res, key=lambda m: -m["score"])
 
 
+CONTRAST = ("but", "instead", "however", "actually", "turns out", "the fix", "the problem", "the trick", "the secret", "the reason", "finally", "mistake", "wrong", "surprising")
+PAYOFF = ("so ", "that's why", "which means", "and that's", "that is why", "this is why", "and it worked", "it works", "that fixed")
+
+
+def window_score(text: str, dur: float, last: str = "") -> tuple[float, str]:
+    """How much a stretch of speech looks like a complete little story, from what is said alone: questions, numbers, a turn ("but", "the fix") and a payoff at the end.
+    Returns (score, the reason in a few words)."""
+    low = text.lower()
+    why = []
+    score = 0.0
+    q = min(2, low.count("?"))
+    if q:
+        score += q
+        why.append("asks a question")
+    nums = min(3, len(re.findall(r"\b\d+(?:\.\d+)?\b", low)))
+    if nums:
+        score += 0.5 * nums
+        why.append("has numbers")
+    turns = sum(1 for c in CONTRAST if re.search(r"\b" + re.escape(c) + r"\b", low))
+    if turns:
+        score += min(2.0, turns * 0.75)
+        why.append("has a turn")
+    if any(p in (last.lower() + " ") for p in PAYOFF):
+        score += 1.0
+        why.append("ends on a payoff")
+    words = len(low.split())
+    if dur and words / dur < 1.2:
+        score -= 1.0                                   # slow talk with long pauses is not a tight short
+    return round(score, 2), ", ".join(why)
+
+
+def spoken_moments(segments: list[dict]) -> list[dict]:
+    """Where in a video with no beat map the best little stories are, from the transcript alone: windows of whole segments that fit the skill's length, scored by
+    window_score, the best first, none overlapping. Each is {start, end, dur, score, why, beats: [], sections: []}, the same shape as moments()."""
+    r = skillrules.shorts()
+    lo, hi, need = r["moment_min_s"], r["moment_max_s"], r["moment_min_score"]
+    segs = [s for s in segments if s.get("text", "").strip()]
+    found = []
+    for i, first in enumerate(segs):
+        for j in range(i, len(segs)):
+            dur = segs[j]["end"] - first["start"]
+            if dur > hi:
+                break
+            if dur < lo:
+                continue
+            text = " ".join(s["text"] for s in segs[i:j + 1])
+            score, why = window_score(text, dur, segs[j]["text"])
+            if score >= need:
+                found.append({"start": round(first["start"], 2), "end": round(segs[j]["end"], 2), "dur": round(dur, 2), "score": score, "why": why[:1].upper() + why[1:],
+                              "beats": [], "sections": []})
+    found.sort(key=lambda m: -m["score"])
+    out = []
+    for m in found:
+        if all(m["end"] <= k["start"] or m["start"] >= k["end"] for k in out):
+            out.append(m)
+    return out
+
+
 def runtime_of(beats: list[dict]) -> float:
     return round(sum(b["dur"] for b in beats if not b.get("skip")), 2)
 
 
-def recommend(beats: list[dict] | None, runtime_s: float | None = None) -> dict:
-    """{runtime_s, by_length, strong, recommended, max, moments, reasons, confidence}. `beats` may be None (no beat map yet)."""
+def recommend(beats: list[dict] | None, runtime_s: float | None = None, spoken: list[dict] | None = None) -> dict:
+    """{runtime_s, by_length, strong, recommended, max, moments, reasons, confidence}. `beats` may be None (no beat map yet); `spoken` are the moments
+    found from the transcript alone (spoken_moments) and are used only when there is no beat map."""
     runtime = runtime_s if runtime_s is not None else (runtime_of(beats) if beats else 0.0)
     minutes = runtime / 60.0
     r = skillrules.shorts()
@@ -101,7 +161,11 @@ def recommend(beats: list[dict] | None, runtime_s: float | None = None) -> dict:
                 "reasons": ["There is no stitched or final video yet, so there is nothing to cut shorts from."]}
     mm = f"{int(runtime // 60)}:{int(runtime % 60):02d}"
     reasons.append(f"The video is {mm} long: about one short per {per:g} minutes keeps them from covering the same ground, so room for about {by_length}.")
-    if beats is None:
+    if beats is None and spoken:
+        mo = spoken
+        rec, conf = by_length, "medium"
+        reasons.append(f"There is no beat map, so I read what is said: {len(mo)} stretch{'es' if len(mo) != 1 else ''} look like complete little stories.")
+    elif beats is None:
         rec, conf = by_length, "low"
         reasons.append("There is no beat map to look at, so this is an estimate from the length alone.")
     elif not mo:

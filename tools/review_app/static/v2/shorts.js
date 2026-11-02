@@ -1,18 +1,35 @@
 import { h, api } from './util.js';
+import { pickFolder } from './folder.js';
 
 // Shorts. One screen, used two ways: the Shorts area (#/shorts: every video that has shorts or a final to make them from)
 // and the Shorts step of a video (#/v/<key>/shorts: that video's shorts, one card each, open one to preview it and cut its words).
 
-export async function render(root) {
+export async function render(root, args, setBusy) {
   const d = await api('/api/v2/shorts/list');
+  const fromFile = async () => {
+    let start = '';
+    try { start = localStorage.getItem('wr.videoDir') || ''; } catch { /* private mode */ }
+    const path = await pickFolder({ files: true, start, title: 'Choose the finished video' });
+    if (!path) return;
+    try { localStorage.setItem('wr.videoDir', path.replace(/[\\/][^\\/]*$/, '')); } catch { /* private mode */ }
+    try { await api('/api/v2/shorts/fromfile', { path }); setBusy(); } catch (e) { alert(e.message); }
+  };
   root.replaceChildren(
-    h('div', { class: 'headrow' }, h('h1', {}, 'Shorts')),
+    h('div', { class: 'headrow' }, h('h1', {}, 'Shorts'), h('button', { class: 'main', id: 'fromFile', onclick: fromFile }, 'Shorts from a video file')),
     ...(d.items.length
       ? d.items.map(v => h('div', { class: 'vcard shortsItem' },
         h('div', { class: 'vbody' }, h('div', { class: 'vtitle' }, v.title), h('div', { class: 'muted' }, v.sentence)),
-        h('a', { class: 'main', href: `#/v/${v.key}/shorts` }, v.button)))
+        h('a', { class: 'main', href: v.standalone ? `#/shorts/${v.key}` : `#/v/${v.key}/shorts` }, v.button)))
       : [h('div', { class: 'card empty', id: 'noShorts' }, h('p', {}, 'No shorts yet.'), h('p', { class: 'muted' }, 'Render the final of a video and its shorts will be made from it.'))]),
-    h('p', { class: 'muted small' }, 'Shorts from any finished video file, and from a pile of raw footage, are coming next.'));
+    h('p', { class: 'muted small' }, 'A short from a pile of raw footage is coming next.'));
+}
+
+// Shorts made from a video file that is not one of the app's videos: the same project screen under its own heading.
+export async function renderStandalone(root, [key], setBusy) {
+  const d = await api(`/api/v2/shorts?key=${encodeURIComponent(key)}`);
+  const body = h('div', { id: 'stepBody' });
+  root.replaceChildren(h('div', { class: 'headrow' }, h('a', { class: 'quiet', href: '#/shorts' }, '← Shorts'), h('h1', {}, d.title || 'Your shorts')), body);
+  await renderStep(body, key, setBusy);
 }
 
 let remembered = { key: '', id: null };                  // the short that is open: a finished job redraws the page, and it should still be open
@@ -87,6 +104,7 @@ export async function renderStep(root, key, setBusy) {
       return;
     }
     const head = h('div', { class: 'card shortsHead' },
+      d.note ? h('div', { class: 'muted small', id: 'softNote' }, d.note) : null,
       h('div', { class: 'rhead' },
         h('div', {}, h('b', {}, d.recommendation.sentence || 'Your shorts'), d.last_find ? h('div', { class: 'muted small' }, d.last_find) : null),
         h('div', { class: 'row' },

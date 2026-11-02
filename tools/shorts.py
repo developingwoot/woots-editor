@@ -306,6 +306,7 @@ def auto_classify(cfg, pieces):
     caps = {sid: cv2.VideoCapture(src["path"]) for sid, src in srcs(cfg).items()}
     card = brandstyle.bgr(brandstyle.palette()["primary"])          # a full-screen card is the channel's primary colour all the way to the corners
     zi = 0
+    hists = {}
     for i, pc in enumerate(pieces):
         mid = (pc["a"] + pc["b"]) / 2
         cap = caps[pc["src"]]
@@ -318,6 +319,7 @@ def auto_classify(cfg, pieces):
             continue
         if not ok:
             continue
+        hists[i] = frame_hist(fr)
         sw, sh_ = pc["sw"], pc["sh"]
         corner = [fr[y, x].astype(int) for x, y in ((8, 8), (sw - 9, 8), (8, sh_ - 9), (sw - 9, sh_ - 9))]
         if sum(1 for c in corner if max(abs(int(c[k]) - card[k]) for k in range(3)) < 16) >= 3:
@@ -353,15 +355,39 @@ def auto_classify(cfg, pieces):
         zi += 1
     for cap in caps.values():
         cap.release()
+    # no face and not the place where the speaker was found: b-roll, shown whole (blur layout) instead of cropped to a guessed window
+    seen = {pc["src"]: [hists[j] for j, q in enumerate(pieces) if j in hists and q["src"] == pc["src"] and q.get("face") is True] for pc in pieces}
+    need = skillrules.shorts()["broll_similarity"]
+    for i, pc in enumerate(pieces):
+        if i in hists and pc.get("face") is False and not pc.get("close") and pc["layout"] == "live" and looks_like_broll(hists[i], seen[pc["src"]], need):
+            pc["layout"], pc["zoom"], pc["broll"] = "blur", 1.0, True
     # no face found for this speaker (turned away, profile): take the position from the nearest piece of the same speaker where one was found
     for i, pc in enumerate(pieces):
-        if pc.get("face") is False and not pc.get("close"):
+        if pc.get("face") is False and not pc.get("close") and not pc.get("broll"):
             near = sorted((abs(j - i) + (0.5 if j > i else 0), j) for j, q in enumerate(pieces)
-                          if q.get("face") and not q.get("close") and q.get("speaker") == pc["speaker"] and abs(q["a"] - pc["a"]) < 12)
+                          if q.get("face") and not q.get("close") and not q.get("broll") and q.get("speaker") == pc["speaker"] and abs(q["a"] - pc["a"]) < 12)
             if near:
                 q = pieces[near[0][1]]
                 pc["cx"], pc["cy"], pc["face"] = q["cx"], q["cy"], "carried"
     return pieces
+
+
+def frame_hist(fr):
+    """A small colour histogram of a frame: what the place looks like, for telling the talking-head set from b-roll."""
+    import cv2
+    hsv = cv2.cvtColor(cv2.resize(fr, (64, 36)), cv2.COLOR_BGR2HSV)
+    hist = cv2.calcHist([hsv], [0, 1], None, [16, 8], [0, 180, 0, 256])
+    cv2.normalize(hist, hist)
+    return hist
+
+
+def looks_like_broll(hist, face_hists, threshold) -> bool:
+    """A frame with no face that looks nothing like the frames where the speaker was found (colour histogram correlation under `threshold`)
+    is probably b-roll. With no frame to compare against nothing can be said."""
+    import cv2
+    if not face_hists:
+        return False
+    return max(cv2.compareHist(hist, f, cv2.HISTCMP_CORREL) for f in face_hists) < threshold
 
 
 def apply_overrides(short, pieces):

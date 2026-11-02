@@ -4,6 +4,7 @@ A video's shorts live in `<name>.shorts.json` next to its other work files (shor
 Everything here is data for the page: the sentence about how many shorts the video deserves, one card per short, and the words of an opened short.
 """
 import json
+from pathlib import Path
 from urllib.parse import quote
 
 import config
@@ -11,6 +12,7 @@ import finalrender
 import shortsapp
 import shortsplan
 import shorts as sh
+import skillrules
 import views
 
 STATUS_TEXT = {"": "", "kept": "Kept", "dropped": "Dropped"}
@@ -31,7 +33,10 @@ def _length(short) -> float:
 
 def recommendation(work: str, name: str, final: dict | None) -> dict:
     """How many shorts the video deserves and why, in one sentence. Uses the beat map when there is one, else the length of the final."""
-    rec = shortsplan.for_video(work, name)
+    if shortsapp.cfg_file(work, name).exists():
+        rec = shortsapp.video_plan(work, name)
+    else:
+        rec = shortsplan.for_video(work, name)
     if not rec["runtime_s"] and final and final.get("dur"):
         rec = dict(shortsplan.recommend(None, runtime_s=_seconds(final["dur"])), has_beatmap=False)
     n = rec.get("recommended") or 0
@@ -40,6 +45,9 @@ def recommendation(work: str, name: str, final: dict | None) -> dict:
     strong = rec.get("strong") or 0
     if rec.get("has_beatmap") and strong:
         sentence = f"This video has {strong} strong moment{'s' if strong != 1 else ''}, so room for about {n} short{'s' if n != 1 else ''}."
+    elif strong and rec.get("confidence") == "medium":
+        sentence = (f"This video is {clock(rec['runtime_s'])} long and {strong} stretch{'es' if strong != 1 else ''} of it look like complete little stories, "
+                    f"so room for about {n} short{'s' if n != 1 else ''}.")
     else:
         sentence = f"This video is {clock(rec['runtime_s'])} long, so room for about {n} short{'s' if n != 1 else ''}."
     return {"count": n, "sentence": sentence}
@@ -80,6 +88,10 @@ def project(work: str, name: str, busy: bool = False) -> dict:
         return out
     raw = shortsapp.read_raw(work, name)
     shorts = raw.get("shorts", [])
+    out["title"] = Path(raw.get("source", "")).stem
+    height = sh.probe_size(raw["source"])[1] if Path(raw.get("source", "")).is_file() else 0
+    if height and height < skillrules.shorts()["soft_below_px"]:
+        out["note"] = f"The video is {height}p, so close crops look soft."
     out["shorts"] = [card(work, name, wd, s) for s in shorts if shortsapp.status_of(s) != "dropped"]
     out["dropped"] = [{"id": x["id"], "title": x.get("title") or "A short"} for x in shorts if shortsapp.status_of(x) == "dropped"]
     out["unlooked"] = sum(1 for c in out["shorts"] if not c["status"])
@@ -92,8 +104,10 @@ def project(work: str, name: str, busy: bool = False) -> dict:
 def area() -> dict:
     """The Shorts area: every video that has shorts, or a final to make them from."""
     import workflow
-    have = {(p["work"], p["name"]): p for p in shortsapp.projects()}
+    projects = shortsapp.projects()
+    have = {(p["work"], p["name"]): p for p in projects}
     items = []
+    own = {(v["work"], n) for v in workflow.list_videos() for n in v["names"]}
     for v in workflow.list_videos():
         for name in v["names"]:
             p = have.get((v["work"], name))
@@ -107,6 +121,10 @@ def area() -> dict:
             else:
                 sentence, button = "The final is ready: make shorts from it", "Make shorts"
             items.append({"key": views.key_of(v["work"], name), "title": title, "sentence": sentence, "button": button})
+    for p in projects:                                    # shorts made from a video file that is not one of the app's videos
+        if (p["work"], p["name"]) not in own:
+            sentence = f"{p['shorts']} short{'s' if p['shorts'] != 1 else ''}" + (f", {p['kept']} kept" if p["kept"] else "")
+            items.append({"key": views.key_of(p["work"], p["name"]), "title": Path(p["source"]).stem, "sentence": sentence, "button": "Open the shorts", "standalone": True})
     return {"items": items}
 
 

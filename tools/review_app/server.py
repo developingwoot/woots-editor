@@ -236,14 +236,14 @@ def list_drives() -> list[str]:
         return [f"{c}:\\" for c in "CDEFGHIJKLMNOPQRSTUVWXYZ" if os.path.exists(f"{c}:\\")]
 
 
-def list_dir(path: str) -> dict:
-    """Folder browser: sub-folders of a directory (empty path = the drives)."""
+def list_dir(path: str, files: bool = False) -> dict:
+    """Folder browser: sub-folders of a directory (empty path = the drives). With files=True the video files in it too, as {name, path, mb}."""
     if not path:
         return {"path": "", "parent": None, "dirs": [{"name": d, "path": d} for d in list_drives()], "videos": 0}
     p = Path(path)
     if not p.is_dir():
         raise ValueError(f"not a folder: {path}")
-    dirs, vids = [], 0
+    dirs, vids, vfiles = [], 0, []
     try:
         for e in os.scandir(p):
             if e.is_dir(follow_symlinks=False):
@@ -251,11 +251,14 @@ def list_dir(path: str) -> dict:
                     dirs.append({"name": e.name, "path": str(Path(e.path))})
             elif Path(e.name).suffix.lower() in footage_cfg.VIDEO_EXT:
                 vids += 1
+                if files:
+                    vfiles.append({"name": e.name, "path": str(Path(e.path)), "mb": round(e.stat().st_size / 1e6)})
     except PermissionError:
         raise ValueError(f"no permission to read {path}")
     dirs.sort(key=lambda d: d["name"].lower())
+    vfiles.sort(key=lambda f: f["name"].lower())
     parent = str(p.parent) if p.parent != p else ""
-    return {"path": str(p), "parent": parent, "dirs": dirs, "videos": vids}
+    return {"path": str(p), "parent": parent, "dirs": dirs, "videos": vids, **({"files": vfiles} if files else {})}
 
 
 def probe_clip(path: Path) -> dict:
@@ -704,14 +707,16 @@ SHORTS_V2_EDITS = {"keep": lambda b: {"id": b["id"], "status": "kept" if b.get("
 
 def shorts_v2_post(op, b):
     """The Shorts screen's actions. Quick edits answer with the project; long ones start a job and answer with its id."""
-    work, name = views.split_key(b["key"])
-    sid = b.get("id", "")
-
     def started(job, sentence, done=""):
         job["sentence"] = sentence
         if done:
             job["done_sentence"] = done
         return {"id": job["id"]}
+    if op == "fromfile":
+        job = started(start_shorts_from_file(b["path"]), "Reading your video, then choosing shorts", "Shorts ready")
+        return {**job, "key": _jobs[job["id"]]["key"]}
+    work, name = views.split_key(b["key"])
+    sid = b.get("id", "")
     if op in SHORTS_V2_EDITS:
         with _lock:
             shortsapp.apply_op(work, name, "edit", SHORTS_V2_EDITS[op](b))
@@ -1202,6 +1207,28 @@ def start_shorts_make(work, name, count):
     return _job_run(job, [([str(PY), str(TOOLS / "transcribe.py"), str(src), "--out", str(wd)], TOOLS)], after)
 
 
+def start_shorts_from_file(path):
+    """Shorts from any finished video file: the file stays where it is. Read it word by word, write a project in its own work folder, then Claude chooses.
+    Returns the job and the video's key."""
+    src = Path(path)
+    if not src.is_file() or src.suffix.lower() not in footage_cfg.VIDEO_EXT:
+        raise ValueError("pick a video file")
+    work, name = shortsapp.standalone_names(src)
+    wd = WORK / work
+    wd.mkdir(parents=True, exist_ok=True)
+    tr = wd / f"{src.stem}.transcript.json"
+    job = _job("shorts", ["read the video word by word", "write the shorts project", "Claude chooses the shorts"])
+    job["key"] = views.key_of(work, name)
+
+    def after():
+        job["step"] = 1
+        with _lock:
+            shortsapp.new_project(work, name, str(src).replace("\\", "/"), str(tr).replace("\\", "/"), None)
+        job["step"] = 2
+        _claude_find(job, work, name, shortsapp.video_plan(work, name)["recommended"] or 3)
+    return _job_run(job, [([str(PY), str(TOOLS / "transcribe.py"), str(src), "--out", str(wd)], TOOLS)], after)
+
+
 def start_shorts_tighten(work, name, ids):
     """Claude cuts content out of each short (filler, tangents, repeats, slow set-ups) so it is dense; one headless run per short, one after another."""
     import usage
@@ -1554,7 +1581,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_error(404)
                 return self.send_file(work_dir(work) / "storyboard" / file)
             if u.path == "/api/fs":
-                return self.send_json(list_dir(q.get("path", "")))
+                return self.send_json(list_dir(q.get("path", ""), files=q.get("files") == "1"))
             if u.path == "/api/footage":
                 return self.send_json(footage_state(q["work"], q["name"]))
             if u.path == "/thumb":
