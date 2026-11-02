@@ -15,7 +15,7 @@ REPO = Path(__file__).resolve().parents[2]
 SERVER = REPO / "tools" / "review_app" / "server.py"
 
 # Text that must never show on a main view (plan rule 2). Allowed only inside a closed "Details" block.
-FORBIDDEN = [r"\.json", r"\.mp4", r"\b[SBG]\d{2}\b", r"TP\d", r"\$\d", r"\d+\.\d{2,}", r"Traceback", r"\bbeat", r"stitch", r"approve", r"\bstale", r"sandbox"]
+FORBIDDEN = [r"\.json", r"\.mp4", r"\b[SBG]\d{2}\b", r"TP\d", r"\$\d", r"\d+\.\d{2,}", r"Traceback", r"\bbeat", r"stitch", r"approve", r"\bstale", r"sandbox", r"\bnull\b", r"\bundefined\b"]
 
 
 def clutter(text: str) -> list[str]:

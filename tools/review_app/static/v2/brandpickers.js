@@ -20,19 +20,19 @@ export function fontPicker({ value, sample, onChange }) {
 
   const paintShown = () => {
     const f = (fonts || []).find(x => x.name.toLowerCase() === value.toLowerCase());
-    shown.replaceChildren(value
+    shown.replaceChildren(...[value
       ? h('span', { class: 'fontSample', style: f ? fontCss(f) : '' }, word())
       : h('span', { class: 'muted' }, 'Default (no font chosen)'),
-      value ? h('span', { class: 'muted small' }, value + (fonts && !f ? ' (not found on this computer)' : '')) : null);
+      value ? h('span', { class: 'muted small' }, value + (fonts && !f ? ' (not found on this computer)' : '')) : null].filter(Boolean));
   };
   const choose = name => { value = name; onChange(name); paintShown(); toggle(false); };
   const fill = () => {
     const found = (fonts || []).filter(f => !filter || f.name.toLowerCase().includes(filter));
-    rows.replaceChildren(
+    rows.replaceChildren(...[
       filter ? null : h('button', { type: 'button', class: 'fontRow', onclick: () => choose('') }, h('span', { class: 'muted' }, 'Default (no font chosen)')),
       ...found.map(f => h('button', { type: 'button', class: 'fontRow' + (f.name.toLowerCase() === value.toLowerCase() ? ' on' : ''), 'data-font': f.name, onclick: () => choose(f.name) },
         h('span', { class: 'fontSample', style: fontCss(f) }, word()), h('span', { class: 'muted small' }, f.name))),
-      found.length ? null : h('div', { class: 'muted small' }, fonts && fonts.length ? 'No font matches.' : 'Could not list the fonts on this computer; type the font name in the notes file instead.'));
+      found.length ? null : h('div', { class: 'muted small' }, fonts && fonts.length ? 'No font matches.' : 'Could not list the fonts on this computer; type the font name in the notes file instead.')].filter(Boolean));
   };
   const toggle = async (to = !open) => {
     open = to;

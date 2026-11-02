@@ -53,3 +53,11 @@ def test_any_step_can_be_opened_and_new_video_works(screen):
 def test_clutter_check_catches_forbidden_text():
     assert clutter("see beat B12 in plan.json costs $0.42") != []
     assert clutter("Rough cut 2 ready to watch, about 4 min") == []
+
+
+def test_an_empty_home_says_so_without_stray_text(screen):
+    page = screen("/v2/")
+    if page.locator(".vcard").count():
+        pytest.skip("other tests already made videos in this workspace")
+    assert "No videos yet." in page.locator("#screen").inner_text()
+    assert clutter(visible_text(page)) == []
