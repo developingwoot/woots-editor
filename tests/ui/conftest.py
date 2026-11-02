@@ -74,6 +74,8 @@ def base(tmp_path_factory):
 @pytest.fixture
 def screen(base, page):
     """Open a v2 path and return the page; any console error or uncaught exception fails the test afterwards."""
+    import channel
+    channel.save({"name": "Sam"})                                   # without a profile the app opens the first-run Settings screen instead of the page asked for
     errors = []
     page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
     page.on("pageerror", lambda e: errors.append(str(e)))

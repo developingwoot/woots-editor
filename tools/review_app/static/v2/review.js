@@ -89,17 +89,17 @@ export async function render(root, key, stage, setBusy) {
       const search = can_search && !picture ? h('div', { class: 'searchMore' },
         h('button', { class: 'quiet', id: 'findOptions', onclick: async () => { try { await api('/api/v2/options/find', { key, clip: clip.ref }); reopen = clip.ref; setBusy(); } catch (e) { alert(e.message); } } }, 'Search all my footage for more takes'),
         h('span', { class: 'muted small' }, 'This takes a little longer.')) : null;
-      if (!options.length) { body.replaceChildren(h('p', { class: 'muted' }, picture ? 'Nothing in your footage looks like this yet.' : 'There is no other take of this part yet.'), look, search); return; }
-      body.replaceChildren(h('div', { class: 'options' }, ...options.map(o => {
+      if (!options.length) { body.replaceChildren(...[h('p', { class: 'muted' }, picture ? 'Nothing in your footage looks like this yet.' : 'There is no other take of this part yet.'), look, search].filter(Boolean)); return; }
+      body.replaceChildren(...[h('div', { class: 'options' }, ...options.map(o => {
         const vid = h('video', { src: o.video + `#t=${o.start}`, controls: true, preload: 'none', hidden: true });
         return h('div', { class: 'option' },
           h('img', { src: o.frame, alt: '' }),
           h('div', { class: 'small' }, o.why),
-          h('div', { class: 'small muted' }, `“${o.said}”`),
+          o.said ? h('div', { class: 'small muted' }, `“${o.said}”`) : null,
           h('div', { class: 'optActs' },
             h('button', { class: 'quiet', onclick: () => { vid.hidden = false; vid.currentTime = o.start; vid.play(); } }, 'Play'),
             h('button', { class: 'main small', onclick: () => choose(clip, 'replace', { span: o.span }) }, 'Use this one')), vid);
-      })), look, search);
+      })), look, search].filter(Boolean));
     }
 
     function trimUI(clip, body) {
