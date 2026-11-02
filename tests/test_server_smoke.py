@@ -125,25 +125,6 @@ def test_shorts_make_refuses_a_silly_count(base):
     assert e.value.code == 400 and "between 1 and" in e.value.read().decode()
 
 
-def test_graphics_are_planned_only_for_approved_shorts(base):
-    import json as _json
-    import shortsapp
-    import workflow
-    r = workflow.create("Gfx Refusal")
-    wd = workflow.WORK / r["work"]
-    tr = wd / "t.json"
-    tr.write_text(_json.dumps({"duration": 60, "words": [], "segments": []}), encoding="utf-8")
-    shortsapp.new_project(r["work"], r["name"], "main.mp4", str(tr), None)
-    raw = shortsapp.read_raw(r["work"], r["name"])
-    raw["shorts"] = [{"id": "s1", "title": "T", "hook": "H", "ranges": [[1.0, 20.0]], "status": "proposed"}]
-    shortsapp.save_raw(r["work"], r["name"], raw)
-    req = urllib.request.Request(f"{base}/api/shorts/gfxplan", data=_json.dumps({"work": r["work"], "name": r["name"], "id": "s1"}).encode(),
-                                 headers={"Content-Type": "application/json"}, method="POST")
-    with pytest.raises(urllib.error.HTTPError) as e:
-        urllib.request.urlopen(req, timeout=10)
-    assert e.value.code == 400 and "approve the short first" in e.value.read().decode()
-
-
 def test_v2_page_and_its_module_are_served(base):
     status, body = get(base + "/v2/")
     assert status == 200 and b"/static/v2/app.js" in body

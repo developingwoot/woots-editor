@@ -58,7 +58,7 @@ def test_fewer_strong_moments_than_the_length_allows_stops_at_the_strong_ones():
 
 def test_short_and_very_long_videos():
     assert sp.recommend(beats([("A", 180, EXPLAINER, None)]))["by_length"] == 1
-    assert sp.recommend(beats([("A", 2400, EXPLAINER, None)]))["by_length"] == sp.HARD_CAP
+    assert sp.recommend(beats([("A", 2400, EXPLAINER, None)]))["by_length"] == sp.hard_cap()
 
 
 def test_no_beat_map_or_no_strong_moments_is_a_low_confidence_estimate():

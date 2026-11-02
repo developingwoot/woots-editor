@@ -12,6 +12,7 @@ All times are MAIN-VIDEO seconds (the same clock as the short's ranges); the str
 """
 import time
 
+import brandstyle
 import channel
 import shorts as sh
 import gfxplan
@@ -207,17 +208,19 @@ def still_jpeg(cfg: dict, short: dict, pieces: list[dict], gid: str, k: int, wid
     src = Image.fromarray(cv2.cvtColor(fr, cv2.COLOR_BGR2RGB))
     pc = piece_at(pieces, t) or {"layout": "live", "cx": 0.5, "cy": 0.5, "zoom": 1.0}
     W, H = sh.W, sh.H
-    navy = (20, 44, 68)
+    card_c = brandstyle.rgb(brandstyle.palette()["primary"])
+    sw, sh_ = src.size
     if pc.get("layout") == "graphic":
         gz = pc.get("gzoom", 1.0)
         gw, gh = int(1600 / gz), int(1080 / gz)
-        gx = int(min(max(pc.get("gcx", 0.5) * sh.SRC_W - gw / 2, 0), sh.SRC_W - gw))
-        gy = int(min(max(pc.get("gcy", 0.5) * sh.SRC_H - gh / 2, 0), sh.SRC_H - gh))
-        base = Image.new("RGB", (W, H), navy)
+        gw, gh = min(gw, sw), min(gh, sh_)
+        gx = int(min(max(pc.get("gcx", 0.5) * sw - gw / 2, 0), sw - gw))
+        gy = int(min(max(pc.get("gcy", 0.5) * sh_ - gh / 2, 0), sh_ - gh))
+        base = Image.new("RGB", (W, H), card_c)
         base.paste(src.crop((gx, gy, gx + gw, gy + gh)).resize((W, 730)), (0, 400))
     elif pc.get("layout") == "blur":
         bg = src.resize((W, H)).filter(ImageFilter.GaussianBlur(24))
-        fg = src.resize((W, int(W * sh.SRC_H / sh.SRC_W)))
+        fg = src.resize((W, int(W * sh_ / sw)))
         base = bg
         base.paste(fg, (0, (H - fg.height) // 2 - 90))
     else:
@@ -226,8 +229,8 @@ def still_jpeg(cfg: dict, short: dict, pieces: list[dict], gid: str, k: int, wid
     card = {"kind": g.get("look") or "brand", "text": g.get("text") or g.get("what", ""), "words": g.get("words", ""), "idea": g.get("what", "")}
     base = storyboard.draw_card(base, REGIONS[g.get("place", "top")], card, opaque=g.get("place") == "full")
     d = ImageDraw.Draw(base)
-    d.rectangle((0, H - 120, W, H), fill=(11, 23, 36))
-    storyboard.wrap_text(d, f"STILL {k + 1} OF {len(moments)} · {what}", (30, H - 110, W - 30, H - 20), (244, 237, 228), 34, valign="center")
+    d.rectangle((0, H - 120, W, H), fill=brandstyle.rgb(brandstyle.palette()["dark"]))
+    storyboard.wrap_text(d, f"STILL {k + 1} OF {len(moments)} · {what}", (30, H - 110, W - 30, H - 20), brandstyle.rgb(brandstyle.palette()["light"]), 34, valign="center")
     base = base.resize((width, int(width * H / W)))
     buf = io.BytesIO()
     base.save(buf, "JPEG", quality=82)

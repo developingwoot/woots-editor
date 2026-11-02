@@ -81,16 +81,16 @@ def facts(work: str, name: str) -> dict:
     preview = workflow.stage_path(wd, name, next(s for s in workflow.STAGES if s["id"] == "review"))
     has_preview = bool(preview) and preview.exists()
     has_final = has_preview and any(f.stat().st_mtime > preview.stat().st_mtime for f in wd.glob("* v*(1080p).mp4"))
-    approved = 0
+    kept = 0
     try:
         import shortsapp
-        approved = sum(1 for s in shortsapp.read_raw(work, name).get("shorts", []) if s.get("status") == "approved")
+        kept = sum(1 for s in shortsapp.read_raw(work, name).get("shorts", []) if s.get("status") == "kept")
     except (ValueError, OSError):
         pass
     return {"work": work, "name": name, "title": workflow.load(work, name).get("title") or name,
             "outline": (wd / f"{name}.script.md").exists(), "clips": (wd / f"{name}.clips.json").exists(),
             "cut": (wd / f"{name}.beatmap.json").exists(), "cut_made": bool(reviewnotes.versions(work, name, "cut")), "preview": has_preview, "final": has_final,
-            "shorts_approved": approved, "finished": (wd / "FINALIZED.json").exists(), "outline_gaps": _outline_gaps(wd, name)}
+            "shorts_kept": kept, "finished": (wd / "FINALIZED.json").exists(), "outline_gaps": _outline_gaps(wd, name)}
 
 
 def _outline_gaps(wd, name: str) -> int:
@@ -104,15 +104,15 @@ def _outline_gaps(wd, name: str) -> int:
 
 def _dots(f: dict, current: str) -> list[dict]:
     have = {"outline": f["outline"], "footage": f["clips"], "rough-cut": f.get("cut_made", f["cut"]), "preview": f["preview"], "final": f["final"],
-            "shorts": f["shorts_approved"] > 0}
+            "shorts": f["shorts_kept"] > 0}
     return [{"id": sid, "title": title, "current": sid == current, "dot": "result" if have[sid] else "none"} for sid, title in STEPS]
 
 
 def step_of(f: dict, job: dict | None = None) -> dict:
     """The step a video is at, in a sentence, with the one button that goes there. A running job (see job_sentence) takes over the sentence."""
-    if f["shorts_approved"]:
-        n = f["shorts_approved"]
-        step, sentence, button = "shorts", f"Shorts: {n} approved", "Open the shorts"
+    if f["shorts_kept"]:
+        n = f["shorts_kept"]
+        step, sentence, button = "shorts", f"Shorts: {n} kept", "Open the shorts"
     elif f["final"]:
         step, sentence, button = "final", "Final rendered: publishing details ready", "Open the final"
     elif f["preview"]:

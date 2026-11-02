@@ -31,6 +31,7 @@ from pathlib import Path
 
 import numpy as np
 import soundfile as sf
+import encoders
 
 import assemble
 import render
@@ -40,8 +41,8 @@ NAVY = assemble.NAVY
 
 
 def venc(quality):
-    return (["-c:v", "h264_nvenc", "-preset", "p6", "-rc", "vbr", "-cq", "17", "-b:v", "0"] if quality == "final"
-            else ["-c:v", "h264_nvenc", "-preset", "p3", "-cq", "28"])
+    return encoders.adapt(["-c:v", "h264_nvenc", "-preset", "p6", "-rc", "vbr", "-cq", "17", "-b:v", "0"] if quality == "final"
+                          else ["-c:v", "h264_nvenc", "-preset", "p3", "-cq", "28"])
 
 
 def take_piece(name, spec, folder, fps, size, br, tmp, fade_in, fade_out, whoosh_at):

@@ -21,21 +21,24 @@ import shortsplan                         # noqa: E402
 import shortsgfx                          # noqa: E402
 
 EDITOR = TOOLS.parent
+import brandstyle
 import channel
 import config
+import projectstore
 WORK = config.WORK
-STATUSES = ("proposed", "approved", "rejected")
+STATUSES = ("", "kept", "dropped")          # not looked at yet / the host wants it / the host does not (hidden, never deleted)
+LEGACY_STATUS = {"proposed": "", "approved": "kept", "rejected": "dropped"}         # older project files
 
 
-def _replace(tmp, p):
-    for i in range(8):
-        try:
-            os.replace(tmp, p)
-            return
-        except PermissionError:
-            if i == 7:
-                raise
-            time.sleep(0.05 * (i + 1))
+def status_of(short: dict) -> str:
+    st = short.get("status") or ""
+    st = LEGACY_STATUS.get(st, st)
+    return st if st in STATUSES else ""
+
+
+def live(shorts: list) -> list:
+    """The shorts that are not dropped: what the graphics, the final render and the delivery work on."""
+    return [s for s in shorts if status_of(s) != "dropped"]
 
 
 def wd_of(work: str) -> Path:
@@ -57,14 +60,15 @@ def read_raw(work, name) -> dict:
     p = cfg_file(work, name)
     if not p.exists():
         raise ValueError(f"no shorts project {name!r} in {work!r}")
-    return json.loads(p.read_text(encoding="utf-8-sig"))
+    raw = json.loads(p.read_text(encoding="utf-8-sig"))
+    for s in raw.get("shorts", []):
+        s["status"] = status_of(s)
+    return raw
 
 
-def save_raw(work, name, raw):
-    p = cfg_file(work, name)
-    tmp = p.with_name(p.name + f".{os.getpid()}.{int(time.time() * 1000)}.tmp")
-    tmp.write_text(json.dumps(raw, indent=1, ensure_ascii=False), encoding="utf-8")
-    _replace(tmp, p)
+def save_raw(work, name, raw, why=""):
+    """Written through projectstore, so every change is recorded (who, why) and can be undone."""
+    projectstore.write_json(cfg_file(work, name), raw, why=why)
 
 
 def projects() -> list:
@@ -78,7 +82,7 @@ def projects() -> list:
             except (OSError, ValueError):
                 continue
             out.append({"work": d.name, "name": f.name[: -len(".shorts.json")], "source": Path(raw.get("source", "")).name,
-                        "shorts": len(raw.get("shorts", [])), "approved": sum(1 for s in raw.get("shorts", []) if s.get("status") == "approved")})
+                        "shorts": len(raw.get("shorts", [])), "kept": sum(1 for s in raw.get("shorts", []) if status_of(s) == "kept")})
     return out
 
 
@@ -96,7 +100,7 @@ def _render_one(wd: Path, short: dict, suffix: str) -> dict:
 
 
 def _render_info(wd: Path, short: dict) -> dict:
-    """The quick preview (half size) at the top level, the final (1080x1920, best quality, approved shorts only) under 'final'."""
+    """The quick preview (half size) at the top level, the final (1080x1920, best quality) under 'final'."""
     out = _render_one(wd, short, "")
     out["final"] = _render_one(wd, short, ".final")
     return out
@@ -107,15 +111,14 @@ def state(work, name) -> dict:
     wd = wd_of(work)
     shorts = []
     for s in raw.get("shorts", []):
-        est = sum(max(0.0, b - a) for a, b in s.get("ranges", []))
+        est = sum(max(0.0, r["b"] - r["a"]) if isinstance(r, dict) else max(0.0, r[1] - r[0]) for r in s.get("ranges", []))
         shorts.append({"id": s["id"], "title": s.get("title", ""), "hook": s.get("hook", ""), "why": s.get("why", ""), "thought": s.get("thought") or {}, "visual": s.get("visual", ""), "gfx": s.get("gfx"),
-                       "status": s.get("status", "proposed"), "ranges": s.get("ranges", []), "drop": s.get("drop", []),
+                       "status": status_of(s), "ranges": s.get("ranges", []), "drop": s.get("drop", []),
                        "words": s.get("words", {}), "crops": s.get("crops", []), "layout_all": s.get("layout_all", ""),
                        "estimate": round(est, 1), "pace": sh.LEGACY_PACE.get(s.get("pace") or "natural", s.get("pace") or "natural"), "publish": s.get("publish") or {}, "delivered": s.get("delivered") or {}, "tightened": bool(s.get("before_tighten")), "tighten_note": (s.get("tighten") or {}).get("note", ""), "render": _render_info(wd, s)})
-    fonts = (EDITOR / "fonts" / sh.FONT_FILE).exists()
     import mpfaces
     return {"work": work, "name": name, "source": raw.get("source", ""), "has_speakers": bool(raw.get("speakers")),
-            "font": sh.FONT_NAME if fonts else "Impact (Oswald not installed)", "faces": mpfaces.available(), "full_video_url": raw.get("full_video_url", ""), "last_find": raw.get("last_find"), "folder": str(Path(raw.get("source", "")).parent / "Shorts"),
+            "font": brandstyle.font("headline")["name"], "faces": mpfaces.available(), "full_video_url": raw.get("full_video_url", ""), "last_find": raw.get("last_find"), "folder": str(Path(raw.get("source", "")).parent / "Shorts"),
             "paces": {k: v["label"] for k, v in sh.PACES.items()}, "shorts": shorts}
 
 
@@ -148,7 +151,7 @@ def plan(work, name, sid) -> dict:
         if not text or text[-1]["r"] != w["r"]:
             text.append({"r": w["r"], "range": short["ranges"][w["r"]], "words": []})
         text[-1]["words"].append({"w": w["w"], "s": round(w["s"], 2), "e": round(w["e"], 2), "cut": w["cut"], "why": w["why"]})
-    return {"id": sid, "pieces": out, "total": round(total, 1), "src": [sh.SRC_W, sh.SRC_H], "text": text}
+    return {"id": sid, "pieces": out, "total": round(total, 1), "src": list(cfg.get("_size") or sh.DEFAULT_SIZE), "text": text}
 
 
 def _num_ranges(v, what):
@@ -203,7 +206,7 @@ def apply_op(work, name, op, b) -> dict:
         if not ranges:
             raise ValueError("give at least one range, e.g. 20.6-40.7")
         raw.setdefault("shorts", []).append({"id": sid, "title": b.get("title") or "New short", "hook": b.get("hook", ""), "why": b.get("why", ""),
-                                             "status": "proposed", "ranges": ranges})
+                                             "status": "", "ranges": ranges})
     else:
         s = _short(raw, b["id"])
         if op == "edit":
@@ -211,9 +214,10 @@ def apply_op(work, name, op, b) -> dict:
                 if k in b:
                     s[k] = str(b[k]).strip()
             if "status" in b:
-                if b["status"] not in STATUSES:
-                    raise ValueError("status must be proposed, approved or rejected")
-                s["status"] = b["status"]
+                new = LEGACY_STATUS.get(b["status"], b["status"])
+                if new not in STATUSES:
+                    raise ValueError("status must be kept, dropped or empty")
+                s["status"] = new
             if "ranges" in b:
                 s["ranges"] = _num_ranges(b["ranges"], "ranges") or s["ranges"]
             if "drop" in b:
@@ -409,7 +413,7 @@ def import_candidates(work: str, name: str, path: Path, count: int | None = None
     runtime = float((sh.load(cfg_file(work, name))["_tr"] or {}).get("duration") or 0)
     ids = [int(m.group(1)) for s in raw.get("shorts", []) if (m := re.match(r"^s(\d+)$", s["id"]))]
     n = max(ids, default=0)
-    kept = [{"title": s.get("title", ""), "ranges": s.get("ranges", [])} for s in raw.get("shorts", []) if s.get("status") != "rejected"]
+    kept = [{"title": s.get("title", ""), "ranges": s.get("ranges", [])} for s in raw.get("shorts", []) if status_of(s) != "dropped"]
     added, skipped = 0, []
     for c in data if isinstance(data, list) else []:
         title = str(c.get("title", "Short"))[:90]
@@ -434,7 +438,7 @@ def import_candidates(work: str, name: str, path: Path, count: int | None = None
         kept.append(cand)
         raw.setdefault("shorts", []).append({"id": f"s{n}", "title": title, "hook": str(c.get("hook", ""))[:90].upper(),
                                              "why": str(c.get("why", ""))[:300], "thought": thought, "visual": str(c.get("visual", ""))[:300],
-                                             "status": "proposed", "ranges": ranges})
+                                             "status": "", "ranges": ranges})
     raw["last_find"] = {"asked": count, "added": added, "skipped": skipped, "at": time.time()}
     save_raw(work, name, raw)
     return added
@@ -563,16 +567,16 @@ def _same_file(a: Path, b: Path) -> bool:
 
 
 def deliver(work: str, name: str, log=None) -> list:
-    """Copy the final render of every approved short into <the finished video's folder>\\Shorts\\, named from its generated file name, with a .txt beside it
+    """Copy the final render of every short that is not dropped into <the finished video's folder>\\Shorts\\, named from its generated file name, with a .txt beside it
     holding the title, description and tags to paste into YouTube. Never overwrites: an identical file is skipped, a different one gets (2), (3)..."""
     import shutil
     say = log or (lambda m: None)
     raw = read_raw(work, name)
     wd = wd_of(work)
     folder = Path(raw["source"]).parent / "Shorts"
-    todo = [s for s in raw.get("shorts", []) if s.get("status") == "approved"]
+    todo = live(raw.get("shorts", []))
     if not todo:
-        raise ValueError("no approved shorts")
+        raise ValueError("no shorts to deliver")
     bad = [s["id"].upper() for s in todo if not _render_one(wd, s, ".final").get("exists") or _render_one(wd, s, ".final").get("stale")]
     if bad:
         raise ValueError("final render missing or out of date for " + ", ".join(bad))

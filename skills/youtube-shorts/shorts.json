@@ -1,0 +1,14 @@
+{
+  "min_s": 10,
+  "favour_s": 60,
+  "max_s": 180,
+  "minutes_per_short": 3.5,
+  "hard_cap": 8,
+  "strong": 3.0,
+  "setup_s": 8,
+  "payoff_s": 8,
+  "max_moment_s": 90,
+  "caption_max_words": 3,
+  "caption_max_chars": 17,
+  "hook_s": 2.8
+}

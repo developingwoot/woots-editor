@@ -52,7 +52,7 @@ def test_fake_claude_copies_the_canned_answer_and_runs_apply(tmp_path, monkeypat
 
 def _facts(**kw):
     base = {"work": "w", "name": "n", "title": "T", "outline": False, "clips": False, "cut": False, "preview": False, "final": False,
-            "shorts_approved": 0, "finished": False}
+            "shorts_kept": 0, "finished": False}
     base.update(kw)
     return base
 
@@ -64,7 +64,7 @@ def test_step_of_follows_what_exists():
              ({"outline": True, "clips": True, "cut": True}, "rough-cut", "Rough cut ready to watch"),
              ({"outline": True, "clips": True, "cut": True, "preview": True}, "preview", "Preview ready to watch"),
              ({"outline": True, "clips": True, "cut": True, "preview": True, "final": True}, "final", "Final rendered: publishing details ready"),
-             ({"final": True, "shorts_approved": 3}, "shorts", "Shorts: 3 approved")]
+             ({"final": True, "shorts_kept": 3}, "shorts", "Shorts: 3 kept")]
     for kw, step, sentence in cases:
         s = views.step_of(_facts(**kw))
         assert (s["step"], s["sentence"]) == (step, sentence), kw

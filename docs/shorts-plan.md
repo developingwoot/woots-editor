@@ -1,6 +1,6 @@
 # Shorts: the plan
 
-Status: planned 2026-11-02, nothing in this file is built yet unless a phase says so. Work through the phases in order; each one ends in something the
+Status: planned 2026-11-02; Phase 0 and Phase 1 are done (see "Phase 1 as built"); nothing else is built yet. Work through the phases in order; each one ends in something the
 host can use and a green test run. Read `CLAUDE.md` first: its rules (no approval gates, plan files through `projectstore`, channel data only in the
 profile, a test for every behaviour change) all apply here.
 
@@ -186,6 +186,22 @@ main video as before (a regression test on synthetic audio).
 - Final render (1080x1920, best quality) of kept shorts, publishing details (`publish_prompt`/`apply_publish` exist), deliver to the footage
   folder or a chosen folder.
 - Update `docs/how-it-works.md` (the Shorts line) and this file's status.
+
+## Phase 1 as built (2026-11-02)
+
+- `tools/encoders.py`: `adapt(args)` keeps NVENC flags when `h264_nvenc` opens (probed once) and otherwise rewrites them for libx264; `render.py`, `assemble.py`, `splice.py`, `shorts.py` use it
+  (`sectionrender.py` already had its own fallback).
+- `tools/brandstyle.py`: `palette()`, `font()`, colour formats; `sysfonts.file_for()` and `family_of_file()`. `shorts.py` and `shortsgfx.py` hold no colour or font literal (a test checks it).
+  Graphic-card detection uses the palette's primary colour. With an empty profile: white text, black outline, a neutral dark primary, a yellow accent, and the Oswald file that ships in `fonts/`.
+- Statuses are `""`, `kept`, `dropped` (old files are read as before); no approval gate; graphics, the final render and delivery work on every short that is not dropped.
+- `.shorts.json` is a plan file written through `projectstore` (history and undo).
+- `shorts.py` reads each source's real size (`probe_size`); crops, graphic cards and the `blur` layout use it. Pieces carry `src`, `sw`, `sh`, `noaudio`.
+- Several sources: `sources` plus `{"src", "a", "b"}` ranges load, pick words, cut, caption and render per source (tested with two clips of different sizes). **Not done yet** (they belong to
+  the phases that need them): Claude's find/tighten prompts, `shortsplan.validate`, the old tab's range editor and the graphics plan still assume one source; a `broll` source has no
+  words, so it only produces pieces once Phase 4 adds ranges laid over words (`audio_from`).
+- The `youtube-shorts` skill holds the numbers (`shorts.json`: lengths, count, strength, caption size, hook time) and the rules text of the find prompt (`shorts.md`); the user's copy wins.
+  Pace presets (`PACES`) stay in code: they are choices the host picks per short.
+- Left in `shorts.py` for Phase 5: caption sizes/positions, the hook box position and the -14 LUFS target are still literals.
 
 ## Open questions (ask the host when the phase starts)
 

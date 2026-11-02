@@ -9,4 +9,5 @@ A file only this folder has is used as it is. Your name, channel and voice come 
 - `youtube-script/`: how an outline is shaped: hooks, structure, teaching points.
 - `youtube-graphics/`: the look of graphics and how they are built (HyperFrames).
 - `woots-channel/`: your house style and brand (colours, fonts). Fill `brand.md` in.
+- `youtube-shorts/shorts.json`: the numbers for shorts (lengths, how many per video, caption size, hook time). `shorts.md`: the rules Claude follows when it picks shorts.
 - `youtube-publish/`: titles, descriptions, chapters.

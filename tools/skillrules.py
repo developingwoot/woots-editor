@@ -31,20 +31,47 @@ def files(skill: str, pattern: str = "*.md") -> list:
 DEFAULTS = {"min_piece_s": 3.0, "beat_min_s": 15.0, "beat_max_s": 30.0, "repeat_phrase_words": 4, "repeat_phrase_within_words": 40,
             "repeat_phrase_within_s": 20.0, "repeat_sentence_share": 0.5, "repeat_sentence_far_share": 0.7, "repeat_sentence_s": 60.0, "cold_open_after_s": 120.0,
             "cold_open_min_s": 6.0, "cold_open_max_s": 15.0, "broll_max_s": 8.0, "max_pause_s": 0.5, "broll_min_beat_s": 12.0, "retake_share": 0.6, "splice_min_words": 4, "punch_in_zoom": 1.3, "punch_hold_s": 15.0, "punch_flat_s": 30.0, "hook_total_s": 30.0, "min_words": 60, "min_words_per_s": 0.8}
+SHORTS_DEFAULTS = {"min_s": 10.0, "favour_s": 60.0, "max_s": 180.0, "minutes_per_short": 3.5, "hard_cap": 8, "strong": 3.0, "setup_s": 8.0, "payoff_s": 8.0,
+                   "max_moment_s": 90.0, "caption_max_words": 3, "caption_max_chars": 17, "hook_s": 2.8}
 RULES_FILE = "youtube-edit/rough-cut.json"
+SHORTS_FILE = "youtube-shorts/shorts.json"
 FOR_CLAUDE = ("youtube-edit/rough-cut.md", "youtube-edit/editing-style.md", "youtube-edit/cut-rules.md", "youtube-script/hook-library.md")
 
 
-def rules() -> dict:
-    out = dict(DEFAULTS)
+def numbers(rel: str, defaults: dict) -> dict:
+    """The numbers in one skill file: `defaults`, each replaced by the file's value when that is a positive number."""
+    out = dict(defaults)
     try:
-        got = json.loads((find(RULES_FILE) or Path("missing")).read_text(encoding="utf-8-sig"))
+        got = json.loads((find(rel) or Path("missing")).read_text(encoding="utf-8-sig"))
     except (OSError, ValueError):
         return out
     for k, v in (got.items() if isinstance(got, dict) else []):
-        if k in DEFAULTS and isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0:
-            out[k] = type(DEFAULTS[k])(v)
+        if k in defaults and isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0:
+            out[k] = type(defaults[k])(v)
     return out
+
+
+def rules() -> dict:
+    return numbers(RULES_FILE, DEFAULTS)
+
+
+def shorts() -> dict:
+    """The numbers for shorts (youtube-shorts/shorts.json): lengths, how many, how strong a moment must be, caption size, hook time."""
+    return numbers(SHORTS_FILE, SHORTS_DEFAULTS)
+
+
+def shorts_notes() -> str:
+    """The prose rules for choosing shorts (youtube-shorts/shorts.md), with the numbers filled in."""
+    p = find("youtube-shorts/shorts.md")
+    try:
+        text = p.read_text(encoding="utf-8-sig") if p else ""
+    except OSError:
+        text = ""
+    text = "\n".join(line for line in text.splitlines() if not line.startswith("#")).strip() or "- Each short is a complete thought of {min_s} to {max_s} seconds."
+    r = shorts()
+    for k in ("min_s", "max_s", "hook_s"):
+        text = text.replace("{" + k + "}", f"{r[k]:g}")
+    return text
 
 
 def copy_into(fd: Path, rels=FOR_CLAUDE) -> list:

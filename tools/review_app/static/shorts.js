@@ -15,13 +15,13 @@
     if (!m) throw new Error(`"${x}" is not a range like 20.6-40.7`);
     return [+m[1], +m[2]];
   });
-  const STATUS = { proposed: "proposed", approved: "approved", rejected: "rejected" };
+  const STATUS = { "": "not looked at", kept: "kept", dropped: "dropped" };
 
   /* ---------------------------------------------------------------- loading */
   async function loadList(pick) {
     const list = await App.api("/api/shorts/list");
     const sel = $("#shPick"); sel.innerHTML = "";
-    for (const p of list) sel.append(el("option", { value: JSON.stringify([p.work, p.name]) }, `${p.name} · ${p.shorts} short${p.shorts !== 1 ? "s" : ""}${p.approved ? `, ${p.approved} approved` : ""}`));
+    for (const p of list) sel.append(el("option", { value: JSON.stringify([p.work, p.name]) }, `${p.name} · ${p.shorts} short${p.shorts !== 1 ? "s" : ""}${p.kept ? `, ${p.kept} kept` : ""}`));
     $("#shEmpty").hidden = list.length > 0; $("#shBody").hidden = !list.length; sel.hidden = !list.length;
     for (const id of ["shFind", "shTightAll", "shTitles", "shFinish", "shAdd", "shRefresh"]) $("#" + id).hidden = !list.length;
     if (!list.length) { S.key = null; return; }
@@ -102,7 +102,7 @@
       el("b", { class: "shTitle" }, s.id.toUpperCase() + "  " + s.title),
       el("span", { class: "muted small" }, len),
       el("span", { class: `chip ${r.exists && !r.stale ? "restored" : "pend"}`, title: "Quick half-size preview, for checking while you edit" }, r.exists ? (r.stale ? "preview out of date" : "preview ok") : "no preview"),
-      s.status === "approved" || r.final.exists ? el("span", { class: `chip ${r.final.exists && !r.final.stale ? "restored" : "pend"}`, title: "1080x1920 at the best quality setting; made when you press Finish approved" }, r.final.exists ? (r.final.stale ? "final out of date" : "final ✓") : "no final yet") : null,
+      s.status === "kept" || r.final.exists ? el("span", { class: `chip ${r.final.exists && !r.final.stale ? "restored" : "pend"}`, title: "1080x1920 at the best quality setting; made when you press Finish kept" }, r.final.exists ? (r.final.stale ? "final out of date" : "final ✓") : "no final yet") : null,
       s.delivered && s.delivered.file ? el("span", { class: "chip restored", title: s.delivered.file }, "saved in the video's folder") : null,
       el("span", { class: "spacer" }),
       el("button", { class: "ghost", onclick: () => { S.open = open ? null : id; if (!open) loadPlan(id); renderCard(id); } }, open ? "▲ Close" : "▼ Open"),
@@ -135,9 +135,9 @@
     if (rr.exists) player.append(el("video", { controls: true, playsinline: true, src: `/shortmedia/${encodeURIComponent(S.key.work)}/${encodeURIComponent(rr.file)}?t=${rr.mtime}` }));
     else player.append(el("div", { class: "muted small shNoVid" }, "No preview yet. A few seconds."));
     const acts = el("div", { class: "row" },
-      el("button", { class: "accent", title: "Quick half-size preview. The final-quality render is made for approved shorts by Finish approved.", onclick: () => runJob(() => post("render", { id }), `Preview ${id.toUpperCase()}`, async () => { await reload(); }) }, r.exists ? (r.stale ? "↻ Update preview" : "↻ Preview again") : "▶ Preview (quick)"),
-      el("button", { class: s.status === "approved" ? "" : "ghost", onclick: async () => { const approving = s.status !== "approved"; const ok = await act("edit", { id, status: approving ? "approved" : "proposed" }); if (ok && approving && !s.gfx) planGfx(id); } }, s.status === "approved" ? "✓ Approved (click to undo)" : "✓ Approve"),
-      el("button", { class: "ghost", onclick: () => act("edit", { id, status: s.status === "rejected" ? "proposed" : "rejected" }) }, s.status === "rejected" ? "Un-reject" : "✕ Reject"),
+      el("button", { class: "accent", title: "Quick half-size preview. The final-quality render is made for the kept shorts by Finish kept.", onclick: () => runJob(() => post("render", { id }), `Preview ${id.toUpperCase()}`, async () => { await reload(); }) }, r.exists ? (r.stale ? "↻ Update preview" : "↻ Preview again") : "▶ Preview (quick)"),
+      el("button", { class: s.status === "kept" ? "" : "ghost", onclick: async () => { const keeping = s.status !== "kept"; const ok = await act("edit", { id, status: keeping ? "kept" : "" }); if (ok && keeping && !s.gfx) planGfx(id); } }, s.status === "kept" ? "✓ Kept (click to undo)" : "✓ Keep"),
+      el("button", { class: "ghost", onclick: () => act("edit", { id, status: s.status === "dropped" ? "" : "dropped" }) }, s.status === "dropped" ? "Bring back" : "✕ Drop"),
       el("button", { class: "ghost", title: "Whole short as one fitted picture (use for shots with burned-in overlays)", onclick: () => act("edit", { id, layout_all: s.layout_all ? "" : "blur" }) }, s.layout_all ? "Fit: whole frame (on)" : "Fit whole frame"),
       el("button", { class: "ghost", title: "Claude cuts filler, tangents and repeats out of this short (one short run, a few cents); you can click any word afterwards to cut or restore it", onclick: () => tighten([id]) }, s.tightened ? "✂ Tighten again" : "✂ Tighten with Claude"),
       s.tightened ? el("button", { class: "ghost", onclick: () => act("untighten", { id }, "Back to the selection before the tighten") }, "↶ Undo tighten") : null,
@@ -148,7 +148,7 @@
       wordsPanel(id, s), pieces(id, s))));
   }
 
-  /* ---------------------------------------------------------------- graphics plan of an approved short (ADR 0006 phase 2) */
+  /* ---------------------------------------------------------------- graphics plan of a short (ADR 0006 phase 2) */
   const GFX = {};                                              // id -> the strip data from /api/shorts/gfx
   const LOOK = { brand: "plain brand card", depth: "3D depth", sticker: "comic sticker", ui: "UI explainer", kinetic: "kinetic type", "": "no look chosen" };
   const gfxUrl = (path, extra) => `/api/shorts/${path}?${q()}&${extra}`;
@@ -169,10 +169,6 @@
     const box = el("div", { class: "card gxBox" });
     box.append(el("div", { class: "row" }, el("b", {}, "Graphics plan"),
       el("span", { class: "muted small" }, "where each graphic goes and what it will be; nothing is built until you say so")));
-    if (s.status !== "approved") {
-      box.append(el("div", { class: "muted small" }, "Approve this short and Claude plans its graphics (one small run, about a minute)."));
-      return box;
-    }
     if (!s.gfx) {
       box.append(el("div", { class: "row" }, el("button", { class: "accent", onclick: () => planGfx(id) }, "✦ Plan the graphics"),
         el("span", { class: "muted small" }, "Claude reads the words and the video's own graphics, then proposes where graphics go and what they show.")));
@@ -217,7 +213,7 @@
 
   function publishBox(id, s) {
     const pub = s.publish || {};
-    const det = el("details", { class: "shPub", open: s.status === "approved" && !pub.title });
+    const det = el("details", { class: "shPub", open: s.status === "kept" && !pub.title });
     det.append(el("summary", {}, "YouTube title, description, tags, file name ", pub.title ? el("span", { class: "chip restored" }, "written") : el("span", { class: "chip pend" }, "not written yet")));
     const save = () => act("publish", { id, title: t.value, description: d.value, tags: g.value, filename: fn.value });
     const t = el("input", { type: "text", class: "shIn", value: pub.title || "", maxlength: 100 });
@@ -238,16 +234,16 @@
   }
 
   function titles(ids) {
-    if (!ids.length) return App.toast("Nothing to write titles for: approve some shorts first", true);
+    if (!ids.length) return App.toast("Nothing to write titles for: keep some shorts first", true);
     if (!confirm(`Ask Claude to write YouTube titles, descriptions, tags and file names for ${ids.length === 1 ? ids[0].toUpperCase() : ids.length + " shorts"}?\nOne short Claude run (a few cents). You can edit everything afterwards.`)) return;
     runJob(() => post("titles", { ids }), "Claude writes the titles", async () => { await reload(); });
   }
   function finish() {
-    const ap = S.d.shorts.filter(x => x.status === "approved");
+    const ap = S.d.shorts.filter(x => x.status === "kept");
     if (!ap.length) return App.toast("Approve the shorts you want first", true);
     const need = ap.filter(x => !x.render.final.exists || x.render.final.stale).length;
-    if (!confirm(`Finish ${ap.length} approved short${ap.length > 1 ? "s" : ""}?\n\n1. ${need ? `Render ${need} at final quality (1080x1920, best quality, about 10 s each)` : "All finals are already current"}\n2. Copy them, with their generated file names and a text file of title, description and tags, into:\n${S.d.folder}\n\nNothing there is ever overwritten. No Claude tokens are used.`)) return;
-    runJob(() => post("finish", {}), "Finish approved shorts", async () => { await reload(); });
+    if (!confirm(`Finish ${ap.length} kept short${ap.length > 1 ? "s" : ""}?\n\n1. ${need ? `Render ${need} at final quality (1080x1920, best quality, about 10 s each)` : "All finals are already current"}\n2. Copy them, with their generated file names and a text file of title, description and tags, into:\n${S.d.folder}\n\nNothing there is ever overwritten. No Claude tokens are used.`)) return;
+    runJob(() => post("finish", {}), "Finish kept shorts", async () => { await reload(); });
   }
 
   function wordsPanel(id, s) {
@@ -412,8 +408,8 @@
 
   /* ---------------------------------------------------------------- wiring */
   $("#shPick").addEventListener("change", () => { const [work, name] = JSON.parse($("#shPick").value); S.key = { work, name }; S.open = null; S.plans = {}; reload(); });
-  $("#shTightAll").onclick = () => { const ids = S.d.shorts.filter(x => x.status !== "rejected" && !x.tightened).map(x => x.id); ids.length ? tighten(ids) : App.toast("Everything that is not rejected is already tightened"); };
-  $("#shTitles").onclick = () => { const ap = S.d.shorts.filter(x => x.status === "approved"); const miss = ap.filter(x => !(x.publish || {}).title); titles((miss.length ? miss : ap).map(x => x.id)); };
+  $("#shTightAll").onclick = () => { const ids = S.d.shorts.filter(x => x.status !== "dropped" && !x.tightened).map(x => x.id); ids.length ? tighten(ids) : App.toast("Everything that is not dropped is already tightened"); };
+  $("#shTitles").onclick = () => { const ap = S.d.shorts.filter(x => x.status === "kept"); const miss = ap.filter(x => !(x.publish || {}).title); titles((miss.length ? miss : ap).map(x => x.id)); };
   $("#shFinish").onclick = finish;
   $("#shLink").addEventListener("change", () => act("project", { full_video_url: $("#shLink").value }, "Link saved: used in the descriptions Claude writes"));
   $("#shNew").onclick = showNew; $("#shAdd").onclick = addByTime; $("#shFind").onclick = ask; $("#shRefresh").onclick = reload;

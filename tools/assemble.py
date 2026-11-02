@@ -24,6 +24,7 @@ from pathlib import Path
 
 import numpy as np
 import soundfile as sf
+import encoders
 
 import footage_cfg
 import render
@@ -108,8 +109,8 @@ def build_piece(which, spec, br, fps, size, quality, chain, whoosh, tmp: Path) -
     if f > 0 and which == "outro":
         vf += f",fade=t=in:st=0:d={f}:color={NAVY}"
     vf += ",format=yuv420p"                      # fade with a colour converts to RGB (4:4:4) otherwise
-    venc = (["-c:v", "h264_nvenc", "-preset", "p6", "-rc", "vbr", "-cq", "19", "-b:v", "0"] if quality == "final"
-            else ["-c:v", "h264_nvenc", "-preset", "p3", "-cq", "28"])
+    venc = encoders.adapt(["-c:v", "h264_nvenc", "-preset", "p6", "-rc", "vbr", "-cq", "19", "-b:v", "0"] if quality == "final"
+                          else ["-c:v", "h264_nvenc", "-preset", "p3", "-cq", "28"])
     abr = "320k" if quality == "final" else "160k"
     out = tmp / f"{which}.mp4"
     ff("-ss", f"{spec['in']:.3f}", "-i", clip, "-i", norm, "-vf", vf, "-map", "0:v:0", "-map", "1:a:0",
@@ -150,8 +151,8 @@ def join(parts: list[Path], out: Path, quality: str, tmp: Path) -> str:
         print("  streams differ between main and bookends; re-encoding the join", file=sys.stderr)
     inputs = [x for p in parts for x in ("-i", p)]
     fc = "".join(f"[{i}:v][{i}:a]" for i in range(len(parts))) + f"concat=n={len(parts)}:v=1:a=1[v][a]"
-    venc = (["-c:v", "h264_nvenc", "-preset", "p6", "-rc", "vbr", "-cq", "19", "-b:v", "0"] if quality == "final"
-            else ["-c:v", "h264_nvenc", "-preset", "p3", "-cq", "28"])
+    venc = encoders.adapt(["-c:v", "h264_nvenc", "-preset", "p6", "-rc", "vbr", "-cq", "19", "-b:v", "0"] if quality == "final"
+                          else ["-c:v", "h264_nvenc", "-preset", "p3", "-cq", "28"])
     ff(*inputs, "-filter_complex", fc, "-map", "[v]", "-map", "[a]", *venc, "-c:a", "aac",
        "-b:a", "320k" if quality == "final" else "160k", "-movflags", "+faststart", out)
     return "re-encode"

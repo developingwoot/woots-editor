@@ -1102,13 +1102,11 @@ def start_find_teaching(work, name):
 
 
 def start_shorts_gfxplan(work, name, sid):
-    """Claude plans the graphics of ONE approved short (where each goes, what it is): a small run; nothing is built."""
+    """Claude plans the graphics of ONE short (where each goes, what it is): a small run; nothing is built."""
     raw = shortsapp.read_raw(work, name)
     short = next((s for s in raw.get("shorts", []) if s["id"] == sid), None)
     if not short:
         raise ValueError(f"no short {sid!r}")
-    if short.get("status") != "approved":
-        raise ValueError("approve the short first: graphics are planned only for approved shorts")
     prompt = shortsapp.gfx_prompt(work, name, sid)
     job = _job("shorts", [f"Claude plans the graphics for {sid.upper()}"])
 
@@ -1140,8 +1138,8 @@ def start_shorts_find(work, name, count=None):
 def start_shorts_make(work, name, count):
     """'Go': make `count` shorts from this video's own final render. First time: transcribe the final and write <name>.shorts.json;
     then Claude chooses the shorts. The count is the recommendation, or whatever the creator asked for."""
-    if not isinstance(count, int) or not 1 <= count <= shortsplan.HARD_CAP + 2:
-        raise ValueError(f"ask for between 1 and {shortsplan.HARD_CAP + 2} shorts")
+    if not isinstance(count, int) or not 1 <= count <= shortsplan.hard_cap() + 2:
+        raise ValueError(f"ask for between 1 and {shortsplan.hard_cap() + 2} shorts")
     steps = ["Claude chooses the shorts"]
     if shortsapp.cfg_file(work, name).exists():
         job = _job("shorts", steps)
@@ -1286,13 +1284,13 @@ def start_shorts_titles(work, name, ids):
 
 
 def start_shorts_finish(work, name):
-    """Approved shorts only: render each at final quality (1080x1920, best encoder setting) unless it is already current, then copy them with their
+    """Every short that is not dropped: render each at final quality (1080x1920, best encoder setting) unless it is already current, then copy them with their
     generated names into the finished video's own Shorts folder (never overwriting)."""
     raw = shortsapp.read_raw(work, name)
     wd = WORK / work
-    approved = [s for s in raw.get("shorts", []) if s.get("status") == "approved"]
+    approved = shortsapp.live(raw.get("shorts", []))
     if not approved:
-        raise ValueError("no approved shorts: approve the ones you want first")
+        raise ValueError("no shorts to finish: every short is dropped")
     todo = []
     for s in approved:
         info = shortsapp._render_one(wd, s, ".final")

@@ -11,15 +11,11 @@ import json
 from pathlib import Path
 
 import config
+import skillrules
 
-MIN_S, FAVOUR_S, MAX_S = 10.0, 60.0, 180.0
-MINUTES_PER_SHORT = 3.5                  # the length cap: about one short per 3.5 minutes of video, never one per minute
-HARD_CAP = 8                             # more than this is spam for one video, whatever its length
-STRONG = 3.0                             # a moment needs a motion explainer or a teaching point to count as strong
+# The numbers (lengths, one short per N minutes, the cap, how strong a moment must be) are in the youtube-shorts skill: skillrules.shorts().
 POPUPS = ("counter", "stamp", "burst", "kinetic")
 CARDS = ("title", "end")
-SETUP_S, PAYOFF_S = 8.0, 8.0             # how much context to take before and after the seed beat, inside the same section
-MAX_MOMENT_S = 90.0
 
 
 def _read(p: Path):
@@ -54,24 +50,25 @@ def moments(beats: list[dict]) -> list[dict]:
     """Strong moments: each seed beat (score >= STRONG) widened with setup and payoff beats of the same section, then overlapping ones merged.
     [{start, end, dur, score, beats: [ids], sections: [...], why}] best first."""
     live = [b for b in beats if not b.get("skip")]
+    r = skillrules.shorts()
     out = []
     for i, b in enumerate(live):
-        if beat_score(b) < STRONG:
+        if beat_score(b) < r["strong"]:
             continue
         lo = hi = i
         sec = b.get("section")
         t = 0.0
-        while lo > 0 and live[lo - 1].get("section") == sec and t + live[lo - 1]["dur"] <= SETUP_S:      # the setup: what leads into it
+        while lo > 0 and live[lo - 1].get("section") == sec and t + live[lo - 1]["dur"] <= r["setup_s"]:      # the setup: what leads into it
             lo -= 1
             t += live[lo]["dur"]
         t = 0.0
-        while hi < len(live) - 1 and live[hi + 1].get("section") == sec and t + live[hi + 1]["dur"] <= PAYOFF_S:   # the payoff: what it leads to
+        while hi < len(live) - 1 and live[hi + 1].get("section") == sec and t + live[hi + 1]["dur"] <= r["payoff_s"]:   # the payoff: what it leads to
             hi += 1
             t += live[hi]["dur"]
         out.append((lo, hi, i))
     merged = []
     for lo, hi, seed in sorted(out):
-        if merged and lo <= merged[-1][1] + 1 and live[hi]["end"] - live[merged[-1][0]]["start"] <= MAX_MOMENT_S:
+        if merged and lo <= merged[-1][1] + 1 and live[hi]["end"] - live[merged[-1][0]]["start"] <= r["max_moment_s"]:
             merged[-1] = (merged[-1][0], max(merged[-1][1], hi), merged[-1][2] + [seed])
         else:
             merged.append((lo, hi, [seed]))
@@ -94,14 +91,16 @@ def recommend(beats: list[dict] | None, runtime_s: float | None = None) -> dict:
     """{runtime_s, by_length, strong, recommended, max, moments, reasons, confidence}. `beats` may be None (no beat map yet)."""
     runtime = runtime_s if runtime_s is not None else (runtime_of(beats) if beats else 0.0)
     minutes = runtime / 60.0
-    by_length = max(1, min(HARD_CAP, round(minutes / MINUTES_PER_SHORT))) if runtime else 0
+    r = skillrules.shorts()
+    cap, per = r["hard_cap"], r["minutes_per_short"]
+    by_length = max(1, min(cap, round(minutes / per))) if runtime else 0
     mo = moments(beats) if beats else []
     reasons = []
     if not runtime:
         return {"runtime_s": 0, "by_length": 0, "strong": 0, "recommended": 0, "max": 0, "moments": [], "confidence": "none",
                 "reasons": ["There is no stitched or final video yet, so there is nothing to cut shorts from."]}
     mm = f"{int(runtime // 60)}:{int(runtime % 60):02d}"
-    reasons.append(f"The video is {mm} long: about one short per {MINUTES_PER_SHORT:g} minutes keeps them from covering the same ground, so room for about {by_length}.")
+    reasons.append(f"The video is {mm} long: about one short per {per:g} minutes keeps them from covering the same ground, so room for about {by_length}.")
     if beats is None:
         rec, conf = by_length, "low"
         reasons.append("There is no beat map to look at, so this is an estimate from the length alone.")
@@ -115,7 +114,7 @@ def recommend(beats: list[dict] | None, runtime_s: float | None = None) -> dict:
             reasons.append(f"That is more than the length allows, so I would keep the best {by_length}.")
         elif len(mo) < by_length:
             reasons.append("That is fewer than the length would allow, and a weak short is worse than none, so I would stop at the strong ones.")
-    return {"runtime_s": round(runtime, 1), "by_length": by_length, "strong": len(mo), "recommended": rec, "max": min(HARD_CAP, max(rec, by_length) + 2),
+    return {"runtime_s": round(runtime, 1), "by_length": by_length, "strong": len(mo), "recommended": rec, "max": min(cap, max(rec, by_length) + 2),
             "moments": mo, "confidence": conf, "reasons": reasons}
 
 
@@ -133,9 +132,15 @@ def total_s(ranges) -> float:
     return sum(b - a for a, b in ranges)
 
 
+def hard_cap() -> int:
+    return skillrules.shorts()["hard_cap"]
+
+
 def validate(shorts: list[dict], runtime_s: float, count: int | None = None) -> list[str]:
     """Problems with a set of proposed shorts ([] = fine). Each short: {title, hook, ranges: [[a, b], ...], thought: {setup, point, payoff}}."""
     problems = []
+    r = skillrules.shorts()
+    min_s, max_s = r["min_s"], r["max_s"]
     for i, s in enumerate(shorts, 1):
         tag = f"short {i} ({s.get('title', '?')})"
         rs = s.get("ranges") or []
@@ -145,10 +150,10 @@ def validate(shorts: list[dict], runtime_s: float, count: int | None = None) -> 
         if runtime_s and max(r[1] for r in rs) > runtime_s + 0.5:
             problems.append(f"{tag}: a range runs past the end of the video ({runtime_s:.0f} s)")
         d = total_s(rs)
-        if d < MIN_S:
-            problems.append(f"{tag}: {d:.0f} s is under the {MIN_S:.0f} s minimum")
-        if d > MAX_S:
-            problems.append(f"{tag}: {d:.0f} s is over the {MAX_S:.0f} s maximum")
+        if d < min_s:
+            problems.append(f"{tag}: {d:.0f} s is under the {min_s:.0f} s minimum")
+        if d > max_s:
+            problems.append(f"{tag}: {d:.0f} s is over the {max_s:.0f} s maximum")
         th = s.get("thought") or {}
         if not all(str(th.get(k, "")).strip() for k in ("setup", "point", "payoff")):
             problems.append(f"{tag}: it must state its setup, point and payoff (a complete thought)")
@@ -166,23 +171,15 @@ def validate(shorts: list[dict], runtime_s: float, count: int | None = None) -> 
 
 def long_ones(shorts: list[dict]) -> list[str]:
     """Not errors: shorts over a minute are allowed when the story needs it, but worth a second look."""
-    return [s.get("title", "?") for s in shorts if total_s(s.get("ranges") or []) > FAVOUR_S]
+    return [s.get("title", "?") for s in shorts if total_s(s.get("ranges") or []) > skillrules.shorts()["favour_s"]]
 
 
 FIND_RULES = """You are choosing YouTube Shorts from the finished MAIN video of the channel. The goal: views, from fast, visual, complete little stories.
 
 How many: make exactly {count} short{plural}{fewer}. Do not make more.
 
-Hard rules (the host's):
-- Length: {min_s} seconds to {max_s} seconds in total. Favour under a minute: 15 to 45 seconds is ideal. A short may be as brief as 15 seconds IF it holds a complete thought.
-- A COMPLETE THOUGHT: a viewer who never saw the long video must get a beginning, a point and a payoff (setup: what the question or problem is; point: the idea or action; payoff: the answer, result or punchline). State all three in "thought".
-- A short is made of clips of the main video. The clips may come from DIFFERENT sections, in any order that makes the story work, joined by cuts. Never change what the host said.
-- Fast and visual: prefer the most visually interesting parts of the video, the places with a motion graphic or animation, a teaching point, B-roll or a physical demonstration. The VISUAL MOMENTS list below is a starting point, not a limit.
-- Choose by BEST part, not by position: do not spread the shorts evenly through the video and never cover the same point twice. No intro, outro, subscribe ask or sponsor-like lines.
-- Start on the hook (the interesting claim or question), never on "so", "and" or an unfinished thought. End on the payoff, after a sentence ends.
-- A later "tighten" pass cuts filler and tangents inside each short, so pick a slightly wider range than the final length.
-- hook = the title shown over the first 2.8 s: 2 to 5 words, uppercase, max 3 lines separated with |, a promise or a question, no clickbait lies.
-- Times are MAIN-VIDEO seconds taken from the transcript lines below: the start of the first word you keep and the end of the last word you keep.
+Rules (the host's):
+{rules}
 
 Write the result to candidates.json in the current folder (use the Write tool), exactly this shape and nothing else, best first:
 [{{"title": "Never use a cold iron", "hook": "NEVER USE|A COLD IRON", "ranges": [[20.6, 40.7], [182.2, 195.9]], "thought": {{"setup": "...", "point": "...", "payoff": "..."}}, "visual": "what is on screen that makes it work", "why": "one sentence"}}]
@@ -193,7 +190,7 @@ def find_rules(count: int, strong: int | None = None) -> str:
     fewer = ""
     if strong is not None and strong < count:
         fewer = f" (only {strong} strong visual moment{'s' if strong != 1 else ''} were found, so some of these will be weaker: still make {count} if the host asked for it, but put the best first)"
-    return FIND_RULES.format(count=count, plural="" if count == 1 else "s", fewer=fewer, min_s=int(MIN_S), max_s=int(MAX_S))
+    return FIND_RULES.format(count=count, plural="" if count == 1 else "s", fewer=fewer, rules=skillrules.shorts_notes())
 
 
 def moments_text(mo: list[dict]) -> str:

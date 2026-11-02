@@ -17,6 +17,7 @@ from pathlib import Path
 
 import numpy as np
 import soundfile as sf
+import encoders
 
 SR = 48000
 FADE = 0.008  # seconds of crossfade at each audio join
@@ -114,8 +115,8 @@ def intermediate(video: Path, frames, fps: Fraction, cache: Path, final: bool) -
     vf.write_text(f"fps={fps},select='{select}',setpts=N/({fps}*TB)", encoding="utf-8")
     tmp = out.with_suffix(".part.mp4")                 # only a verified file gets the cache name
     subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", "-i", str(video), "-/vf", str(vf), "-an",
-                    "-c:v", "h264_nvenc", "-bf", "0", "-forced-idr", "1", "-force_key_frames", "expr:1",
-                    "-cq", "15" if final else "22", str(tmp)], check=True)  # NVENC rejects -g 1
+                    *encoders.adapt(["-c:v", "h264_nvenc", "-bf", "0", "-forced-idr", "1", "-force_key_frames", "expr:1",
+                                     "-cq", "15" if final else "22"]), str(tmp)], check=True)  # NVENC rejects -g 1
     want = sum(b - a for a, b in frames)
     got = int(subprocess.run(["ffprobe", "-v", "error", "-count_packets", "-select_streams", "v:0", "-show_entries",
                               "stream=nb_read_packets", "-of", "csv=p=0", str(tmp)],
@@ -223,7 +224,7 @@ def stabilized(src: Path, start: float, dur: float, cache: Path) -> Path:
                    check=True, cwd=cache)
     subprocess.run(["ffmpeg", "-nostdin", "-y", "-v", "error", *trim, "-an", "-vf",
                     "vidstabtransform=input=t.trf:smoothing=12:optzoom=0:zoom=3,unsharp=5:5:0.5",
-                    "-c:v", "h264_nvenc", "-cq", "16", out.name], check=True, cwd=cache)
+                    *encoders.adapt(["-c:v", "h264_nvenc", "-cq", "16"]), out.name], check=True, cwd=cache)
     return out
 
 
@@ -449,10 +450,10 @@ def main():
         vf = vf.replace(f"{{PIECE{k}}}", str(first_piece + k))
 
     if args.final:
-        venc = ["-c:v", "h264_nvenc", "-preset", "p6", "-rc", "vbr", "-cq", "19", "-b:v", "0"]
+        venc = encoders.adapt(["-c:v", "h264_nvenc", "-preset", "p6", "-rc", "vbr", "-cq", "19", "-b:v", "0"])
         aenc = ["-c:a", "aac", "-b:a", "320k"]
     else:
-        venc = ["-c:v", "h264_nvenc", "-preset", "p3", "-cq", "28"]
+        venc = encoders.adapt(["-c:v", "h264_nvenc", "-preset", "p3", "-cq", "28"])
         aenc = ["-c:a", "aac", "-b:a", "160k"]
 
     with tempfile.TemporaryDirectory() as tmp:
