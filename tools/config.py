@@ -15,6 +15,7 @@ Paths use abspath, never resolve(): resolve() turns the mapped drive Z:\\ into t
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 CODE_ROOT = Path(os.path.abspath(__file__)).parent.parent
@@ -47,6 +48,18 @@ def user_settings() -> dict:
     return _read(settings_file())
 
 
+def replace_retry(tmp, p):
+    """os.replace that survives a reader holding the destination open (Windows: 'Access is denied' while another thread reads it)."""
+    for i in range(8):
+        try:
+            os.replace(tmp, p)
+            return
+        except PermissionError:
+            if i == 7:
+                raise
+            time.sleep(0.05 * (i + 1))
+
+
 def save_user_settings(values: dict) -> None:
     """Merge `values` into the per-user file; an empty string removes a key. Takes effect when the app restarts."""
     cur = user_settings()
@@ -59,7 +72,7 @@ def save_user_settings(values: dict) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_suffix(".tmp")
     tmp.write_text(json.dumps(cur, indent=2), encoding="utf-8")
-    os.replace(tmp, p)
+    replace_retry(tmp, p)
 
 
 def _pick(env: str, key: str, default) -> Path:

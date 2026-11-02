@@ -69,7 +69,7 @@ def save(values: dict) -> dict:
     fd, tmp = tempfile.mkstemp(dir=p.parent, suffix=".tmp")
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         json.dump(have, f, indent=1)
-    os.replace(tmp, p)
+    config.replace_retry(tmp, p)
     if any(k in values for k in STYLE_KEYS):
         write_style_files()
     return load()

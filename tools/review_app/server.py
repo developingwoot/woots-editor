@@ -96,6 +96,7 @@ import finalrender                                # noqa: E402  (stage 8: the fu
 import accuracy                                   # noqa: E402  (Beat map tab: Opus checks what is taught for accuracy)
 import shortsapp                                  # noqa: E402  (Shorts tab: vertical shorts from a finished video)
 import shortsplan                                 # noqa: E402  (how many shorts a video deserves, and the rules for them: ADR 0006)
+import shortsview                                 # noqa: E402  (the v2 Shorts screen)
 
 _lock = threading.Lock()                     # one writer at a time (PC + phone)
 _probe_cache: dict = {}
@@ -692,6 +693,45 @@ def _job_run(job, cmds, after=None):
         job["elapsed"] = round(time.time() - job["started"], 1)
     threading.Thread(target=run, daemon=True).start()
     return job
+
+
+SHORTS_V2_EDITS = {"keep": lambda b: {"id": b["id"], "status": "kept" if b.get("keep", True) else ""},
+                   "drop": lambda b: {"id": b["id"], "status": "dropped" if b.get("drop", True) else ""},
+                   "hook": lambda b: {"id": b["id"], "hook": str(b.get("hook", ""))[:90].upper()},
+                   "title": lambda b: {"id": b["id"], "title": str(b.get("title", ""))[:90]},
+                   "pace": lambda b: {"id": b["id"], "pace": b.get("pace", "")}}
+
+
+def shorts_v2_post(op, b):
+    """The Shorts screen's actions. Quick edits answer with the project; long ones start a job and answer with its id."""
+    work, name = views.split_key(b["key"])
+    sid = b.get("id", "")
+
+    def started(job, sentence, done=""):
+        job["sentence"] = sentence
+        if done:
+            job["done_sentence"] = done
+        return {"id": job["id"]}
+    if op in SHORTS_V2_EDITS:
+        with _lock:
+            shortsapp.apply_op(work, name, "edit", SHORTS_V2_EDITS[op](b))
+        return shortsview.project(work, name)
+    if op == "cut":
+        with _lock:
+            shortsapp.apply_op(work, name, "cut", {"id": sid, "start": b["start"], "end": b["end"], "cut": bool(b.get("cut", True))})
+        return shortsview.words(work, name, sid)
+    if op == "preview":
+        return started(start_shorts_render(work, name, sid), "Making the preview of your short", "Preview ready")
+    if op == "tighten":
+        return started(start_shorts_tighten(work, name, [sid]), "Claude is tightening your short", "Short tightened")
+    if op == "make":                                           # the first time: read the final, then Claude chooses
+        rec = shortsview.recommendation(work, name, (finalrender.finals(work, name) or [None])[0])
+        return started(start_shorts_make(work, name, int(b.get("count") or rec["count"] or 3)), "Making your shorts", "Shorts ready")
+    if op == "find":
+        return started(start_shorts_find(work, name, int(b["count"]) if b.get("count") else None), "Claude is choosing shorts", "Shorts chosen")
+    if op == "finish":
+        return started(start_shorts_finish(work, name), "Making the final shorts", "Final shorts ready")
+    raise ValueError("unknown action")
 
 
 def start_shorts_render(work, name, sid):
@@ -1427,6 +1467,14 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/api/v2/frame":
                 work, name = views.split_key(q["key"])
                 return self.send_file(views.frame_path(work, q["file"], float(q["t"])))
+            if u.path == "/api/v2/shorts/list":
+                return self.send_json(shortsview.area())
+            if u.path == "/api/v2/shorts":
+                work, name = views.split_key(q["key"])
+                return self.send_json(shortsview.project(work, name, bool(_busy())))
+            if u.path == "/api/v2/shorts/words":
+                work, name = views.split_key(q["key"])
+                return self.send_json(shortsview.words(work, name, q["id"]))
             if u.path == "/api/v2/video":
                 work, name = views.split_key(q["key"])
                 f = views.facts(work, name)
@@ -1750,6 +1798,8 @@ class Handler(BaseHTTPRequestHandler):
                 if job and not job["done"]:
                     job["stop"] = True
                 return self.send_json({"ok": True})
+            if u.path.startswith("/api/v2/shorts/"):
+                return self.send_json(shorts_v2_post(u.path.rsplit("/", 1)[1], b))
             if u.path == "/api/v2/video/new":
                 with _lock:
                     r = workflow.create(b.get("title", ""))

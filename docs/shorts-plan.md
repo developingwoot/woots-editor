@@ -203,6 +203,16 @@ main video as before (a regression test on synthetic audio).
   Pace presets (`PACES`) stay in code: they are choices the host picks per short.
 - Left in `shorts.py` for Phase 5: caption sizes/positions, the hook box position and the -14 LUFS target are still literals.
 
+## Phase 2 as built (2026-11-02)
+
+- `static/v2/shorts.js` is the screen: `#/shorts` (the area: every video with shorts or a final) and `#/v/<key>/shorts` (the step). `tools/shortsview.py` makes its data in plain words;
+  the routes are `/api/v2/shorts/*` in `server.py` (keep, drop, hook, title, pace, cut a word, preview, tighten, make, find, finish). Long jobs show their own sentence in the job bar.
+- The step: no final -> says so and links to Final; a final but no project -> "Make the shorts" (reads the final, then Claude chooses); a project -> the recommendation sentence, "Find more shorts",
+  "Make the final shorts", one card per short (frame, title, length, hook, Keep / Drop / Open), dropped shorts under "Dropped" with Bring back. An opened short has its preview (or "Make a preview"),
+  the hook, the pace, "Tighten it", and the words (click to cut or restore). Shorts nobody kept or dropped are still made, with a line saying so.
+- **Not built yet**: notes to Claude on a short, layout per piece, caption style / music / SFX / graphics panels (Phases 5 and 6), and the two buttons for a video file (Phase 3) and raw footage (Phase 4).
+- Also fixed: `channel.save` and the settings writer retry `os.replace` (`config.replace_retry`), which failed intermittently on Windows while the server read the file.
+
 ## Open questions (ask the host when the phase starts)
 
 - Phase 3: where should standalone projects' finished shorts go: next to the source file, or a Shorts folder in the workspace?

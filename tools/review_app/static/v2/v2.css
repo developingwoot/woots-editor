@@ -199,3 +199,25 @@ button.x { opacity: .35; padding: 0 4px; } button.x:hover { opacity: 1; }
 .modelAct { display: flex; gap: 10px; align-items: center; white-space: nowrap; }
 .modelAct progress { width: 140px; accent-color: var(--orange); }
 .bad { color: var(--bad); }
+
+/* Shorts */
+.settingsLink ~ .settingsLink { margin-left: 18px; }
+.shortsHead { margin-bottom: 16px; display: flex; flex-direction: column; gap: 6px; }
+.shortBlock { margin-bottom: 12px; }
+.shortCard { margin-bottom: 0; }
+.shortCard.dropped { opacity: .5; }
+.sthumb { width: 90px; height: 160px; object-fit: cover; border-radius: 6px; background: var(--navy); }
+.chip.ok { background: var(--ok); }
+.shortOpen { margin-top: 8px; }
+.openCols { display: flex; gap: 24px; align-items: flex-start; }
+.openPreview { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; width: 270px; flex: none; }
+.openPreview video, .noPreview { width: 270px; height: 480px; background: #000; border-radius: var(--radius); }
+.noPreview { display: flex; align-items: center; justify-content: center; background: var(--line); }
+.openEdit { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.openEdit input, .openEdit select { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; max-width: 420px; }
+.shortWords { margin-top: 8px; }
+.wordRange { margin: 0 0 10px; line-height: 2; }
+button.w { background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; margin: 0 3px 3px 0; font: inherit; cursor: pointer; }
+button.w:hover { border-color: var(--orange); }
+button.w.cut { color: var(--muted); text-decoration: line-through; background: var(--bg); }
+.droppedRow { display: flex; gap: 12px; align-items: baseline; margin-bottom: 6px; }

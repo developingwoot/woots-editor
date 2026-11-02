@@ -1,3 +1,5 @@
+import os
+
 import config
 
 
@@ -34,3 +36,18 @@ def test_no_machine_specific_python_path_is_left_in_the_code():
     import pathlib
     for p in (config.CODE_ROOT / "tools").rglob("*.py"):
         assert ".venvs" not in p.read_text(encoding="utf-8", errors="ignore"), p.name
+
+
+def test_a_replace_that_is_refused_while_another_thread_reads_is_retried(tmp_path, monkeypatch):
+    calls = []
+    real = os.replace
+
+    def flaky(a, b):
+        calls.append(1)
+        if len(calls) < 3:
+            raise PermissionError("in use")
+        real(a, b)
+    monkeypatch.setattr(os, "replace", flaky)
+    (tmp_path / "a.tmp").write_text("x", encoding="utf-8")
+    config.replace_retry(tmp_path / "a.tmp", tmp_path / "a.json")
+    assert (tmp_path / "a.json").read_text(encoding="utf-8") == "x" and len(calls) == 3

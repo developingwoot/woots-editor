@@ -2,9 +2,10 @@ import { $, h, api } from './util.js';
 import * as home from './home.js';
 import * as video from './video.js';
 import * as settings from './settings.js';
+import * as shorts from './shorts.js';
 
 // Hash router: #/ is home, #/v/<key>/<step> is a video page.
-const routes = [[/^#?\/?$/, home], [/^#\/settings$/, settings], [/^#\/v\/([^/]+)\/([\w-]+)$/, video]];
+const routes = [[/^#?\/?$/, home], [/^#\/settings$/, settings], [/^#\/shorts$/, shorts], [/^#\/v\/([^/]+)\/([\w-]+)$/, video]];
 
 async function show() {
   for (const [re, screen] of routes) {

@@ -42,7 +42,7 @@ def test_any_step_can_be_opened_and_new_video_works(screen):
     page.wait_for_selector(".stepbar")
     assert page.locator("h1").inner_text() == "ui brand new"
     assert page.locator(".step.current").inner_text() == "Outline"
-    page.click("text=Shorts")
+    page.click(".stepbar >> text=Shorts")
     expect(page.locator(".step.current")).to_have_text("Shorts")
     page.click("text=Your videos")
     page.wait_for_selector(".vcard")

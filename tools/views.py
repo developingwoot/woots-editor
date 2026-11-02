@@ -16,6 +16,7 @@ _PIPELINES = {
     "options": ("Looking for more takes", "More takes found", 2),
     "teaching": ("Looking for teaching moments", "Teaching moments found", 1),
     "publish": ("Writing the publishing details", "Publishing details ready", 2),
+    "shorts": ("Working on your shorts", "Shorts ready", None),
 }
 
 
@@ -41,6 +42,7 @@ def time_text(seconds) -> str:
 def job_sentence(job: dict, now: float | None = None) -> dict:
     """What the job bar shows: one sentence, progress 0..1 (None if unknown), an estimate, and a plain error with the log behind 'Show details'."""
     running, done_text, typical = _PIPELINES.get(job.get("pipeline"), ("Working", "Done", None))
+    running, done_text = job.get("sentence") or running, job.get("done_sentence") or done_text         # a job can say what it is doing in its own words
     now = time.time() if now is None else now
     steps = job.get("steps") or []
     if not job.get("done"):
@@ -59,7 +61,7 @@ def job_sentence(job: dict, now: float | None = None) -> dict:
 STEPS = [("outline", "Outline"), ("footage", "Footage"), ("rough-cut", "Rough cut"), ("preview", "Preview"), ("final", "Final"), ("shorts", "Shorts")]
 STEP_IDS = [s for s, _ in STEPS]
 _PIPELINE_STEP = {"archive": "final", "vision": "footage", "options": "rough-cut", "teaching": "rough-cut", "analyze": "footage", "clipmap": "footage", "cut": "rough-cut", "preview": "preview", "outline": "outline", "final": "final",
-                  "publish": "final"}
+                  "publish": "final", "shorts": "shorts"}
 
 
 def key_of(work: str, name: str) -> str:
