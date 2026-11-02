@@ -202,7 +202,7 @@ def write_config(html: str, cfg: dict) -> str:
 # ----------------------------------------------------------------------------- project bundle
 def list_works():
     out = []
-    for d in sorted(WORK.iterdir()):
+    for d in sorted(WORK.iterdir()) if WORK.is_dir() else []:
         if d.is_dir():
             names = sorted(p.name[:-len(".edit.json")] for p in d.glob("*.edit.json"))
             if names:
@@ -2005,6 +2005,7 @@ def main():
         return
     mimetypes.add_type("video/mp4", ".mp4")
     mimetypes.add_type("text/javascript", ".js")
+    WORK.mkdir(parents=True, exist_ok=True)          # Settings only creates the workspace folder itself
     builder.recover()                                # runs that were alive when the app closed are not alive now
     srv = ThreadingHTTPServer((args.host, args.port), Handler)
     srv.daemon_threads = True

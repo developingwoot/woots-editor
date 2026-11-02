@@ -367,7 +367,7 @@ def list_videos() -> list[dict]:
     """Videos the Workflow tab can show: any with a workflow.json or a script. (The review tabs list
     videos by edit.json instead; a brand-new video has neither until it gets a script.)"""
     out = []
-    for d in sorted(WORK.iterdir()):
+    for d in sorted(WORK.iterdir()) if WORK.is_dir() else []:        # a new workspace has no work folder until the first video
         if not d.is_dir():
             continue
         names = sorted({p.name[:-len(".workflow.json")] for p in d.glob("*.workflow.json")} |
