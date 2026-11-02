@@ -1,6 +1,6 @@
 # Shorts: the plan
 
-Status: planned 2026-11-02; Phases 0 to 5 are done (see "as built" below); nothing else is built yet. Work through the phases in order; each one ends in something the
+Status: planned 2026-11-02; Phases 0 to 6 are done (see "as built" below); nothing else is built yet. Work through the phases in order; each one ends in something the
 host can use and a green test run. Read `CLAUDE.md` first: its rules (no approval gates, plan files through `projectstore`, channel data only in the
 profile, a test for every behaviour change) all apply here.
 
@@ -259,6 +259,18 @@ main video as before (a regression test on synthetic audio).
   A missing Music or SFX folder is said, never a failure.
 - **Not built**: the SFX list on the word strip with remove / swap per sound (the kit is per role), a kit editor in Settings (the API and the file exist), Claude choosing the track or the emphasis words in
   the find / tighten step (the `emphasis` list exists and is used when something fills it), a swell in music where nobody talks, `glitch` and `typing` roles, and a real run on a real Music / SFX library.
+
+## Phase 6 as built (2026-11-02)
+
+- `tools/shortsgfxbuild.py` builds what `shortsgfx` planned, in the channel's colours and font (`brandstyle`), when a short is rendered: every graphic the host has not cut (no OK step; a graphic
+  is built unless it is cut), for a short made from one recording.
+- **Kinetic** (`look: kinetic`): the one to three words pop in the accent colour, in the graphic's region, as ASS events drawn with the captions.
+- **Every other look is a card**: a panel in the region (`top`, `full` opaque, `bottom`) with the headline (the first line of the graphic's `text`) and, one at a time while the words are said,
+  up to four items (the other lines). The picture of each step is made with PIL and laid over the video at its time (fade in with a small rise, fade out). The plan prompt now asks Claude for list items on separate lines.
+- Each built graphic gets a `hit` (card) or `pop` (key word) sound at its start through `shortsaudio.events`.
+- The open short has a Graphics panel: Plan graphics (the Claude run that already existed), each planned graphic with Cut / Bring back, and the plan's note; the preview is rebuilt with them.
+- **Not built**: the main video's own graphics builder (`builder.py`, `sectionrender.py`, the `youtube-graphics` skill: Claude-written animated scenes) for diagrams and UI mockups at 1080x1920,
+  graphics for a short joined from several recordings, the draft stills in the v2 panel, "change" notes on a graphic, and moving a graphic's time or place.
 
 ## Ideas to think about (from the host)
 

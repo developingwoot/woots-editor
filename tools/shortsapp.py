@@ -363,6 +363,8 @@ def gfx_still(work, name, sid, gid, k, width=360) -> bytes:
 def gfx_prompt(work, name, sid) -> str:
     cfg = sh.load(cfg_file(work, name))
     short = _short(cfg, sid)
+    if any(isinstance(r, dict) for r in short["ranges"]):
+        raise ValueError("graphics are not planned yet for a short made from raw footage")
     bm = {}
     try:
         bm = json.loads((wd_of(work) / f"{name}.beatmap.json").read_text(encoding="utf-8-sig"))

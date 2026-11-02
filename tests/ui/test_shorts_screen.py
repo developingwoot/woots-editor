@@ -205,3 +205,26 @@ def test_the_sound_panel_saves_the_caption_style_music_and_effects_choices(scree
         time.sleep(0.1)
     assert (s["caption_style"], s["sfx"], s["music"]) == ("box", "off", "none")
     assert clutter(visible_text(page)) == []
+
+
+def test_the_graphics_panel_lists_the_plan_and_cuts_and_brings_back_a_graphic(screen):
+    import shortsapp
+    r, key = video_with_shorts("ui shorts graphics")
+    raw = shortsapp.read_raw(r["work"], r["name"])
+    raw["shorts"][0]["gfx"] = {"note": "Two ideas", "skipped": [], "graphics": [
+        {"id": "g1", "t0": 1.0, "t1": 3.0, "look": "ui", "place": "top", "text": "GEAR TEETH\nsharp edge\nwears fast", "what": "the gear", "how": "x", "words": "the gears", "status": ""},
+        {"id": "g2", "t0": 3.0, "t1": 4.0, "look": "kinetic", "place": "bottom", "text": "3 PRINTS", "what": "the number", "how": "pop", "words": "three prints", "status": ""}]}
+    shortsapp.save_raw(r["work"], r["name"], raw)
+    page = screen(f"/v2/#/v/{key}/shorts")
+    page.wait_for_selector(".shortCard")
+    page.locator(".shortCard[data-id=s1] .openBtn").click()
+    page.wait_for_selector("#shortGfx .gfxRow")
+    assert page.locator("#shortGfx .gfxRow").count() == 2
+    assert "GEAR TEETH" in page.inner_text("#shortGfx") and "kinetic · bottom" in page.inner_text("#shortGfx") and "Plan the graphics again" in page.inner_text("#shortGfx")
+    page.locator("#shortGfx .gfxRow[data-gid=g1] .gfxCut").click()
+    expect(page.locator("#shortGfx .gfxRow.cut")).to_have_count(1)
+    assert raw_of(r)["shorts"][0]["gfx"]["graphics"][0]["status"] == "cut"
+    page.locator("#shortGfx .gfxRow.cut .gfxCut").click()
+    expect(page.locator("#shortGfx .gfxRow.cut")).to_have_count(0)
+    assert raw_of(r)["shorts"][0]["gfx"]["graphics"][0]["status"] == ""
+    assert clutter(visible_text(page)) == []

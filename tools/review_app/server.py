@@ -738,6 +738,12 @@ def shorts_v2_post(op, b):
         with _lock:
             shortsapp.apply_op(work, name, "cut", {"id": sid, "start": b["start"], "end": b["end"], "cut": bool(b.get("cut", True))})
         return shortsview.words(work, name, sid)
+    if op == "gfxplan":
+        return started(start_shorts_gfxplan(work, name, sid), "Claude is planning the graphics of your short", "Graphics planned")
+    if op == "gfxcut":                                         # a graphic is built unless the host cuts it
+        with _lock:
+            shortsapp.gfx_mark(work, name, sid, b["g"], "cut" if b.get("cut", True) else "", "")
+        return shortsview.project(work, name)
     if op == "preview":
         return started(start_shorts_render(work, name, sid), "Making the preview of your short", "Preview ready")
     if op == "tighten":

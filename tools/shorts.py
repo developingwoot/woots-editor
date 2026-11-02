@@ -458,7 +458,7 @@ def classify(cfg, pieces):
 
 PIECES_VER = 7                                                                   # bump when build_pieces / auto_classify change, so cached guesses are redone
 SIG_AUTO = ("ranges", "drop", "words", "pace")                                           # what the automatic guesses depend on
-SIG_ALL = ("ranges", "drop", "words", "hook", "crops", "layout_all", "pace", "overlays", "caption_style", "emphasis", "music", "sfx")             # what a render depends on
+SIG_ALL = ("ranges", "drop", "words", "hook", "crops", "layout_all", "pace", "overlays", "caption_style", "emphasis", "music", "sfx", "gfx")             # what a render depends on
 
 
 def sig(obj):
@@ -647,6 +647,9 @@ def make_ass(short, pieces):
     for start, end, text, size in caps:
         if end > start:
             ev.append(f"Dialogue: 1,{ass_time(start / sp)},{ass_time(end / sp)},{'Cap' if size == CAP_SIZE else f'Cap{size}'},,0,0,0,,{text}")
+    import shortsgfxbuild
+    for start, end, text in shortsgfxbuild.kinetic_events(short, pieces, sp):             # key-word pop-ups of the planned graphics
+        ev.append(f"Dialogue: 3,{ass_time(start)},{ass_time(end)},Cap,,0,0,0,,{text}")
     hook = short.get("hook")
     if hook:
         lines = "\\N".join(hook.upper().split("|"))
@@ -754,12 +757,25 @@ def render(cfg, short, out, pieces=None, quality="preview", report=None):
     try:
         (tmp / "c.ass").write_text(make_ass(short, pieces), encoding="utf-8")
         shutil.copy(brandstyle.font("headline")["file"], tmp)
+        import shortsgfxbuild
+        cards = shortsgfxbuild.cards(short, pieces, speed, tmp, f)                       # explainer cards: one picture per step, laid over the video at their time
+        chain, cur = [], "vb"
+        for j, c in enumerate(cards):
+            n = len(used) + j
+            fades = ("fade=t=in:st={:.3f}:d={}:alpha=1".format(c["t0"], shortsgfxbuild.FADE_S) if c["first"] else "") + (
+                "," if c["first"] and c["last"] else "") + ("fade=t=out:st={:.3f}:d={}:alpha=1".format(max(c["t1"] - shortsgfxbuild.FADE_S, c["t0"]), shortsgfxbuild.FADE_S) if c["last"] else "")
+            chain.append(f"[{n}:v]format=rgba" + ("," + fades if fades else "") + f"[gc{j}]")
+            rise = int(shortsgfxbuild.SLIDE_PX * f)
+            y = f"'{c['y']}+if(lt(t,{c['t0'] + 0.2:.3f}),({c['t0'] + 0.2:.3f}-t)*{rise * 5},0)'" if c["first"] else str(c["y"])
+            chain.append(f"[{cur}][gc{j}]overlay=x={c['x']}:y={y}:enable='between(t,{c['t0']:.3f},{c['t1']:.3f})':eof_action=pass[gv{j}]")
+            cur = f"gv{j}"
         graph = ";".join(fv + fa + [
             f"color=c={brandstyle.ffmpeg(brandstyle.palette()['accent'])}:s={ev(W * f)}x{ev(14 * f)}:r=30:d={total:.2f}[bar]",
-            f"[vc][bar]overlay=x='-w+w*t/{total:.2f}':y=H-h:shortest=1[vb]",
-            "[vb]subtitles=c.ass:fontsdir=.[vout]"])
+            f"[vc][bar]overlay=x='-w+w*t/{total:.2f}':y=H-h:shortest=1[vb]", *chain,
+            f"[{cur}]subtitles=c.ass:fontsdir=.[vout]"])
         (tmp / "g.txt").write_text(graph, encoding="utf-8")
         ins = [x for sid in used for x in ("-ss", f"{base[sid]:.3f}", "-t", f"{span_end[sid] - base[sid]:.3f}", "-i", srcs(cfg)[sid]["path"])]
+        ins += [x for c in cards for x in ("-loop", "1", "-framerate", "30", "-t", f"{total:.2f}", "-i", c["png"])]
         cmd = ["ffmpeg", "-y", "-v", "error", "-stats", *ins,
                "-/filter_complex", "g.txt", "-map", "[vout]", "-map", "[aout]", "-t", f"{total:.2f}",
                *encoders.adapt(["-c:v", "h264_nvenc", *enc["v"]]), "-pix_fmt", "yuv420p", "-r", "30",

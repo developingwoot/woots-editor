@@ -76,8 +76,19 @@ def card(work: str, name: str, wd, short: dict) -> dict:
             "preview": {"url": f"/shortmedia/{quote(work)}/{quote(sid)}.mp4?v={prev['mtime']}" if prev.get("exists") else "", "old": bool(prev.get("stale"))},
             "final": {"made": bool(fin.get("exists")) and not fin.get("stale")},
             "tightened": bool(short.get("before_tighten")),
+            "gfx": graphics_of(short),
             "sound": {"style": short.get("caption_style") or "", "music": short.get("music") or "", "sfx": short.get("sfx") or "on",
                       "emphasis": short.get("emphasis") or [], "made": prev.get("audio") or {}}}
+
+
+def graphics_of(short: dict) -> dict:
+    """The Graphics panel of an open short: what was planned (a headline and the look of each), what is cut, and whether this short can have any."""
+    import shortsgfxbuild
+    plan = short.get("gfx") or {}
+    rows = [{"id": g["id"], "title": (g.get("text") or g.get("what") or "").splitlines()[0][:60] if (g.get("text") or g.get("what")) else "Graphic", "what": g.get("what", ""),
+             "look": g.get("look") or "card", "place": g.get("place", "top"), "cut": g.get("status") == "cut", "words": g.get("words", "")} for g in plan.get("graphics", [])]
+    return {"can": shortsgfxbuild.single_source(short) and not any(isinstance(r, dict) for r in short.get("ranges") or []), "planned": bool(plan), "note": plan.get("note", ""),
+            "skipped": plan.get("skipped", []), "graphics": rows}
 
 
 def sounds() -> dict:

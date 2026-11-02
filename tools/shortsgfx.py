@@ -32,7 +32,7 @@ Rules:
 - A graphic must SHOW what is being said: the mechanism, the number, the comparison, the before and after. Not decoration. Prefer the moments the main video already has a graphic for (listed below): set "reuse" to that beat id and say how it should be re-laid-out for a vertical frame.
 - place: "top" (a card above the speaker, who stays visible below), "full" (replaces the speaker, for an explainer that needs the room), or "bottom". Captions sit around the middle-bottom of the frame, so keep "bottom" for small things.
 - look: one of {looks}. Use "kinetic" for a key-word pop-up (0.6 to 1.5 s); the others for real explainers.
-- text: the headline on the card, 6 words or fewer. what: one sentence, what it shows. how: one sentence, how it moves (what appears first, what lights up on which word).
+- text: the headline on the card, 6 words or fewer. For a list or a comparison put the headline first and then up to 4 items, each on its own line (a line break in the string), 4 words or fewer each: the items appear one at a time while the words are said. For "kinetic" give the one to three words that pop. what: one sentence, what it shows. how: one sentence, how it moves (what appears first, what lights up on which word).
 - beats: 3 to 5 key moments in the graphic as {{"t": main-video seconds, "what": what is on screen at that moment}}: the first moment it is fully on screen, the word where the point lands, the end state. The host sees one draft still per beat.
 
 Write the result to graphics.json in the current folder (use the Write tool), exactly this shape and nothing else:
@@ -119,7 +119,7 @@ def validate_plan(graphics, ranges) -> tuple[list[dict], list[str]]:
                 beats.append({"t": round(bt, 2), "what": str(b.get("what", ""))[:200]})
         kept.append({"id": f"g{len(kept) + 1}", "t0": round(t0, 2), "t1": round(t1, 2), "words": str(g.get("words", ""))[:200], "what": what[:300], "how": how[:300],
                      "look": look if look in gfxplan.STYLE_IDS else "", "place": g.get("place") if g.get("place") in PLACES else "top",
-                     "text": str(g.get("text", ""))[:80], "beats": beats[:MAX_STILLS], "reuse": str(g.get("reuse", ""))[:20], "status": "", "note": ""})
+                     "text": str(g.get("text", ""))[:160], "beats": beats[:MAX_STILLS], "reuse": str(g.get("reuse", ""))[:20], "status": "", "note": ""})
     return kept, skipped
 
 

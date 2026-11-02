@@ -74,6 +74,21 @@ export async function renderStep(root, key, setBusy) {
       notes.length ? h('div', { class: 'muted small', id: 'soundNotes' }, notes.join(' ')) : null].filter(Boolean));
   }
 
+  function graphicsPanel(d, s) {
+    const g = s.gfx;
+    if (!g.can) return h('div', { class: 'shortGfx', id: 'shortGfx' }, h('div', { class: 'glabel' }, 'Graphics'), h('div', { class: 'muted small' }, 'Graphics are not planned yet for a short joined from several recordings.'));
+    const cut = (x) => async () => { try { draw(await post('gfxcut', { id: s.id, g: x.id, cut: !x.cut })); } catch (e) { alert(e.message); } };
+    return h('div', { class: 'shortGfx', id: 'shortGfx' },
+      h('div', { class: 'glabel' }, 'Graphics'),
+      ...[g.graphics.length ? g.graphics.map(x => h('div', { class: 'gfxRow' + (x.cut ? ' cut' : ''), 'data-gid': x.id },
+        h('div', { class: 'vbody' }, h('b', {}, x.title), h('div', { class: 'muted small' }, `${x.look} · ${x.place}${x.words ? ' · “' + x.words + '”' : ''}`)),
+        h('button', { class: 'quiet gfxCut', onclick: cut(x) }, x.cut ? 'Bring back' : 'Cut'))) : [],
+        g.note ? [h('div', { class: 'muted small' }, g.note)] : [],
+        g.skipped.length ? [h('div', { class: 'muted small' }, 'Left out: ' + g.skipped.join('; '))] : [],
+        [h('div', { class: 'row' }, h('button', { class: 'quiet', id: 'gfxPlanBtn', disabled: d.busy, onclick: () => run('gfxplan', { id: s.id }) }, g.planned ? 'Plan the graphics again' : 'Plan graphics'),
+          h('span', { class: 'muted small' }, g.graphics.length ? 'They are built into the preview.' : 'Claude proposes where graphics go; each is built into the preview unless you cut it.'))]].flat());
+  }
+
   function openPanel(d, s) {
     const hook = h('input', { id: 'hookInput', type: 'text', value: s.hook, placeholder: 'Words shown over the first seconds', autocomplete: 'off' });
     hook.addEventListener('change', async () => { try { draw(await post('hook', { id: s.id, hook: hook.value })); } catch (e) { alert(e.message); } });
@@ -94,7 +109,7 @@ export async function renderStep(root, key, setBusy) {
         h('div', { class: 'openEdit' },
           h('label', { class: 'glabel' }, 'Hook'), hook,
           h('label', { class: 'glabel' }, 'Pace'), pace,
-          sound,
+          sound, graphicsPanel(d, s),
           h('div', { class: 'row' }, h('button', { class: 'quiet', id: 'tightenBtn', disabled: d.busy, onclick: () => run('tighten', { id: s.id }) }, s.tightened ? 'Tighten it again' : 'Tighten it'),
             h('span', { class: 'muted small' }, 'Claude cuts the filler and tangents out of this short.')),
           words)));

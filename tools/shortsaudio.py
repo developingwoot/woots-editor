@@ -72,6 +72,8 @@ def events(pieces: list, short: dict, speed: float = 1.0) -> list:
         pc = pieces[e["i"]]
         first = not pc["cont"] and pc["words"] and pc["words"][0]["s"] == e["s"]
         ev.append({"t": e["t"] / speed, "role": "ding" if e["num"] else "pop", "first": bool(first)})
+    import shortsgfxbuild
+    ev += shortsgfxbuild.sound_events(short, pieces, speed)                         # a hit when an explainer lands, a pop on a key word
     if len(pieces) > 1:
         ev.append({"t": (pieces[-1]["t0"] - 1.0) / speed, "role": "riser"})
     return ev
