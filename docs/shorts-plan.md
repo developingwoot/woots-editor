@@ -1,6 +1,6 @@
 # Shorts: the plan
 
-Status: planned 2026-11-02; Phases 0 to 6 are done (see "as built" below); nothing else is built yet. Work through the phases in order; each one ends in something the
+Status: planned 2026-11-02; Phases 0 to 7 are done (see "as built" below); nothing else is built yet. Work through the phases in order; each one ends in something the
 host can use and a green test run. Read `CLAUDE.md` first: its rules (no approval gates, plan files through `projectstore`, channel data only in the
 profile, a test for every behaviour change) all apply here.
 
@@ -321,3 +321,13 @@ size, vision-model descriptions of the b-roll, anything with music or SFX.
 **Parakeet**: not an option here. A 4 GB card is under the app's 6 GB for Parakeet, and that venv had a CPU-only torch and a NeMo that did not
 import. `engines.py` now lists Whisper large-v3 at 4 GB and `transcribe.py` loads it in 8-bit on cards under 8 GB, whatever the machine.
 The Whisper CUDA libraries for a CPU-torch install are an optional block in `requirements-speech.txt`.
+
+## Phase 7 as built (2026-11-02)
+
+- The backend already wrote titles (`publish_prompt`/`apply_publish`), rendered finals and delivered; the v2 screen now reaches all of it. An opened short has a "YouTube details" panel
+  (title, description, tags, file name: edited by hand, saved when you leave the box, or "Write them for me" for Claude). The step has a "Full video link" box (put in each description)
+  and "Write all the titles". A card says "Saved" once its final is in the folder, or "Saved, changed since" when the short was edited after.
+- "Make the final shorts" renders every short that is not dropped at 1080x1920 unless its final is current, then copies each into `Shorts` next to the source with a `.txt` of its details
+  (never overwrites; an identical file is not copied twice). The screen names that folder. A standalone project uses the folder of its source file; a different folder is not a setting yet.
+- `docs/how-it-works.md` describes the Shorts step. Tests: `tests/test_shorts_finish.py`, one UI test.
+- Phases 0 to 7 are done. The ideas and open questions above are what is left.

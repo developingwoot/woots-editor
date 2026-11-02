@@ -738,6 +738,18 @@ def shorts_v2_post(op, b):
         with _lock:
             shortsapp.apply_op(work, name, "cut", {"id": sid, "start": b["start"], "end": b["end"], "cut": bool(b.get("cut", True))})
         return shortsview.words(work, name, sid)
+    if op == "publish":                                        # the YouTube details of one short, edited by hand
+        with _lock:
+            shortsapp.apply_op(work, name, "publish", {"id": sid, **{k: b[k] for k in ("title", "description", "filename", "tags") if k in b}})
+        return shortsview.project(work, name)
+    if op == "link":                                           # the full video's address, put in the descriptions
+        with _lock:
+            shortsapp.apply_op(work, name, "project", {"full_video_url": b.get("url", "")})
+        return shortsview.project(work, name)
+    if op == "titles":                                         # Claude writes titles, descriptions, tags and file names
+        raw = shortsapp.read_raw(work, name)
+        ids = [sid] if sid else [x["id"] for x in shortsapp.live(raw.get("shorts", []))]
+        return started(start_shorts_titles(work, name, ids), "Claude is writing the titles and descriptions", "Titles written")
     if op == "gfxplan":
         return started(start_shorts_gfxplan(work, name, sid), "Claude is planning the graphics of your short", "Graphics planned")
     if op == "gfxcut":                                         # a graphic is built unless the host cuts it

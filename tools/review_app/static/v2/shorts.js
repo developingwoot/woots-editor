@@ -89,6 +89,20 @@ export async function renderStep(root, key, setBusy) {
           h('span', { class: 'muted small' }, g.graphics.length ? 'They are built into the preview.' : 'Claude proposes where graphics go; each is built into the preview unless you cut it.'))]].flat());
   }
 
+  function publishPanel(d, s) {
+    const p = s.publish;
+    const save = (k) => async e => { try { draw(await post('publish', { id: s.id, [k]: e.target.value })); } catch (err) { alert(err.message); } };
+    const field = (id, label, tag, attrs, k) => { const el = h(tag, { id, ...attrs }); el.value = p[k]; el.addEventListener('change', save(k)); return [h('label', { class: 'glabel', for: id }, label), el]; };
+    return h('div', { class: 'shortPublish', id: 'shortPublish' },
+      h('div', { class: 'glabel' }, 'YouTube details'),
+      ...field('pubTitle', 'Title', 'input', { type: 'text', maxlength: 100, autocomplete: 'off' }, 'title'),
+      ...field('pubDesc', 'Description', 'textarea', { rows: 5 }, 'description'),
+      ...field('pubTags', 'Tags (separated by commas)', 'input', { type: 'text', autocomplete: 'off' }, 'tags'),
+      ...field('pubFile', 'File name', 'input', { type: 'text', autocomplete: 'off' }, 'filename'),
+      h('div', { class: 'row' }, h('button', { class: 'quiet', id: 'titlesBtn', disabled: d.busy, onclick: () => run('titles', { id: s.id }) }, p.written ? 'Write them again' : 'Write them for me'),
+        h('span', { class: 'muted small' }, p.written ? 'Edit anything above; it is saved when you leave the box.' : 'Claude writes a title, description, tags and file name from what the short says.')));
+  }
+
   function openPanel(d, s) {
     const hook = h('input', { id: 'hookInput', type: 'text', value: s.hook, placeholder: 'Words shown over the first seconds', autocomplete: 'off' });
     hook.addEventListener('change', async () => { try { draw(await post('hook', { id: s.id, hook: hook.value })); } catch (e) { alert(e.message); } });
@@ -109,7 +123,7 @@ export async function renderStep(root, key, setBusy) {
         h('div', { class: 'openEdit' },
           h('label', { class: 'glabel' }, 'Hook'), hook,
           h('label', { class: 'glabel' }, 'Pace'), pace,
-          sound, graphicsPanel(d, s),
+          sound, graphicsPanel(d, s), publishPanel(d, s),
           h('div', { class: 'row' }, h('button', { class: 'quiet', id: 'tightenBtn', disabled: d.busy, onclick: () => run('tighten', { id: s.id }) }, s.tightened ? 'Tighten it again' : 'Tighten it'),
             h('span', { class: 'muted small' }, 'Claude cuts the filler and tangents out of this short.')),
           words)));
@@ -125,6 +139,7 @@ export async function renderStep(root, key, setBusy) {
           h('div', { class: 'muted' }, [s.length, s.hook].filter(Boolean).join(' · ')),
           s.why ? h('div', { class: 'muted small' }, s.why) : null),
         s.status === 'kept' ? h('span', { class: 'chip ok' }, 'Kept') : null,
+        s.delivered.file ? h('span', { class: 'chip ' + (s.delivered.current ? 'ok' : ''), title: s.delivered.file }, s.delivered.current ? 'Saved' : 'Saved, changed since') : null,
         h('button', { class: 'quiet keepBtn', onclick: act('keep', { id: s.id, keep: s.status !== 'kept' }) }, s.status === 'kept' ? 'Un-keep' : 'Keep'),
         h('button', { class: 'quiet dropBtn', onclick: act('drop', { id: s.id }) }, 'Drop'),
         h('button', { class: 'main small openBtn', onclick: () => { openId = openId === s.id ? null : s.id; remembered = { key, id: openId }; draw(d); } }, openId === s.id ? 'Close' : 'Open')),
@@ -152,6 +167,12 @@ export async function renderStep(root, key, setBusy) {
         h('div', { class: 'row' },
           h('button', { class: 'quiet', id: 'findBtn', disabled: d.busy, onclick: () => run('find') }, 'Find more shorts'),
           h('button', { class: 'main', id: 'finishBtn', disabled: d.busy || !d.shorts.length, onclick: () => run('finish') }, 'Make the final shorts'))),
+      h('div', { class: 'row', id: 'deliverRow' },
+        h('label', { class: 'glabel', for: 'linkInput' }, 'Full video link'),
+        (() => { const i = h('input', { id: 'linkInput', type: 'text', placeholder: 'Put this in each description', autocomplete: 'off' }); i.value = d.full_video_url || '';
+          i.addEventListener('change', async () => { try { draw(await post('link', { url: i.value })); } catch (e) { alert(e.message); } }); return i; })(),
+        h('button', { class: 'quiet', id: 'allTitlesBtn', disabled: d.busy || !d.shorts.length, onclick: () => run('titles') }, 'Write all the titles')),
+      h('div', { class: 'muted small', id: 'folderNote' }, `The final shorts are saved in ${d.folder}, each with a text file of its title, description and tags.`),
       d.unlooked ? h('div', { class: 'muted small', id: 'unlooked' },
         `${d.unlooked} short${d.unlooked !== 1 ? 's' : ''} you have not kept or dropped will be made too.`) : null);
     const list = d.shorts.length

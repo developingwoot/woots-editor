@@ -228,3 +228,35 @@ def test_the_graphics_panel_lists_the_plan_and_cuts_and_brings_back_a_graphic(sc
     expect(page.locator("#shortGfx .gfxRow.cut")).to_have_count(0)
     assert raw_of(r)["shorts"][0]["gfx"]["graphics"][0]["status"] == ""
     assert clutter(visible_text(page)) == []
+
+
+def test_the_youtube_details_and_the_full_video_link_are_edited_on_the_screen(screen):
+    import time
+    r, key = video_with_shorts("ui shorts publish")
+    page = screen(f"/v2/#/v/{key}/shorts")
+    page.wait_for_selector(".shortCard")
+    assert "saved in" in page.inner_text("#folderNote") and "Shorts" in page.inner_text("#folderNote")
+    page.fill("#linkInput", "https://youtu.be/abc")
+    page.press("#linkInput", "Tab")
+    for _ in range(50):                                        # the page redraws when the link is saved: wait for that before typing elsewhere
+        if raw_of(r).get("full_video_url"):
+            break
+        time.sleep(0.1)
+    page.wait_for_timeout(300)
+    page.locator(".shortCard[data-id=s1] .openBtn").click()
+    page.wait_for_selector("#pubTitle")
+    assert "Write them for me" in page.inner_text("#shortPublish")
+    page.fill("#pubTitle", "Never use a cold iron")
+    page.press("#pubTitle", "Tab")
+    page.wait_for_function("() => document.querySelector('#titlesBtn').textContent.includes('again')")
+    page.fill("#pubTags", "Soldering, Tips")
+    page.press("#pubTags", "Tab")
+    for _ in range(50):
+        raw = raw_of(r)
+        if raw["shorts"][0].get("publish", {}).get("tags") == ["Soldering", "Tips"] and raw.get("full_video_url"):
+            break
+        time.sleep(0.1)
+    assert raw["full_video_url"] == "https://youtu.be/abc" and raw["shorts"][0]["publish"]["title"] == "Never use a cold iron"
+    page.wait_for_selector("#shortPublish")
+    assert "Write them again" in page.inner_text("#shortPublish") and page.input_value("#linkInput") == "https://youtu.be/abc"
+    assert clutter(visible_text(page)) == []

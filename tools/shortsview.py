@@ -76,9 +76,24 @@ def card(work: str, name: str, wd, short: dict) -> dict:
             "preview": {"url": f"/shortmedia/{quote(work)}/{quote(sid)}.mp4?v={prev['mtime']}" if prev.get("exists") else "", "old": bool(prev.get("stale"))},
             "final": {"made": bool(fin.get("exists")) and not fin.get("stale")},
             "tightened": bool(short.get("before_tighten")),
+            "publish": publish_of(short), "delivered": delivered_of(short),
             "gfx": graphics_of(short),
             "sound": {"style": short.get("caption_style") or "", "music": short.get("music") or "", "sfx": short.get("sfx") or "on",
                       "emphasis": short.get("emphasis") or [], "made": prev.get("audio") or {}}}
+
+
+def publish_of(short: dict) -> dict:
+    """The YouTube details of a short: written by Claude or by hand, shown for editing."""
+    p = short.get("publish") or {}
+    return {"title": p.get("title", ""), "description": p.get("description", ""), "tags": ", ".join(p.get("tags") or []), "filename": p.get("filename", ""), "written": bool(p.get("title"))}
+
+
+def delivered_of(short: dict) -> dict:
+    """Where the finished file went, and whether it still matches the short as it is now."""
+    d = short.get("delivered") or {}
+    if not d.get("file"):
+        return {}
+    return {"file": d["file"], "name": Path(d["file"]).name, "current": d.get("sig") == sh.short_sig(short, sh.SIG_ALL), "exists": Path(d["file"]).is_file()}
 
 
 def graphics_of(short: dict) -> dict:
@@ -114,6 +129,8 @@ def project(work: str, name: str, busy: bool = False) -> dict:
         return out
     raw = shortsapp.read_raw(work, name)
     shorts = raw.get("shorts", [])
+    out["full_video_url"] = raw.get("full_video_url", "")
+    out["folder"] = str(Path(raw.get("source", "")).parent / "Shorts")
     out["title"] = Path(raw["folder"]).name if raw.get("mode") == "raw" and raw.get("folder") else Path(raw.get("source", "")).stem
     height = sh.probe_size(raw["source"])[1] if raw.get("mode") != "raw" and Path(raw.get("source", "")).is_file() else 0
     if height and height < skillrules.shorts()["soft_below_px"]:
