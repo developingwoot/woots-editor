@@ -178,6 +178,22 @@ def test_the_numbers_come_from_the_skill_and_a_broken_file_falls_back(tmp_path, 
     assert skillrules.copy_into(fd, ("youtube-edit/rough-cut.md", "youtube-edit/missing.md")) == ["rough-cut.md"] and (fd / "rough-cut.md").read_text() == "rules"
 
 
+def test_the_fast_pace_changes_the_beat_and_hook_numbers_and_calm_leaves_the_file_alone(tmp_path, monkeypatch):
+    import json
+    import skillrules
+    d = tmp_path / "youtube-edit"
+    d.mkdir()
+    monkeypatch.setattr(skillrules, "SKILLS", tmp_path)
+    (d / "rough-cut.json").write_text('{"pace": "calm", "beat_max_s": 25}', encoding="utf-8")
+    assert skillrules.rules()["beat_max_s"] == 25.0
+    (d / "rough-cut.json").write_text('{"pace": "Fast", "beat_max_s": 25, "max_pause_s": 0.7}', encoding="utf-8")
+    r = skillrules.rules()
+    assert r["beat_max_s"] == 12.0 and r["hook_total_s"] == 45.0 and r["beat_min_s"] < r["beat_max_s"] and r["max_pause_s"] == 0.7
+    (d / "rough-cut.json").write_text('{"pace": "nonsense"}', encoding="utf-8")
+    assert skillrules.rules() == skillrules.DEFAULTS
+    assert json.loads(skillrules.STARTER.joinpath("youtube-edit/rough-cut.json").read_text(encoding="utf-8"))["pace"] == "calm"
+
+
 def test_a_fragment_between_stumbles_goes_a_long_stretch_is_split_at_a_pause_and_a_segue_stays():
     stumble = words_of("and if i'm doing something for cad", 0.0)
     frag = words_of("anything i use", 3.0)                                    # 1 s fragment
