@@ -117,7 +117,7 @@ def draw_card(g: dict, shown: int, f: float = 1.0):
         for ln in wrapped:
             d.text((w / 2, y), ln, font=font, fill=light + (255,), anchor="ma")
             y += font.size * 1.15
-        d.rounded_rectangle((w / 2 - 90 * f, y + 8 * f, w / 2 + 90 * f, y + 8 * f + 10 * f), int(5 * f), fill=accent + (255,))
+        d.rounded_rectangle((w / 2 - 90 * f, y + 26 * f, w / 2 + 90 * f, y + 26 * f + 10 * f), int(5 * f), fill=accent + (255,))
         return im
     hfont, hwrap = _fit(d, head, ff, inner_w, inner_h * 0.3, int(84 * f))
     y = pad

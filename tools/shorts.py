@@ -292,6 +292,15 @@ def pick_face(fs, speaker, sides):
     return None
 
 
+def has_big_face(fr, sw) -> bool:
+    """A speaker in the frame (a face at least 11 % of its width): then it is a live shot, whatever colour its corners are."""
+    import facedet
+    import mpfaces
+    if mpfaces.available():
+        return any(f[2] >= 0.11 for f in mpfaces.faces(fr))
+    return any(f[2] / sw >= 0.11 for f in facedet.faces(fr, 0.02))
+
+
 def auto_classify(cfg, pieces):
     """Layout, crop centre and zoom for every piece: the guesses (short['crops'] is applied afterwards by apply_overrides)."""
     import cv2
@@ -304,7 +313,9 @@ def auto_classify(cfg, pieces):
     gi = 0
     sides = cfg.get("sides", {})
     caps = {sid: cv2.VideoCapture(src["path"]) for sid, src in srcs(cfg).items()}
-    card = brandstyle.bgr(brandstyle.palette()["primary"])          # a full-screen card is the channel's primary colour all the way to the corners
+    primary = brandstyle.palette()["primary"]
+    card = brandstyle.bgr(primary)                                  # a full-screen card is the channel's primary colour all the way to the corners
+    known = primary != brandstyle.FALLBACK["primary"]               # with no brand colour set there is no card colour to look for (dark corners are not a card)
     zi = 0
     hists = {}
     for i, pc in enumerate(pieces):
@@ -322,7 +333,7 @@ def auto_classify(cfg, pieces):
         hists[i] = frame_hist(fr)
         sw, sh_ = pc["sw"], pc["sh"]
         corner = [fr[y, x].astype(int) for x, y in ((8, 8), (sw - 9, 8), (8, sh_ - 9), (sw - 9, sh_ - 9))]
-        if sum(1 for c in corner if max(abs(int(c[k]) - card[k]) for k in range(3)) < 16) >= 3:
+        if known and sum(1 for c in corner if max(abs(int(c[k]) - card[k]) for k in range(3)) < 16) >= 3 and not has_big_face(fr, sw):   # dark corners alone are not a card: a card has no speaker
             pc["layout"] = "graphic"
             pc["zoom"] = 1.0
             pc["gzoom"], pc["gcy"] = gzooms[gi % len(gzooms)], 0.55

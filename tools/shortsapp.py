@@ -556,7 +556,7 @@ PUBLISH_RULES = """Write the YouTube Shorts metadata for these shorts from the c
 
 For each short give:
 - title: aim for 40 to 60 characters (hard limit 80). Put the main search phrase in the first 40 characters (what a person types to find this). A concrete benefit, answer, number or question. Plain words. No clickbait lies, no ALL CAPS, no "#Shorts" in the title, at most one emoji and only if it adds meaning.
-- description: 2 or 3 short sentences. The first sentence contains the main phrase and gives the answer or the hook (it shows before "more"). Then one line of context. If a full-video link is given below, add a line "Full video: <link>"; if none is given, do not mention a link. Then a line: "the channel: practical 3D printing upgrades, tests and lessons." Then 4 or 5 hashtags on the last line, always #Shorts and #3DPrinting plus topic ones (#Klipper, #Ender3, ...).
+- description: 2 or 3 short sentences. The first sentence contains the main phrase and gives the answer or the hook (it shows before "more"). Then one line of context. If a full-video link is given below, add a line "Full video: <link>"; if none is given, do not mention a link. If the channel profile above names the channel and what it is about, add one line saying so; if it does not, leave that line out. Then 4 or 5 hashtags on the last line: #Shorts plus ones for the subject of the short and of the channel.
 - tags: 8 to 12 lowercase search phrases, the main phrase first.
 - filename: lowercase ASCII words joined by hyphens, 3 to 7 words, the main keywords (for example never-use-a-cold-iron), no stop-word padding, no dates, no ids.
 Do not invent facts, prices or numbers that are not in the short's text. The co-host and the host may be named when it helps.

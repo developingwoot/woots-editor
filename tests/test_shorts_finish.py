@@ -71,3 +71,8 @@ def test_a_missing_or_old_final_stops_the_delivery_and_the_card_says_where_it_we
     card = shortsview.card("v1", "big", work / "v1", shortsapp.read_raw("v1", "big")["shorts"][0])
     assert card["delivered"]["current"] is False and card["final"]["made"] is False
     assert shortsview.delivered_of({}) == {}
+
+
+def test_the_publishing_prompt_names_no_channel_or_subject_of_its_own():
+    for word in ("3D", "Klipper", "Ender", "printing"):
+        assert word not in shortsapp.PUBLISH_RULES
