@@ -19,7 +19,7 @@ export async function render(root, key, setBusy) {
 
   function adder(placeholder, onAdd) {
     const box = h('input', { type: 'text', class: 'adder', placeholder, autocomplete: 'off' });
-    box.addEventListener('keydown', e => { if (e.key === 'Enter' && box.value.trim()) onAdd(box.value.trim()); });
+    box.addEventListener('keydown', e => { if (e.key === 'Enter' && box.value.trim()) { const t = box.value.trim(); box.value = ''; onAdd(t); } });
     return box;
   }
 
@@ -68,7 +68,15 @@ export async function render(root, key, setBusy) {
     const header = h('div', { class: 'card ohead', id: 'outlineHeader' }, ...d.header.map(f => h('div', { class: 'hfield', 'data-field': f.field },
       h('div', { class: 'glabel' }, f.label),
       editable(f.text || '', t => edit({ op: 'set_header', field: f.field, text: t }), f.text ? '' : 'blank'))));
+    // A save redraws the page: what is half typed in a box (and which box has the cursor) must survive it.
+    const typed = [...root.querySelectorAll('input')].map(i => [i.closest('[data-section]')?.dataset.section || i.id, i.value, i === document.activeElement]).filter(([k, v, f]) => v || f);
     root.replaceChildren(...[ask, d.summary ? h('div', { class: 'muted', id: 'outlineGaps' }, d.summary) : null, header, ...d.sections.map(card)].filter(Boolean));
+    for (const [k, v, focused] of typed) {
+      const box = root.querySelector(`[data-section="${CSS.escape(k)}"] input`) || root.querySelector(`#${CSS.escape(k)}`);
+      if (!box) continue;
+      box.value = v;
+      if (focused) box.focus();
+    }
   }
   await draw(await api(`/api/v2/outline?key=${encodeURIComponent(key)}`));
 }

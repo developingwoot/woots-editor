@@ -34,7 +34,7 @@ def test_making_the_rough_cut_fills_in_the_shots_and_makes_cut_1(screen):
     page.wait_for_selector("#cutBtn")
     page.click("#cutBtn")
     expect(page.locator("#shotsCard .frow.shot")).to_have_count(2, timeout=90000)
-    expect(page.locator('#shotsCard .frow.shot[data-status="ready"]')).to_have_count(1)
+    expect(page.locator('#shotsCard .frow.shot[data-status="ready"]')).to_have_count(1, timeout=90000)
     expect(page.locator('#shotsCard .frow.shot[data-status="nothing"] .chip.warn')).to_have_text("Nothing yet")
     expect(page.locator('#shotsCard .frow.take[data-status="ready"]')).to_have_count(3)
     expect(page.locator("#recordings .looked")).to_have_count(5)

@@ -113,3 +113,20 @@ def test_home_card_says_which_sections_need_shots_and_leads_to_the_outline(scree
     card.locator("a.main").click()
     page.wait_for_selector(".osec")
     assert page.locator(".step.current").inner_text() == "Outline"
+
+
+def test_what_is_half_typed_survives_a_save_elsewhere_on_the_page(screen):
+    page, r, path = open_outline(screen, "ui outline typing")
+    page.wait_for_selector(".osec")
+    adder = page.locator(".osec").nth(1).locator(".adder")
+    adder.fill("Close-up of the gear teeth")
+    page.locator(".osec").nth(0).locator(".shot .ed").click()
+    page.keyboard.press("Control+a")
+    page.keyboard.type("Sam holds the new gear")
+    page.keyboard.press("Enter")                                           # saved: the page is drawn again from the answer
+    assert in_file(path, "[VISUAL: Sam holds the new gear]")
+    page.wait_for_timeout(500)
+    assert page.locator(".osec").nth(1).locator(".adder").input_value() == "Close-up of the gear teeth"
+    page.locator(".osec").nth(1).locator(".adder").press("Enter")
+    assert in_file(path, "[VISUAL: Close-up of the gear teeth]")
+    expect(page.locator(".osec").nth(1).locator(".adder")).to_have_value("")
