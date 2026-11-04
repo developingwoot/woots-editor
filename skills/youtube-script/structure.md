@@ -12,7 +12,11 @@
 5. **Verdict**: the answer, with the evidence in the order the viewer will believe it.
 6. **Ending**: one next step (another video, a download, a try-it-yourself). No recap of the whole video.
 
+## Asks (what seven reference videos did; options)
+- The ask to like or subscribe came in the last 5 to 10% of the video in every one (91 to 98% of the way through), and almost never earlier. Put it in the ending, once.
+- The pointer to another video came with the ask at the end, and sometimes earlier as a passing reference to the last video.
+
 ## Pacing
-- A new idea or a new picture every 15-30 seconds.
+- A new idea or a new picture every 15-30 seconds when the rough cut's `pace` is "calm"; about every 3 to 4 seconds in the maker and tech videos studied, which is what `pace` "fast" is for.
 - Keep sections between 45 seconds and 3 minutes; split anything longer with a visual change.
 - Open loops (a question raised, answered later) carry attention across sections.

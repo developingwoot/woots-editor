@@ -49,6 +49,17 @@ def test_the_rule_checker_finds_a_short_shot_a_close_framing_change_and_a_long_o
     assert not rows["no shot under min_piece_s"]["ok"]
 
 
+def test_the_rule_checker_reports_the_speaking_pace_without_failing_the_cut():
+    import cutcheck
+    rules = {"min_piece_s": 3.0, "beat_max_s": 30.0, "punch_hold_s": 15.0, "cold_open_max_s": 15.0, "hook_total_s": 30.0, "repeat_phrase_words": 4,
+             "repeat_phrase_within_words": 40, "repeat_phrase_within_s": 20.0, "max_pause_s": 0.5}
+    a = beat("B01", "T.mkv", " ".join(f"word{i}" for i in range(160)), dur=60.0)
+    a["start"] = 0.0
+    a["on_screen"] = {"broll": [], "punch": {"zooms": [1.0], "cy": 0.4}}
+    row = {r["rule"]: r for r in cutcheck.check({"beats": [a]}, rules)}["speaking pace (words a minute, for information)"]
+    assert row["ok"] and row["value"] == 160
+
+
 def test_silences_left_in_the_cut_are_read_from_the_sound_of_each_recording():
     import cutcheck
     ws = [["a", 1.0, 1.2]]

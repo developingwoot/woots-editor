@@ -100,6 +100,8 @@ def check(data: dict, rules: dict | None = None, known_programs: set | None = No
         if b.get("aroll") and not b.get("skip"):
             words += [[w[0], w[1], w[2]] for w in b["aroll"].get("words", []) if any(a - 0.001 <= (w[1] + w[2]) / 2 <= z + 0.001 for a, z in b["aroll"]["keep"])]
     toks = [re.sub(r"[^a-z0-9']", "", w[0].lower()) for w in words]
+    if words and tl["total_s"] >= 60:                                          # a reading, not a rule: it is always ok. Eight reference videos ran 150 to 215 words a minute
+        add("speaking pace (words a minute, for information)", True, round(len(words) / (tl["total_s"] / 60)), "reference videos: 150-215")
     seen, rep = {}, []
     for i in range(len(toks) - r["repeat_phrase_words"] + 1):
         g = tuple(toks[i:i + r["repeat_phrase_words"]])

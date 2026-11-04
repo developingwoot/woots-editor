@@ -13,4 +13,11 @@ Written for this app, not copied from any channel. Pick one that fits the video'
 ## Test of a hook
 - Could a stranger say what the video is about after ten seconds?
 - Is there something to see, not only something said?
+- Is the first picture the subject or the result (the thing, not the host)?
 - Does the video pay it off within the first third?
+
+## What seven reference videos did (maker and tech channels; no view data, so options, not rules)
+- All seven opened on a statement or a claim, not a question; none asked more than one question in the first minute. Say what the thing is or what happened.
+- In the five whose openings I looked at on screen, the first picture was the object or the result.
+- Two put the stakes or the verdict in the first 35 s ("I have to give it a zero", "probably not").
+- A line that names the video ("let's scale it up", "let's get into it") came after that opening in the ones with a long hook, around 40 to 55 s.

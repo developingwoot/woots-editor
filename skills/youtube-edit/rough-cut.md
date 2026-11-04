@@ -11,7 +11,9 @@ The app builds the first cut from your recordings. It reads `rough-cut.json` (ev
 - **Pace.** `"pace": "calm"` uses the numbers in the file as they are. `"pace": "fast"` replaces `beat_min_s`, `beat_max_s`, `punch_hold_s`, `punch_flat_s`, `hook_total_s` and `cold_open_max_s`
   with a rhythm that changes the picture every few seconds (nothing unchanged for much over `beat_max_s`) and allows a longer hook while the picture keeps changing.
   It is an option, not a finding about what works: the fast numbers come from the rhythm of seven maker and tech videos, with no view or retention data behind them.
-- **Pauses.** Cut a silence longer than `max_pause_s`. Keep a breath: never cut to nothing.
+- **Pauses.** Cut a silence longer than `max_pause_s`. Keep a breath: never cut to nothing. A host who leaves deliberate beats (a joke landing, a reaction, a moment of the build) raises
+  `max_pause_s` (about 1.0 keeps them); the videos that do this have 30 to 75 pauses over a second, the tighter ones 5 to 15.
+- **Layouts.** Alternate the face with the work (hands, parts, screen, a graphic). When a talking stretch runs past `beat_max_s`, the change of picture should be the work, not only a zoom.
 - **Pieces.** A kept piece is at least `min_piece_s` long, so the video never flickers between fragments. Joining pieces of two takes needs at least `splice_min_words` words from the other take.
 - **Beats.** A beat (one idea on screen) runs `beat_min_s` to `beat_max_s`. A longer stretch needs a change of picture.
 - **Repeats.** The same phrase of `repeat_phrase_words` words within `repeat_phrase_within_s` seconds is a stumble or a retake: keep one.
