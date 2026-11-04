@@ -17,6 +17,7 @@ _PIPELINES = {
     "teaching": ("Looking for teaching moments", "Teaching moments found", 1),
     "publish": ("Writing the publishing details", "Publishing details ready", 2),
     "shorts": ("Working on your shorts", "Shorts ready", None),
+    "score": ("Measuring the final against the reference videos", "Final measured", 3),
 }
 
 
@@ -61,7 +62,7 @@ def job_sentence(job: dict, now: float | None = None) -> dict:
 STEPS = [("outline", "Outline"), ("footage", "Footage"), ("rough-cut", "Rough cut"), ("preview", "Preview"), ("final", "Final"), ("shorts", "Shorts")]
 STEP_IDS = [s for s, _ in STEPS]
 _PIPELINE_STEP = {"archive": "final", "vision": "footage", "options": "rough-cut", "teaching": "rough-cut", "analyze": "footage", "clipmap": "footage", "cut": "rough-cut", "preview": "preview", "outline": "outline", "final": "final",
-                  "publish": "final", "shorts": "shorts"}
+                  "publish": "final", "shorts": "shorts", "score": "final"}
 
 
 def key_of(work: str, name: str) -> str:
@@ -364,7 +365,18 @@ def final(work: str, name: str, running: bool = False) -> dict:
                        ("Render the final first." if not latest else "Choose the title first." if not pd["title"] else "Choose the footage folder first.")}}
     if latest:
         out["latest"] = {"video": f"/media/{quote(work)}/{quote(latest['file'])}", "dur": time_text(latest["dur"]) if latest.get("dur") else ""}
+    out["scorecard"] = scorecard_view(work, name, latest, running)
     return out
+
+
+def scorecard_view(work: str, name: str, latest: dict | None, running: bool) -> dict:
+    """The Final screen's comparison with the reference videos: the rows of the last measurement, whether it is of the latest final, and the button."""
+    import scorecard
+    got = scorecard.load(work, name)
+    stale = bool(got and latest and got.get("file") != latest["file"])
+    return {"rows": got["rows"] if got else [], "n_refs": got["n_refs"] if got else len(scorecard.reference_videos()), "stale": stale,
+            "button": {"label": "Measure again" if got else "Measure the final", "enabled": bool(latest) and not running,
+                       "estimate": minutes_text(_PIPELINES["score"][2])}}
 
 
 # ----------------------------------------------------------------------------- the Outline step

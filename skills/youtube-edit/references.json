@@ -1,0 +1,13 @@
+{
+  "about": "Reference videos the scorecard compares a final with (tools/scorecard.py). Eight maker and tech build videos from seven channels, measured in November 2026 with the same tool. They show what is common in that kind of video, not what makes one succeed: there was no view or retention data. Add your own with: scorecard.py reference <video> [transcript.json] [label].",
+  "videos": [
+    {"label": "Mechanism build, 22 min", "dur_s": 1310, "changes_per_min": 23.6, "median_shot_s": 2.1, "longest_s": 23, "long_share": 3, "face_share": 45, "face_cuts_per_min": 4.4, "first_thing_s": 0.0, "words_per_min": 194},
+    {"label": "Engine build and test, 19 min", "dur_s": 1153, "changes_per_min": 14.1, "median_shot_s": 3.5, "longest_s": 53, "long_share": 11, "face_share": 38, "face_cuts_per_min": 1.9, "first_thing_s": 0.0, "words_per_min": 150},
+    {"label": "Retro console build, 15 min", "dur_s": 874, "changes_per_min": 13.4, "median_shot_s": 3.6, "longest_s": 19, "long_share": 8, "face_share": 56, "face_cuts_per_min": 4.0, "first_thing_s": 1.0, "words_per_min": 165},
+    {"label": "Media player build, 14 min", "dur_s": 826, "changes_per_min": 11.5, "median_shot_s": 4.4, "longest_s": 24, "long_share": 14, "face_share": 57, "face_cuts_per_min": 3.8, "first_thing_s": 0.0, "words_per_min": 159},
+    {"label": "Graphics card build, 18 min", "dur_s": 1072, "changes_per_min": 11.8, "median_shot_s": 4.0, "longest_s": 22, "long_share": 12, "face_share": 51, "face_cuts_per_min": 2.0, "first_thing_s": 0.0, "words_per_min": 215},
+    {"label": "Marble machine build, 32 min", "dur_s": 1916, "changes_per_min": 17.7, "median_shot_s": 1.3, "longest_s": 53, "long_share": 29, "face_share": 54, "face_cuts_per_min": 2.7, "first_thing_s": 6.0, "words_per_min": 148},
+    {"label": "Large RC model build, 32 min", "dur_s": 1910, "changes_per_min": 19.3, "median_shot_s": 2.5, "longest_s": 20, "long_share": 3, "face_share": 34, "face_cuts_per_min": 2.2, "first_thing_s": 2.0, "words_per_min": 171},
+    {"label": "Home automation build, 26 min", "dur_s": 1552, "changes_per_min": 33.2, "median_shot_s": 1.1, "longest_s": 28, "long_share": 5, "face_share": 28, "face_cuts_per_min": 3.4, "first_thing_s": 5.0, "words_per_min": 151}
+  ]
+}

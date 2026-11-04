@@ -221,3 +221,6 @@ button.w { background: #fff; border: 1px solid var(--line); border-radius: 6px; 
 button.w:hover { border-color: var(--orange); }
 button.w.cut { color: var(--muted); text-decoration: line-through; background: var(--bg); }
 .droppedRow { display: flex; gap: 12px; align-items: baseline; margin-bottom: 6px; }
+/* Final: how it compares with the reference videos */
+table.score { border-collapse: collapse; width: 100%; font-size: 14px; }
+table.score td { padding: 4px 8px 4px 0; border-bottom: 1px solid #EEE; }

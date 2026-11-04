@@ -31,6 +31,17 @@ def test_final_screen_is_ready_and_makes_the_final(screen):
     assert clutter(visible_text(page)) == []
 
 
+def test_the_final_is_measured_next_to_the_reference_videos(screen):
+    page, _ = open_final(screen, "ui final score", final=True)
+    page.wait_for_selector("#scoreCard")
+    assert page.inner_text("#scoreBtn") == "Measure the final" and "reference videos" in page.inner_text("#scoreCard")
+    page.click("#scoreBtn")
+    expect(page.locator("#scoreRows tr").first).to_be_visible(timeout=90000)
+    assert "Picture changes a minute" in page.inner_text("#scoreRows")
+    expect(page.locator("#scoreBtn")).to_have_text("Measure again")
+    assert clutter(visible_text(page)) == []
+
+
 def test_claude_writes_publishing_details_which_can_be_chosen_and_edited(screen):
     page, _ = open_final(screen, "ui final publish")
     page.wait_for_selector("#writeBtn")

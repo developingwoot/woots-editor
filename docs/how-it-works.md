@@ -12,7 +12,8 @@
 4. `locks.py`: sentences the user marked good; no pass changes them.
 5. `cutview.py`, `makeversion.py`, `reviewnotes.py`, `watchnotes.py`: the review screen, versions (Cut 1, Cut 2, ...) and the notes Claude applies.
 6. `gfxplan.py`, `sections.py`, `builder.py`, `sectionrender.py`, `selfreview.py`: graphics, built in sections by background Claude runs; the preview.
-7. `finalrender.py`, `loudness.py`, `publish.py`, `finalize.py`, `resolve_export.py`: the final render, metadata and an export for DaVinci Resolve.
+7. `finalrender.py`, `loudness.py`, `publish.py`, `finalize.py`, `resolve_export.py`: the final render, metadata and an export for DaVinci Resolve. `scorecard.py`: how the final compares with
+   reference videos (`skills/youtube-edit/references.json` plus the user's own in `_editor/references`), shown on the Final screen.
 8. `shortsplan.py`, `shortsapp.py`, `shorts.py`, `shortsgfx.py`: vertical shorts from the finished video, a video file or raw footage; `shortsview.py` feeds the v2 Shorts screen, which also edits the YouTube details and saves the final shorts next to the source (`shortsapp.deliver`). Colours and fonts come from the channel profile through `brandstyle.py`; video encoders through `encoders.py` (NVENC when it opens, else libx264); the numbers and rules from the `youtube-shorts` skill.
 
 ## Setup and configuration

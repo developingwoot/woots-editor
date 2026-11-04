@@ -1089,6 +1089,13 @@ def start_rough_cut(work, name):
     return job
 
 
+def start_score(work, name):
+    """Measure the latest final against the reference videos (scorecard.py)."""
+    job = _job("score", ["measure the final against the reference videos"])
+    job.update(work=work, name=name)
+    return _job_run(job, [([str(PY), str(TOOLS / "scorecard.py"), "run", work, name], TOOLS)])
+
+
 def start_vision(work, name):
     """Look at all the footage that has not been looked at yet (no transcription): what is on screen, for clips with no speech."""
     job = _job("vision", ["look at the footage (vision model; clips already looked at are skipped)"])
@@ -1825,6 +1832,11 @@ class Handler(BaseHTTPRequestHandler):
                 work, name = views.split_key(b["key"])
                 with _lock:
                     job = start_final(work, name)
+                return self.send_json({"id": job["id"]})
+            if u.path == "/api/v2/final/score":
+                work, name = views.split_key(b["key"])
+                with _lock:
+                    job = start_score(work, name)
                 return self.send_json({"id": job["id"]})
             if u.path == "/api/v2/final/reveal":
                 import shootplan

@@ -38,6 +38,22 @@ export async function render(root, key, setBusy) {
       h('div', { class: 'makebox' }, render, h('div', { class: 'muted small' }, [button.detail, button.estimate].filter(Boolean).join(' · ')),
         finals.length ? h('div', { class: 'muted small' }, `${finals[0].label}: ${finals[0].dur} long, made ${finals[0].when}`) : null));
 
+    // --- how it compares with the reference videos (a reading, never a rule)
+    const sc = data.scorecard;
+    const measure = h('button', { class: 'quiet', id: 'scoreBtn', disabled: !sc.button.enabled, onclick: async () => {
+      measure.disabled = true;
+      try { await post('/api/v2/final/score'); setBusy(); } catch (e) { alert(e.message); measure.disabled = false; }
+    } }, sc.button.label);
+    const val = (v, unit) => `${v}${unit}`;
+    const scoreCard = latest ? h('div', { class: 'card', id: 'scoreCard' },
+      h('div', { class: 'rhead' }, h('b', {}, 'How it compares'), measure),
+      h('p', { class: 'muted small' }, `Next to the range of ${sc.n_refs} reference videos. A reading, not a rule${sc.button.estimate ? ` · ${sc.button.estimate}` : ''}.`),
+      sc.stale ? h('p', { class: 'muted small', id: 'scoreStale' }, 'Measured on an earlier final.') : null,
+      sc.rows.length ? h('table', { class: 'score', id: 'scoreRows' }, ...sc.rows.map(r => h('tr', { 'data-where': r.where },
+        h('td', {}, r.label), h('td', {}, h('b', {}, val(r.value, r.unit))),
+        h('td', { class: 'muted' }, r.low == null ? '' : `${val(r.low, r.unit)} to ${val(r.high, r.unit)}`),
+        h('td', {}, r.where && r.where !== 'inside' ? h('span', { class: 'chip2' }, r.where) : '')))) : null) : null;
+
     // --- publishing details
     const titleBox = h('input', { id: 'ownTitle', type: 'text', placeholder: 'Or type your own title', autocomplete: 'off' });
     titleBox.addEventListener('keydown', async e => { if (e.key === 'Enter' && titleBox.value.trim()) await draw(await post('/api/v2/publish/title', { title: titleBox.value })); });
@@ -106,7 +122,7 @@ export async function render(root, key, setBusy) {
           h('button', { class: 'quiet', onclick: async () => draw(await load()) }, 'Cancel')));
     }
 
-    root.replaceChildren(top, publishCard, arch);
+    root.replaceChildren(...[top, scoreCard, publishCard, arch].filter(Boolean));
   };
   const load = () => api(`/api/v2/final?key=${encodeURIComponent(key)}`);
   await draw(await load());
