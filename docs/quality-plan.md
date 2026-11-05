@@ -60,6 +60,12 @@ Not a new graphics engine: HyperFrames already builds good graphics. What is slo
 - No new approval steps: the scorecard and coverage only show, they never block a render.
 - One new panel (scorecard), one new column (coverage); everything else changes what the existing buttons produce.
 
+## Sound effects
+The host's call (2026-11-04): use effects where they are fun and fit, and stop trying to measure what the reference videos use (a sound classifier could not tell a whoosh from music,
+even with the voice taken out). Today a long-form video only plays an effect that a beat names (`audio.sfx`); nothing places them on its own, while shorts have `sfxkit`.
+Next step when this comes up: let the long-form edit place effects the way shorts do (a graphic landing, a number card, a reveal of the result, a joke beat; never under a teaching line,
+never on every cut), from the files in the SFX folder, with a cap a minute in the skill.
+
 ## Not now
 - A different graphics engine, multiple cameras (one camera with crops matches four of the seven references), music and sound design (the study could not measure them), loudness changes.
 - The real judge is the channel's own retention graph. Reading it into the app is a later step once the scorecard exists.
