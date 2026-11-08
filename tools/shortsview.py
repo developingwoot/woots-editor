@@ -75,11 +75,18 @@ def card(work: str, name: str, wd, short: dict) -> dict:
             "frame": f"/api/shorts/frame?work={quote(work)}&name={quote(name)}&t={_first_t(short):.1f}&w=360&src={quote(_first_src(short))}",
             "preview": {"url": f"/shortmedia/{quote(work)}/{quote(sid)}.mp4?v={prev['mtime']}" if prev.get("exists") else "", "old": bool(prev.get("stale"))},
             "final": {"made": bool(fin.get("exists")) and not fin.get("stale")},
-            "tightened": bool(short.get("before_tighten")),
+            "tightened": bool(short.get("before_tighten")), "feedback": feedback_of(short),
             "publish": publish_of(short), "delivered": delivered_of(short),
             "gfx": graphics_of(short),
             "sound": {"style": short.get("caption_style") or "", "music": short.get("music") or "", "sfx": short.get("sfx") or "on",
                       "emphasis": short.get("emphasis") or [], "made": prev.get("audio") or {}}}
+
+
+def feedback_of(holder: dict) -> dict:
+    """The host's notes on a short (or the general ones): open ones wait for Claude, done ones were applied."""
+    notes = [{"id": n["id"], "text": n["text"], "status": n.get("status", "open")} for n in holder.get("feedback") or []]
+    res = holder.get("feedback_result") or {}
+    return {"notes": notes, "open": sum(1 for n in notes if n["status"] == "open"), "result": res.get("note", ""), "unmet": res.get("unmet", [])}
 
 
 def publish_of(short: dict) -> dict:
@@ -130,6 +137,7 @@ def project(work: str, name: str, busy: bool = False) -> dict:
     raw = shortsapp.read_raw(work, name)
     shorts = raw.get("shorts", [])
     out["full_video_url"] = raw.get("full_video_url", "")
+    out["feedback"] = feedback_of(raw)
     out["folder"] = str(Path(raw.get("source", "")).parent / "Shorts")
     out["title"] = Path(raw["folder"]).name if raw.get("mode") == "raw" and raw.get("folder") else Path(raw.get("source", "")).stem
     height = sh.probe_size(raw["source"])[1] if raw.get("mode") != "raw" and Path(raw.get("source", "")).is_file() else 0

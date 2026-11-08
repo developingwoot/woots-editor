@@ -37,6 +37,7 @@ export async function render(root) {
           h('button', { class: 'main', id: 'saveSettings', disabled: !dirty && !s.folders_needed, onclick: save }, 'Save'),
           h('span', { class: 'muted small', id: 'settingsNote' }, note))),
       channelCard(),
+      claudeModelsCard(),
       modelsCard(),
       h('section', { class: 'card setCard', id: 'claudeCard' },
         h('h2', {}, 'Claude'),
@@ -80,6 +81,24 @@ export async function render(root) {
       draw();
       document.getElementById('channelNote').textContent = 'Saved. Restart the app so speaker names in outlines are read the new way.';
     } catch (e) { document.getElementById('channelNote').textContent = e.message; }
+  };
+
+  // Which Claude model, and how hard it thinks, for each kind of background run. Saved the moment a choice changes.
+  let claudeModels = null;                              // {jobs: [{job, label, help, model, effort, models}], efforts}
+  const claudeModelsCard = () => {
+    if (!claudeModels) return h('section', { class: 'card setCard', id: 'claudeModelsCard' }, h('h2', {}, 'Claude models'), h('p', { class: 'muted' }, 'Loading…'));
+    const choose = (job, field) => async e => {
+      try { claudeModels = await api('/api/v2/claude-models', { choices: { [job]: { [field]: e.target.value } } }); note = ''; }
+      catch (err) { note = err.message; }
+      draw();
+    };
+    const pick = (job, field, current, options) => h('select', { class: 'cmPick', 'data-job': job, 'data-field': field, onchange: choose(job, field) },
+      ...options.map(o => h('option', { value: o, selected: o === current }, o === 'off' ? 'Off' : o[0].toUpperCase() + o.slice(1))));
+    return h('section', { class: 'card setCard', id: 'claudeModelsCard' }, h('h2', {}, 'Claude models'),
+      h('p', { class: 'muted small' }, 'Which Claude does each job, and how hard it thinks. Higher effort is slower and uses more of your plan. Choices apply to the next run.'),
+      ...claudeModels.jobs.map(j => h('div', { class: 'setRow', 'data-job': j.job },
+        h('label', {}, h('b', {}, j.label), h('div', { class: 'muted small' }, j.help)),
+        h('div', { class: 'row' }, pick(j.job, 'model', j.model, j.models), j.model === 'off' ? null : pick(j.job, 'effort', j.effort, claudeModels.efforts)))));
   };
 
   const JOBS = { speech: ['Reading your recordings', 'Turns speech into words with times.'], vision: ['Describing your footage', 'Looks at frames so clips can be found by what they show.'],
@@ -153,5 +172,6 @@ export async function render(root) {
   };
   draw();
   api('/api/v2/channel').then(c => { channel = c; if (document.getElementById('channelCard')) draw(); }).catch(() => {});
+  api('/api/v2/claude-models').then(m => { claudeModels = m; if (document.getElementById('claudeModelsCard')) draw(); }).catch(() => {});
   api('/api/v2/engines').then(m => { models = m; if (document.getElementById('modelsCard')) { draw(); watchDownloads(); } }).catch(() => {});
 }

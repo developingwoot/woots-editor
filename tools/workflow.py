@@ -291,11 +291,17 @@ def _log(s: dict, what: str):
     s["history"].append({"t": datetime.now().isoformat(timespec="seconds"), "what": what})
 
 
+def effective(saved: dict) -> dict:
+    """The settings a video runs with: the defaults, then the graphics models chosen in Settings (claudemodels), then what this video saved itself."""
+    import claudemodels
+    return {**DEFAULT_SETTINGS, **claudemodels.graphics_defaults(), **saved}
+
+
 def state(work: str, name: str) -> dict:
     """Where the video is: one row per stage (done / waiting), warnings, and the next thing to do. There are no approvals (ADR 0003)."""
     wd = work_dir(work)
     s = load(work, name)
-    settings = {**DEFAULT_SETTINGS, **s["settings"]}
+    settings = effective(s["settings"])
     stages = []
     for st in STAGES:
         if st["id"] in ("graphicsplan", "graphicsreview"):        # the plan and the review files are made from the beat map as soon as it exists

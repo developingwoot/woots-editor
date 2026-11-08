@@ -224,3 +224,9 @@ button.w.cut { color: var(--muted); text-decoration: line-through; background: v
 /* Final: how it compares with the reference videos */
 table.score { border-collapse: collapse; width: 100%; font-size: 14px; }
 table.score td { padding: 4px 8px 4px 0; border-bottom: 1px solid #EEE; }
+
+/* feedback on shorts */
+.noteRow { display: flex; gap: 8px; align-items: baseline; margin-bottom: 6px; }
+.noteRow.done .vbody { opacity: .6; }
+.fbInput { width: 100%; box-sizing: border-box; margin: 6px 0; }
+.cmPick { min-width: 110px; }

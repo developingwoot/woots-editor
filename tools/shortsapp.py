@@ -372,7 +372,7 @@ def gfx_prompt(work, name, sid) -> str:
         pass
     ranges = short["ranges"]
     beats = [b for b in bm.get("beats", []) if not b.get("skip") and any(b["start"] < r1 and b["end"] > r0 for r0, r1 in ranges)]
-    return shortsgfx.prompt_for(short, sh.kept_words(cfg, short), beats)
+    return shortsgfx.prompt_for(short, sh.kept_words(cfg, short), beats) + feedback_text(read_raw(work, name), [sid])
 
 
 def gfx_import(work, name, sid, path: Path) -> dict:
@@ -422,6 +422,10 @@ def video_plan(work: str, name: str, cfg: dict | None = None) -> dict:
 
 
 def find_prompt(work: str, name: str, count: int | None = None) -> str:
+    return _find_prompt(work, name, count) + feedback_text(read_raw(work, name))
+
+
+def _find_prompt(work: str, name: str, count: int | None = None) -> str:
     if read_raw(work, name).get("mode") == "raw":
         import rawshorts
         return rawshorts.prompt(work, name, count)
@@ -521,7 +525,8 @@ def tighten_prompt(work: str, name: str, sid: str) -> str:
     return (TIGHTEN_RULES + f"\nThe short: \"{short.get('title', '')}\". On-screen hook title: \"{short.get('hook', '')}\".\n"
             + ("Why it was picked: " + short["why"] + "\n" if short.get("why") else "")
             + "\nCURRENT SELECTION (every word with its start-end seconds; the transcript mishears " + (", ".join(channel.spellings()) or "some words") + "):\n" + "\n".join(sel)
-            + "\n\nSURROUNDING TRANSCRIPT (for context and for choosing better start/end points):\n" + "\n".join(ctx) + "\n")
+            + "\n\nSURROUNDING TRANSCRIPT (for context and for choosing better start/end points):\n" + "\n".join(ctx) + "\n"
+            + feedback_text(read_raw(work, name), [sid]))
 
 
 def apply_tighten(work: str, name: str, sid: str, path: Path) -> dict:
@@ -544,6 +549,125 @@ def apply_tighten(work: str, name: str, sid: str, path: Path) -> dict:
     s["tighten"] = {"note": str(data.get("note", ""))[:400], "text": str(data.get("kept_text", ""))[:1500], "words_kept": len(kept), "at": time.time()}
     save_raw(work, name, raw)
     return {"words": len(kept), "speech": round(speech, 1)}
+
+
+# ----------------------------------------------------------------------------- the host's feedback on shorts
+# Notes are plain sentences. A note on one short is open until Claude has applied it (then "done"); a general note ("hooks are too long") stands and is
+# given to every later run that chooses, tightens, plans or titles shorts. The buttons only save notes; Claude applies them (feedback_prompt).
+MAX_NOTES = 40
+
+
+def feedback_of(raw: dict, sid: str = "") -> list:
+    """The notes of one short, or the general ones when `sid` is empty."""
+    return list((_short(raw, sid) if sid else raw).get("feedback") or [])
+
+
+def _note_holder(raw: dict, sid: str) -> dict:
+    return _short(raw, sid) if sid else raw
+
+
+def add_feedback(work, name, sid, text) -> dict:
+    text = " ".join(str(text or "").split())[:600]
+    if not text:
+        raise ValueError("write what you would change")
+    raw = read_raw(work, name)
+    holder = _note_holder(raw, sid)
+    notes = holder.setdefault("feedback", [])
+    if len(notes) >= MAX_NOTES:
+        raise ValueError("too many notes: delete the ones that are done")
+    notes.append({"id": max([n["id"] for n in notes], default=0) + 1, "text": text, "status": "open" if sid else "standing", "at": time.time()})
+    save_raw(work, name, raw, why="feedback")
+    return state(work, name)
+
+
+def edit_feedback(work, name, sid, fid, status=None, delete=False) -> dict:
+    raw = read_raw(work, name)
+    holder = _note_holder(raw, sid)
+    notes = holder.get("feedback") or []
+    n = next((x for x in notes if x["id"] == int(fid)), None)
+    if not n:
+        raise ValueError("no such note")
+    if delete:
+        notes.remove(n)
+    else:
+        if status not in ("open", "done", "standing"):
+            raise ValueError("a note is open, done or standing")
+        n["status"] = status
+    if not notes:
+        holder.pop("feedback", None)
+    save_raw(work, name, raw, why="feedback")
+    return state(work, name)
+
+
+def feedback_text(raw: dict, sids=()) -> str:
+    """The notes a Claude run must follow, as a block for its prompt ('' when there are none)."""
+    general = [f"- {n['text']}" for n in feedback_of(raw) if n.get("status") != "done"]
+    out = ("THE HOST'S STANDING FEEDBACK ON SHORTS (earlier shorts fell short in these ways; do not repeat them):\n" + "\n".join(general) + "\n") if general else ""
+    for sid in sids:
+        mine = [f"- {n['text']}" for n in feedback_of(raw, sid) if n.get("status") == "open"]
+        if mine:
+            out += f"\nTHE HOST'S FEEDBACK ON SHORT {sid} (apply it):\n" + "\n".join(mine) + "\n"
+    return ("\n" + out) if out else ""
+
+
+def open_feedback(raw: dict, sid: str) -> list:
+    return [n for n in feedback_of(raw, sid) if n.get("status") == "open"]
+
+
+FEEDBACK_RULES = """The host watched this YouTube Short and wrote feedback on it. Change the short so the feedback is met, and change nothing else.
+
+You may: move the start or end (inside the context given), delete words and spans (never reword, reorder or invent), and rewrite the on-screen hook title or the working title when the feedback asks for it. If a note asks for something you cannot do by those means (a different caption style, music, sound effects, a graphic, a crop), say so in "unmet" and leave it for the host. Keep the short complete and grammatical when its words are joined in order. Obey the host over any default of yours; if two notes disagree, follow the later one.
+
+Output: write tighten.json in the current folder (Write tool), exactly this shape and nothing else:
+{"ranges": [[start, end], ...], "drop": [[start, end], ...], "kept_text": "the sentences that remain, as they will be spoken", "hook": "new hook or empty to keep it", "title": "new title or empty to keep it", "note": "one or two sentences: what you changed for each note", "unmet": ["a note you could not meet, and why"]}
+- Every time is a SOURCE second taken from the word timestamps below. Give the full list of ranges and drop spans the short should have now (they replace the current ones). A drop span covers whole words only. Drop spans must lie inside the ranges.
+- Hook: a few words, at most 90 characters; a | marks a line break.
+"""
+
+
+def feedback_prompt(work: str, name: str, sid: str) -> str:
+    raw = read_raw(work, name)
+    if not open_feedback(raw, sid):
+        raise ValueError("write some feedback on this short first")
+    body = tighten_prompt(work, name, sid).split("\nThe short: ", 1)[1]
+    return FEEDBACK_RULES + "\nThe short: " + body
+
+
+def apply_feedback(work: str, name: str, sid: str, path: Path) -> dict:
+    """Apply Claude's changes for the open notes of one short, then mark those notes done. The old cuts are kept so 'undo' works."""
+    data = json.loads(path.read_text(encoding="utf-8-sig"))
+    raw = read_raw(work, name)
+    s = _short(raw, sid)
+    ranges = _num_ranges(data.get("ranges"), "ranges") or s["ranges"]
+    drop = _num_ranges(data.get("drop"), "cuts") if "drop" in data else s.get("drop", [])
+    changed_cuts = ranges != s["ranges"] or drop != s.get("drop", [])
+    if changed_cuts:
+        trial = dict(s, ranges=ranges, drop=drop)
+        cfg = sh.load(cfg_file(work, name))
+        kept = sh.kept_words(cfg, trial)
+        speech = sum(w["e"] - w["s"] for w in kept)
+        if len(kept) < 8 or speech < 4:
+            raise ValueError(f"the changes leave only {len(kept)} words: refused")
+        if "before_tighten" not in s:
+            s["before_tighten"] = {"ranges": s["ranges"], "drop": s.get("drop", [])}
+        s["ranges"], s["drop"] = ranges, drop
+        if not drop:
+            s.pop("drop", None)
+        s["tighten"] = {"note": str(data.get("note", ""))[:400], "text": str(data.get("kept_text", ""))[:1500], "words_kept": len(kept), "at": time.time()}
+    hook, title = str(data.get("hook") or "").strip()[:90].upper(), str(data.get("title") or "").strip()[:90]
+    if hook:
+        s["hook"] = hook
+    if title:
+        s["title"] = title
+    unmet = [str(x)[:300] for x in (data.get("unmet") or []) if str(x).strip()][:10]
+    if not (changed_cuts or hook or title):
+        raise ValueError("Claude changed nothing" + (": " + "; ".join(unmet) if unmet else ""))
+    for n in s.get("feedback") or []:
+        if n.get("status") == "open":
+            n["status"] = "done"
+    s["feedback_result"] = {"note": str(data.get("note", ""))[:400], "unmet": unmet, "at": time.time()}
+    save_raw(work, name, raw, why="feedback applied")
+    return {"changed_cuts": changed_cuts, "hook": bool(hook), "title": bool(title), "unmet": unmet}
 
 
 # ----------------------------------------------------------------------------- YouTube title, description, tags, file name
@@ -575,7 +699,8 @@ def publish_prompt(work: str, name: str, ids: list) -> str:
         text = (s.get("tighten") or {}).get("text") or " ".join(w["w"] for w in sh.kept_words(cfg, s))
         parts.append(f"SHORT {sid}\n  working title: {s.get('title', '')}\n  on-screen hook: {s.get('hook', '').replace('|', ' ')}\n  what is said: {text}")
     link = cfg.get("full_video_url") or ""
-    return (PUBLISH_RULES + f"\nThe full video these were cut from: \"{raw_title}\".\nFull-video link: {link or '(not given yet: leave the link line out)'}\n\n" + "\n\n".join(parts) + "\n")
+    return (PUBLISH_RULES + f"\nThe full video these were cut from: \"{raw_title}\".\nFull-video link: {link or '(not given yet: leave the link line out)'}\n\n" + "\n\n".join(parts) + "\n"
+            + feedback_text(read_raw(work, name), ids))
 
 
 def apply_publish(work: str, name: str, path: Path) -> int:

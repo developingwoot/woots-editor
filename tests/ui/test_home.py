@@ -61,3 +61,23 @@ def test_an_empty_home_says_so_without_stray_text(screen):
         pytest.skip("other tests already made videos in this workspace")
     assert "No videos yet." in page.locator("#screen").inner_text()
     assert clutter(visible_text(page)) == []
+
+
+def test_the_settings_screen_chooses_the_model_and_effort_of_each_job(screen):
+    import claudemodels
+    page = screen("/v2/#/settings")
+    page.wait_for_selector("#claudeModelsCard .cmPick")
+    assert "Shorts" in page.inner_text("#claudeModelsCard") and "Graphics critic" in page.inner_text("#claudeModelsCard")
+    def choose(field, value):
+        page.select_option(f"#claudeModelsCard [data-job=shorts][data-field={field}]", value)
+        for _ in range(100):                                   # the card redraws once the choice is saved: wait for that before touching it again
+            if claudemodels.get("shorts")[0 if field == "model" else 1] == value:
+                break
+            page.wait_for_timeout(50)
+        page.wait_for_timeout(300)
+    choose("model", "opus")
+    choose("effort", "high")
+    assert claudemodels.get("shorts") == ("opus", "high")
+    assert claudemodels.get("edit") == ("sonnet", "medium")
+    import config
+    config.save_user_settings({"model_shorts": "", "effort_shorts": ""})

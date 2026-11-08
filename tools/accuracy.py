@@ -20,6 +20,7 @@ HERE = Path(os.path.abspath(__file__)).parent
 import config
 WORK = config.WORK
 sys.path.insert(0, str(HERE))
+import claudemodels  # noqa: E402
 import builder  # noqa: E402  (find_claude, tool_env, settings)
 import channel  # noqa: E402
 
@@ -124,11 +125,10 @@ def _run(work, name):
     try:
         sb = prepare(work, name)
         (sb / "accuracy.json").unlink(missing_ok=True)
-        st = builder.settings_of(work, name)
-        model = st.get("critic_model") if st.get("critic_model") not in (None, "off") else "opus"
+        model, effort = claudemodels.get("accuracy")
         data["model"] = model
         _write(work, name, data)
-        cmd = [builder.find_claude(), "-p", channel.prompt(PROMPT.format(name=name)), "--model", model, "--effort", "high", "--restricted", "--tools", "Read,Write,WebSearch,WebFetch",
+        cmd = [builder.find_claude(), "-p", channel.prompt(PROMPT.format(name=name)), "--model", model, "--effort", effort, "--restricted", "--tools", "Read,Write,WebSearch,WebFetch",
                "--allowedTools", "Read", "Write", "WebSearch", "WebFetch", "--permission-mode", "dontAsk", "--permission-prompts", "none", "--max-budget-usd", "3.0",
                "--output-format", "stream-json", "--verbose"]
         proc = subprocess.Popen(cmd, cwd=sb, env=builder.tool_env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True,

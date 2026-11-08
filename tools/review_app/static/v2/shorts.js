@@ -103,6 +103,31 @@ export async function renderStep(root, key, setBusy) {
         h('span', { class: 'muted small' }, p.written ? 'Edit anything above; it is saved when you leave the box.' : 'Claude writes a title, description, tags and file name from what the short says.')));
   }
 
+  // The host's feedback: plain notes. On one short they wait until Claude applies them (cuts, hook, title); the general ones are given to every later run.
+  function feedbackList(f, sid, general) {
+    const edit = (n, body) => async () => { try { draw(await post('noteedit', { id: sid, note: n.id, ...body })); } catch (e) { alert(e.message); } };
+    return f.notes.map(n => h('div', { class: 'noteRow' + (n.status === 'done' ? ' done' : ''), 'data-note': n.id },
+      h('div', { class: 'vbody' }, n.text),
+      general ? null : h('span', { class: 'chip ' + (n.status === 'done' ? 'ok' : '') }, n.status === 'done' ? 'Applied' : 'Waiting'),
+      !general && n.status === 'done' ? h('button', { class: 'quiet noteReopen', onclick: edit(n, { status: 'open' }) }, 'Again') : null,
+      h('button', { class: 'quiet noteDelete', onclick: edit(n, { delete: true }) }, 'Delete')));
+  }
+  function feedbackBox(d, f, sid, general) {
+    const input = h('textarea', { class: 'fbInput', rows: 2, autocomplete: 'off',
+      placeholder: general ? 'e.g. “Hooks are too long” or “Start every short on the answer”' : 'e.g. “Start on the number” or “Cut the story about the failed print”' });
+    const add = async () => {
+      if (!input.value.trim()) return;
+      try { draw(await post('note', { id: sid, text: input.value })); } catch (e) { alert(e.message); }
+    };
+    return [...feedbackList(f, sid, general),
+      input,
+      h('div', { class: 'row' }, h('button', { class: 'quiet fbAdd', onclick: add }, 'Save the note'),
+        general ? null : h('button', { class: 'main small fbApply', disabled: d.busy || !f.open, onclick: () => run('feedback', { id: sid }) }, f.open ? `Apply ${f.open} note${f.open !== 1 ? 's' : ''}` : 'Apply my notes'),
+        h('span', { class: 'muted small' }, general ? 'Claude reads these every time it chooses, tightens, plans or titles shorts.' : 'Claude changes the cuts, hook or title to match; sound, captions and crops stay yours.')),
+      !general && f.result ? h('div', { class: 'muted small fbResult' }, f.result) : null,
+      !general && f.unmet.length ? h('div', { class: 'muted small fbUnmet' }, 'Left for you: ' + f.unmet.join('; ')) : null].filter(Boolean);
+  }
+
   function openPanel(d, s) {
     const hook = h('input', { id: 'hookInput', type: 'text', value: s.hook, placeholder: 'Words shown over the first seconds', autocomplete: 'off' });
     hook.addEventListener('change', async () => { try { draw(await post('hook', { id: s.id, hook: hook.value })); } catch (e) { alert(e.message); } });
@@ -123,6 +148,7 @@ export async function renderStep(root, key, setBusy) {
         h('div', { class: 'openEdit' },
           h('label', { class: 'glabel' }, 'Hook'), hook,
           h('label', { class: 'glabel' }, 'Pace'), pace,
+          h('div', { class: 'shortFeedback', id: 'shortFeedback' }, h('div', { class: 'glabel' }, 'Your feedback'), ...feedbackBox(d, s.feedback, s.id, false)),
           sound, graphicsPanel(d, s), publishPanel(d, s),
           h('div', { class: 'row' }, h('button', { class: 'quiet', id: 'tightenBtn', disabled: d.busy, onclick: () => run('tighten', { id: s.id }) }, s.tightened ? 'Tighten it again' : 'Tighten it'),
             h('span', { class: 'muted small' }, 'Claude cuts the filler and tangents out of this short.')),
@@ -173,6 +199,9 @@ export async function renderStep(root, key, setBusy) {
           i.addEventListener('change', async () => { try { draw(await post('link', { url: i.value })); } catch (e) { alert(e.message); } }); return i; })(),
         h('button', { class: 'quiet', id: 'allTitlesBtn', disabled: d.busy || !d.shorts.length, onclick: () => run('titles') }, 'Write all the titles')),
       h('div', { class: 'muted small', id: 'folderNote' }, `The final shorts are saved in ${d.folder}, each with a text file of its title, description and tags.`),
+      h('details', { class: 'doneBox', id: 'generalFeedback', open: d.feedback.notes.length > 0 },
+        h('summary', {}, `Feedback for all shorts${d.feedback.notes.length ? ` (${d.feedback.notes.length})` : ''}`),
+        ...feedbackBox(d, d.feedback, '', true)),
       d.unlooked ? h('div', { class: 'muted small', id: 'unlooked' },
         `${d.unlooked} short${d.unlooked !== 1 ? 's' : ''} you have not kept or dropped will be made too.`) : null);
     const list = d.shorts.length

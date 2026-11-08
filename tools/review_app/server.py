@@ -68,6 +68,7 @@ import channel                                    # noqa: E402  (names in the pr
 import projectstore                               # noqa: E402  (what changed, who changed it, undo: ADR 0005)
 projectstore.actor = "user"                        # writes made through the app's pages are the creator's
 import workflow                                   # noqa: E402  (stages, settings)
+import claudemodels                               # noqa: E402  (which model and effort each kind of Claude run uses)
 import views                                      # noqa: E402  (plain-language view models for /v2)
 import reviewnotes                                # noqa: E402  (v2 notes and versions)
 import shotmatch                                  # noqa: E402  (v2: what we have for each shot)
@@ -756,6 +757,16 @@ def shorts_v2_post(op, b):
         with _lock:
             shortsapp.gfx_mark(work, name, sid, b["g"], "cut" if b.get("cut", True) else "", "")
         return shortsview.project(work, name)
+    if op == "note":                                           # the host's feedback: a note on one short, or a general one when no short is named
+        with _lock:
+            shortsapp.add_feedback(work, name, sid, b.get("text", ""))
+        return shortsview.project(work, name)
+    if op == "noteedit":
+        with _lock:
+            shortsapp.edit_feedback(work, name, sid, b["note"], status=b.get("status"), delete=bool(b.get("delete")))
+        return shortsview.project(work, name)
+    if op == "feedback":                                       # Claude applies the open notes of one short
+        return started(start_shorts_feedback(work, name, sid), "Claude is applying your feedback", "Feedback applied")
     if op == "preview":
         return started(start_shorts_render(work, name, sid), "Making the preview of your short", "Preview ready")
     if op == "tighten":
@@ -803,8 +814,8 @@ def start_shorts_new(work, name, source, people, ref_start, ref_len):
     return _job_run(job, cmds, after)
 
 
-def _claude_run(job, fd, prompt, out_name, apply, budget="1.5"):
-    """One headless Claude run that reads and writes files only. It must write `out_name` in folder `fd`; apply(path, result) -> (ok, message)
+def _claude_run(job, fd, prompt, out_name, apply, budget="1.5", kind="edit"):
+    """One headless Claude run that reads and writes files only. `kind` picks the model and effort chosen in Settings (claudemodels). It must write `out_name` in folder `fd`; apply(path, result) -> (ok, message)
     is then called under the lock. Blocks until finished; sets job['log'] and job['ok'] but not job['done']."""
     import usage
     fd.mkdir(parents=True, exist_ok=True)
@@ -825,7 +836,7 @@ def _claude_run(job, fd, prompt, out_name, apply, budget="1.5"):
         job["log"] += msg
         job["ok"] = ok
         return
-    cmd = [builder.find_claude(), "-p", channel.prompt(prompt), "--model", "sonnet", "--effort", "medium", "--restricted", "--tools", "Read,Write",
+    cmd = [builder.find_claude(), "-p", channel.prompt(prompt), *claudemodels.flags(kind), "--restricted", "--tools", "Read,Write",
            "--allowedTools", "Read", "Write", "--permission-mode", "dontAsk", "--permission-prompts", "none", "--max-budget-usd", budget,
            "--output-format", "stream-json", "--verbose"]
     result = None
@@ -870,7 +881,7 @@ def _claude_find(job, work, name, count):
         skipped = (shortsapp.read_raw(work, name).get("last_find") or {}).get("skipped") or []
         return n > 0, (f"Claude proposed {n} short{'s' if n != 1 else ''}."
                        + (f" Left out because they broke the rules: {'; '.join(skipped)}." if skipped else ""))
-    _claude_run(job, WORK / work / "shorts" / "_find", prompt, "candidates.json", apply)
+    _claude_run(job, WORK / work / "shorts" / "_find", prompt, "candidates.json", apply, kind="shorts")
 
 
 def start_make_version(work, name, stage):
@@ -1199,7 +1210,7 @@ def start_shorts_gfxplan(work, name, sid):
                                 + (f" Left out: {'; '.join(r['skipped'])}." if r["skipped"] else ""))
 
     def run():
-        _claude_run(job, WORK / work / "shorts" / "_gfx" / sid, prompt, "graphics.json", apply, budget="0.6")
+        _claude_run(job, WORK / work / "shorts" / "_gfx" / sid, prompt, "graphics.json", apply, budget="0.6", kind="shorts")
         job["done"] = True
         job["elapsed"] = round(time.time() - job["started"], 1)
     threading.Thread(target=run, daemon=True).start()
@@ -1293,6 +1304,27 @@ def start_shorts_from_folder(path):
     return _job_run(job, cmds, after)
 
 
+def start_shorts_feedback(work, name, sid):
+    """Claude changes one short to meet the host's open notes on it (cuts, hook, title); the notes are then marked done."""
+    raw = shortsapp.read_raw(work, name)
+    if not any(x["id"] == sid for x in raw.get("shorts", [])):
+        raise ValueError("no such short")
+    prompt = shortsapp.feedback_prompt(work, name, sid)             # refuses when there are no open notes
+    job = _job("shorts", [f"Claude applies your feedback to {sid.upper()}"])
+
+    def apply(path, result):
+        r = shortsapp.apply_feedback(work, name, sid, path)
+        bits = [x for x, on in (("cuts", r["changed_cuts"]), ("the hook", r["hook"]), ("the title", r["title"])) if on]
+        return True, (f"{sid.upper()}: changed {' and '.join(bits)}." + (f" Not done: {'; '.join(r['unmet'])}." if r["unmet"] else ""))
+
+    def run():
+        _claude_run(job, WORK / work / "shorts" / "_feedback" / sid, prompt, "tighten.json", apply, budget="1.0", kind="shorts")
+        job["done"] = True
+        job["elapsed"] = round(time.time() - job["started"], 1)
+    threading.Thread(target=run, daemon=True).start()
+    return job
+
+
 def start_shorts_tighten(work, name, ids):
     """Claude cuts content out of each short (filler, tangents, repeats, slow set-ups) so it is dense; one headless run per short, one after another."""
     import usage
@@ -1310,7 +1342,7 @@ def start_shorts_tighten(work, name, ids):
             out.unlink()
         prompt = shortsapp.tighten_prompt(work, name, sid)
         (fd / "PROMPT.md").write_text(channel.prompt(prompt), encoding="utf-8")
-        cmd = [builder.find_claude(), "-p", channel.prompt(prompt), "--model", "sonnet", "--effort", "medium", "--restricted", "--tools", "Read,Write",
+        cmd = [builder.find_claude(), "-p", channel.prompt(prompt), *claudemodels.flags("shorts"), "--restricted", "--tools", "Read,Write",
                "--allowedTools", "Read", "Write", "--permission-mode", "dontAsk", "--permission-prompts", "none", "--max-budget-usd", "1.0",
                "--output-format", "stream-json", "--verbose"]
         p = subprocess.Popen(cmd, cwd=fd, env=tool_env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
@@ -1359,7 +1391,7 @@ def _claude_json_run(fd, prompt, out_name, budget="1.0"):
     if out.exists():
         out.unlink()
     (fd / "PROMPT.md").write_text(channel.prompt(prompt), encoding="utf-8")
-    cmd = [builder.find_claude(), "-p", channel.prompt(prompt), "--model", "sonnet", "--effort", "medium", "--restricted", "--tools", "Read,Write",
+    cmd = [builder.find_claude(), "-p", channel.prompt(prompt), *claudemodels.flags("shorts"), "--restricted", "--tools", "Read,Write",
            "--allowedTools", "Read", "Write", "--permission-mode", "dontAsk", "--permission-prompts", "none", "--max-budget-usd", budget,
            "--output-format", "stream-json", "--verbose"]
     p = subprocess.Popen(cmd, cwd=fd, env=tool_env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
@@ -1494,6 +1526,8 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/api/v2/engines":
                 import engines
                 return self.send_json(engines.view())
+            if u.path == "/api/v2/claude-models":
+                return self.send_json(claudemodels.view())
             if u.path == "/api/v2/channel":
                 return self.send_json(channel.view())
             if u.path == "/api/v2/fonts":
@@ -1717,6 +1751,8 @@ class Handler(BaseHTTPRequestHandler):
                 if restart:                                       # every module read its paths at import: the supervisor starts a fresh copy
                     threading.Timer(1.0, lambda: os._exit(appsetup.RESTART)).start()
                 return self.send_json({**appsetup.view(), "restarting": restart, "needs_restart": not restart})
+            if u.path == "/api/v2/claude-models":
+                return self.send_json(claudemodels.save(b.get("choices") or {}))
             if u.path == "/api/v2/engines":
                 import engines
                 if b["op"] == "choose":

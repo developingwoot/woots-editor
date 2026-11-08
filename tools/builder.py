@@ -109,7 +109,7 @@ def sandbox_dir(work: str, name: str, sid: str) -> Path:
 
 
 def settings_of(work: str, name: str) -> dict:
-    return {**workflow.DEFAULT_SETTINGS, **workflow.load(work, name)["settings"]}
+    return workflow.effective(workflow.load(work, name)["settings"])
 
 
 # ----------------------------------------------------------------------------- status

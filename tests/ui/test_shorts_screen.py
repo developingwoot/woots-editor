@@ -260,3 +260,26 @@ def test_the_youtube_details_and_the_full_video_link_are_edited_on_the_screen(sc
     page.wait_for_selector("#shortPublish")
     assert "Write them again" in page.inner_text("#shortPublish") and page.input_value("#linkInput") == "https://youtu.be/abc"
     assert clutter(visible_text(page)) == []
+
+
+def test_feedback_is_saved_on_a_short_and_as_a_general_note(screen):
+    r, key = video_with_shorts("ui shorts feedback")
+    page = screen(f"/v2/#/v/{key}/shorts")
+    page.wait_for_selector(".shortCard")
+    page.locator("#generalFeedback summary").click()
+    page.locator("#generalFeedback .fbInput").fill("Hooks are too long")
+    page.locator("#generalFeedback .fbAdd").click()
+    page.wait_for_selector("#generalFeedback .noteRow")
+    page.locator(".shortCard[data-id=s1] .openBtn").click()
+    page.wait_for_selector("#shortFeedback")
+    assert page.locator("#shortFeedback .fbApply").is_disabled()                      # nothing to apply yet
+    page.locator("#shortFeedback .fbInput").fill("Start on the number")
+    page.locator("#shortFeedback .fbAdd").click()
+    page.wait_for_selector("#shortFeedback .noteRow")
+    assert "Waiting" in page.inner_text("#shortFeedback") and "Apply 1 note" in page.inner_text("#shortFeedback")
+    raw = raw_of(r)
+    assert raw["feedback"][0]["text"] == "Hooks are too long" and raw["shorts"][0]["feedback"][0]["text"] == "Start on the number"
+    page.locator("#shortFeedback .noteDelete").click()
+    page.wait_for_function("() => !document.querySelector('#shortFeedback .noteRow')")
+    assert "feedback" not in raw_of(r)["shorts"][0]
+    assert clutter(visible_text(page)) == []
