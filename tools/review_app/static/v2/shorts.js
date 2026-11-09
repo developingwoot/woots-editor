@@ -200,6 +200,16 @@ export async function renderStep(root, key, setBusy) {
           i.addEventListener('change', async () => { try { draw(await post('link', { url: i.value })); } catch (e) { alert(e.message); } }); return i; })(),
         h('button', { class: 'quiet', id: 'allTitlesBtn', disabled: d.busy || !d.shorts.length, onclick: () => run('titles') }, 'Write all the titles')),
       h('div', { class: 'muted small', id: 'folderNote' }, `The final shorts are saved in ${d.folder}, each with a text file of its title, description and tags.`),
+      h('details', { class: 'doneBox', id: 'rawStory' },
+        h('summary', {}, 'A newer story from the raw footage'),
+        (() => {
+          const text = h('textarea', { class: 'fbInput', id: 'rawText', rows: 3, autocomplete: 'off', placeholder: 'e.g. “Tell the story of the failed first print and what fixed it” or “Redo this one without the part about the slicer”' });
+          const base = h('select', { id: 'rawBase' }, h('option', { value: '' }, 'A new story (not based on a short)'),
+            ...d.shorts.map(s => h('option', { value: s.id }, `Redo: ${s.title}`)));
+          const go = async () => { try { await post('fromraw', { id: base.value, text: text.value }); setBusy(); } catch (e) { alert(e.message); } };
+          return h('div', {}, text, h('div', { class: 'row' }, base, h('button', { class: 'main small', id: 'rawGo', disabled: d.busy, onclick: go }, 'Make it from the raw footage')),
+            h('div', { class: 'muted small' }, 'Claude reads the recordings this video was filmed from and makes a new short, which appears as its own project in the Shorts list. The shorts you have now stay as they are.'));
+        })()),
       h('details', { class: 'doneBox', id: 'generalFeedback', open: d.feedback.notes.length > 0 },
         h('summary', {}, `Feedback for all shorts${d.feedback.notes.length ? ` (${d.feedback.notes.length})` : ''}`),
         ...feedbackBox(d, d.feedback, '', true)),

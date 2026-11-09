@@ -421,6 +421,30 @@ def video_plan(work: str, name: str, cfg: dict | None = None) -> dict:
     return rec
 
 
+def footage_folder(work: str, name: str) -> str:
+    """The folder of raw recordings a video was made from (its footage.json)."""
+    try:
+        f = json.loads((wd_of(work) / f"{name}.footage.json").read_text(encoding="utf-8-sig")).get("folder") or ""
+    except (OSError, ValueError):
+        f = ""
+    if not f or not Path(f).is_dir():
+        raise ValueError("this video's raw footage folder is not set or not found: choose it in the Footage step first")
+    return f
+
+
+def raw_brief(work: str, name: str, sid: str, text: str) -> str:
+    """What to tell Claude when making a new short from the raw footage: the host's words, and the words of the short being redone (it stays as it is)."""
+    text = " ".join((text or "").split())
+    if not text:
+        raise ValueError("say what the new short should tell, or what to fix")
+    if not sid:
+        return text
+    cfg = sh.load(cfg_file(work, name))
+    short = _short(read_raw(work, name), sid)
+    spoken = " ".join(w["w"] for w in sh.kept_words(cfg, short))
+    return f"{text}\n\nIt redoes this short of the finished video, which stays as it is ({short.get('title', '')!r}). Its words were: {spoken}"
+
+
 def find_prompt(work: str, name: str, count: int | None = None) -> str:
     return _find_prompt(work, name, count) + feedback_text(read_raw(work, name))
 

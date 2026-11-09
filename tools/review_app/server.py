@@ -731,6 +731,10 @@ def shorts_v2_post(op, b):
         return {**job, "key": _jobs[job["id"]]["key"]}
     work, name = views.split_key(b["key"])
     sid = b.get("id", "")
+    if op == "fromraw":                                        # a newer short from this video's raw footage, as its own project: the shorts made so far stay
+        brief = shortsapp.raw_brief(work, name, sid, b.get("text", ""))
+        job = started(start_shorts_from_folder(shortsapp.footage_folder(work, name), brief), "Reading your recordings, then telling the new story", "New short ready")
+        return {**job, "key": _jobs[job["id"]]["key"]}
     if op in SHORTS_V2_EDITS:
         with _lock:
             shortsapp.apply_op(work, name, "edit", SHORTS_V2_EDITS[op](b))
@@ -1278,7 +1282,7 @@ def start_shorts_from_file(path):
     return _job_run(job, [([str(PY), str(TOOLS / "transcribe.py"), str(src), "--out", str(wd)], TOOLS)], after)
 
 
-def start_shorts_from_folder(path):
+def start_shorts_from_folder(path, brief=""):
     """A short from a folder of raw footage: read every recording that has sound word by word, tell the talking ones from the b-roll, write the project
     (the files stay where they are), then Claude chooses. Returns the job; job['key'] is the project's key."""
     import rawshorts
@@ -1297,7 +1301,7 @@ def start_shorts_from_folder(path):
         job["step"] = 1
         info = rawshorts.tell_apart(files, wd)
         with _lock:
-            rawshorts.new_project(work, name, folder, info)
+            rawshorts.new_project(work, name, folder, info, brief)
         job["step"] = 2
         _claude_find(job, work, name, skillrules.shorts()["raw_max_shorts"])
     cmds = [([str(PY), str(TOOLS / "transcribe.py"), *map(str, todo), "--out", str(wd)], TOOLS)] if todo else []

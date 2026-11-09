@@ -110,7 +110,7 @@ def contact_sheet(path, dest: Path, frames: int = 4, width: int = 360):
     return True
 
 
-def new_project(work: str, name: str, folder, info: dict):
+def new_project(work: str, name: str, folder, info: dict, brief: str = ""):
     """Write the shorts project. Talking recordings are sources t1, t2 ..., b-roll b1, b2 ... (talk first: the first source is where crops and speakers come from)."""
     talk = [f for f, i in info.items() if i["kind"] == "talk"]
     broll = [f for f, i in info.items() if i["kind"] == "broll"]
@@ -123,7 +123,7 @@ def new_project(work: str, name: str, folder, info: dict):
     for n, f in enumerate(broll, 1):
         sources.append({"id": f"b{n}", "path": str(f).replace("\\", "/"), "kind": "broll", "dur": duration(f)})
     shortsapp.save_raw(work, name, {"mode": "raw", "folder": str(folder).replace("\\", "/"), "source": sources[0]["path"], "transcript": sources[0]["transcript"],
-                                    "speakers": "", "sources": sources, "shorts": []})
+                                    "speakers": "", "sources": sources, "shorts": [], **({"brief": brief} if brief else {})})
 
 
 # ----------------------------------------------------------------------------- the prompt
@@ -170,7 +170,10 @@ def prompt(work: str, name: str, count: int | None = None) -> str:
             parts.append(f"B-ROLL {sp['id']} ({Path(sp['path']).name}, {sp.get('dur') or 0:.1f} s, {seen})")
     have = [f"{s['title']}" for s in raw.get("shorts", [])]
     extra = ("\nShorts that already exist (do not repeat these):\n- " + "\n- ".join(have) + "\n") if have else ""
-    return head + extra + "\n" + "\n\n".join(parts) + "\n"
+    brief = (raw.get("brief") or "").strip()
+    ask = ("\nTHE HOST'S BRIEF FOR THIS RUN (it comes first: tell this story, even where it repeats a moment an earlier short of the finished video used; "
+           "the earlier short is only there to show what to improve):\n" + brief + "\n") if brief else ""
+    return head + ask + extra + "\n" + "\n\n".join(parts) + "\n"
 
 
 # ----------------------------------------------------------------------------- checking and importing the answer

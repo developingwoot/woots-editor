@@ -222,3 +222,35 @@ def test_the_folder_job_reads_the_recordings_writes_the_project_and_asks_claude(
     raw = shortsapp.read_raw(work, name)
     assert raw["mode"] == "raw" and len(raw["shorts"]) == 1
     assert job["key"] == f"{work}~{name}"
+
+
+def test_a_newer_story_from_the_raw_footage_carries_the_hosts_brief_and_leaves_the_old_short_alone(tmp_path):
+    r = workflow.create("Redo Video")
+    work, name = r["work"], r["name"]
+    wd = workflow.WORK / work
+    tr = wd / "t.json"
+    said(tr, "the gears broke then I changed the tooth shape and now they last", seconds=20)
+    shortsapp.new_project(work, name, "main.mp4", str(tr), None)
+    raw = shortsapp.read_raw(work, name)
+    raw["shorts"] = [{"id": "s1", "title": "Gears", "hook": "H", "ranges": [[0, 6]], "status": ""}]
+    shortsapp.save_raw(work, name, raw)
+    with pytest.raises(ValueError, match="footage folder"):
+        shortsapp.footage_folder(work, name)                                      # no footage.json yet
+    folder = tmp_path / "Raw"
+    folder.mkdir()
+    (wd / f"{name}.footage.json").write_text(json.dumps({"folder": str(folder)}), encoding="utf-8")
+    assert shortsapp.footage_folder(work, name) == str(folder)
+    with pytest.raises(ValueError):
+        shortsapp.raw_brief(work, name, "", "   ")
+    assert shortsapp.raw_brief(work, name, "", " tell the print story ") == "tell the print story"
+    b = shortsapp.raw_brief(work, name, "s1", "redo without the slicer part")
+    assert "redo without the slicer part" in b and "Gears" in b and "tooth shape" in b
+    # the brief reaches the raw project's prompt
+    talk = tmp_path / "Raw" / "take1.mp4"
+    rawtr = wd / "take1.transcript.json"
+    said(rawtr, TALK, seconds=20)
+    rname = "redo-raw"
+    shortsapp.save_raw(work, rname, {"mode": "raw", "folder": str(folder), "source": str(talk), "transcript": str(rawtr), "speakers": "", "brief": b,
+                                     "sources": [{"id": "t1", "path": str(talk), "transcript": str(rawtr), "kind": "talk", "mistakes": []}], "shorts": []})
+    assert "THE HOST'S BRIEF" in shortsapp.find_prompt(work, rname) and "redo without the slicer part" in shortsapp.find_prompt(work, rname)
+    assert [s["id"] for s in shortsapp.read_raw(work, name)["shorts"]] == ["s1"]   # the original project is untouched
