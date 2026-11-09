@@ -614,9 +614,77 @@ def open_feedback(raw: dict, sid: str) -> list:
     return [n for n in feedback_of(raw, sid) if n.get("status") == "open"]
 
 
+STEP_S = 0.5                                                # how often the video is looked at to find the host's face
+
+
+def sample_faces(work: str, name: str, lo: float, hi: float) -> list:
+    """[(t, face)] every STEP_S seconds of the source video between lo and hi: is the host's face (a big one) the picture? Reads frames, so it takes a few seconds."""
+    import cv2
+    raw = read_raw(work, name)
+    src = raw.get("source", "")
+    if raw.get("mode") == "raw" or not Path(src).is_file():
+        return []
+    cap = cv2.VideoCapture(src)
+    out, t = [], max(0.0, lo)
+    while t <= hi:
+        cap.set(cv2.CAP_PROP_POS_MSEC, t * 1000)
+        ok, fr = cap.read()
+        if not ok:
+            break
+        out.append((round(t, 2), bool(sh.has_big_face(fr, fr.shape[1]))))
+        t += STEP_S
+    cap.release()
+    return out
+
+
+def no_face_spans(samples: list) -> list:
+    """[(a, b)] stretches where no face was seen, from the samples."""
+    spans, start = [], None
+    for t, face in samples:
+        if not face and start is None:
+            start = t
+        elif face and start is not None:
+            spans.append((start, t))
+            start = None
+    if start is not None and samples:
+        spans.append((start, samples[-1][0] + STEP_S))
+    return spans
+
+
+def picture_map(work: str, name: str, short: dict) -> list:
+    """Where the finished video shows something other than the host's face around a short, as measured on the video itself: [(a, b)] in video seconds.
+    Empty when the video cannot be read (then nothing is known). Measured, not read from the beat map: the beat map can be newer than the render."""
+    ranges = [r for r in short.get("ranges") or [] if not isinstance(r, dict)]
+    if not ranges:
+        return []
+    lo, hi = max(0.0, min(a for a, _ in ranges) - 12), max(b for _, b in ranges) + 15
+    return no_face_spans(sample_faces(work, name, lo, hi))
+
+
+def face_share(work: str, name: str, short: dict, cfg: dict | None = None) -> float | None:
+    """The share of the words of a short (0 to 1) spoken while the host's face is the picture; None when the video cannot be read."""
+    ranges = [r for r in short.get("ranges") or [] if not isinstance(r, dict)]
+    if not ranges:
+        return None
+    lo, hi = min(a for a, _ in ranges), max(b for _, b in ranges)
+    samples = sample_faces(work, name, lo, hi)
+    if not samples:
+        return None
+    cfg = cfg or sh.load(cfg_file(work, name))
+    kept = sh.kept_words(cfg, short)
+    total = sum(w["e"] - w["s"] for w in kept)
+    if total <= 0:
+        return None
+    spans = no_face_spans(samples)
+    covered = sum(w["e"] - w["s"] for w in kept if any(a <= (w["s"] + w["e"]) / 2 < b for a, b in spans))
+    return round(1 - covered / total, 2)
+
+
 FEEDBACK_RULES = """The host watched this YouTube Short and wrote feedback on it. Change the short so the feedback is met, and change nothing else.
 
 You may: move the start or end (inside the context given), delete words and spans (never reword, reorder or invent), and rewrite the on-screen hook title or the working title when the feedback asks for it. If a note asks for something you cannot do by those means (a different caption style, music, sound effects, a graphic, a crop), say so in "unmet" and leave it for the host. Keep the short complete and grammatical when its words are joined in order. Obey the host over any default of yours; if two notes disagree, follow the later one.
+
+If the host does not want the talking head: the picture of a short is whatever the finished video shows at that second, and the face is on screen except in the PICTURE list below. So the way to show less of the face is to keep the words that are spoken while a listed picture is on screen, and cut the words spoken over the face (still complete sentences, still the story). You cannot add pictures. If the story cannot be told from those words alone, keep the best version you can and say in "unmet" how much of it is still over the face.
 
 Output: write tighten.json in the current folder (Write tool), exactly this shape and nothing else:
 {"ranges": [[start, end], ...], "drop": [[start, end], ...], "kept_text": "the sentences that remain, as they will be spoken", "hook": "new hook or empty to keep it", "title": "new title or empty to keep it", "note": "one or two sentences: what you changed for each note", "unmet": ["a note you could not meet, and why"]}
@@ -630,7 +698,11 @@ def feedback_prompt(work: str, name: str, sid: str) -> str:
     if not open_feedback(raw, sid):
         raise ValueError("write some feedback on this short first")
     body = tighten_prompt(work, name, sid).split("\nThe short: ", 1)[1]
-    return FEEDBACK_RULES + "\nThe short: " + body
+    spans = picture_map(work, name, _short(raw, sid))
+    pic = ("\nPICTURE (measured on the video): the host's face is NOT on screen during these seconds (b-roll, a graphic or a screen capture); any other second shows the face:\n"
+           + "\n".join(f"  {a:.1f}-{b:.1f}" for a, b in spans) + "\n") if spans else (
+        "\nPICTURE: the face is on screen the whole time around this short, or the video could not be read, so no second is known to be free of it.\n")
+    return FEEDBACK_RULES + "\nThe short: " + body + pic
 
 
 def apply_feedback(work: str, name: str, sid: str, path: Path) -> dict:
@@ -668,6 +740,17 @@ def apply_feedback(work: str, name: str, sid: str, path: Path) -> dict:
     s["feedback_result"] = {"note": str(data.get("note", ""))[:400], "unmet": unmet, "at": time.time()}
     save_raw(work, name, raw, why="feedback applied")
     return {"changed_cuts": changed_cuts, "hook": bool(hook), "title": bool(title), "unmet": unmet}
+
+
+def record_face_share(work: str, name: str, sid: str):
+    """After feedback was applied: measure how much of the short is still spoken over the face and keep it with the result (reads frames: call it outside the lock)."""
+    raw = read_raw(work, name)
+    s = _short(raw, sid)
+    face = face_share(work, name, s)
+    if face is not None and s.get("feedback_result") is not None:
+        s["feedback_result"]["face"] = face
+        save_raw(work, name, raw, why="feedback measured")
+    return face
 
 
 # ----------------------------------------------------------------------------- YouTube title, description, tags, file name

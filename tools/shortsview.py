@@ -86,7 +86,8 @@ def feedback_of(holder: dict) -> dict:
     """The host's notes on a short (or the general ones): open ones wait for Claude, done ones were applied."""
     notes = [{"id": n["id"], "text": n["text"], "status": n.get("status", "open")} for n in holder.get("feedback") or []]
     res = holder.get("feedback_result") or {}
-    return {"notes": notes, "open": sum(1 for n in notes if n["status"] == "open"), "result": res.get("note", ""), "unmet": res.get("unmet", [])}
+    return {"notes": notes, "open": sum(1 for n in notes if n["status"] == "open"), "result": res.get("note", ""), "unmet": res.get("unmet", []),
+            "face": res.get("face")}
 
 
 def publish_of(short: dict) -> dict:

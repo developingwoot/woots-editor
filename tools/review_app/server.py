@@ -1305,11 +1305,13 @@ def start_shorts_from_folder(path):
 
 
 def start_shorts_feedback(work, name, sid):
-    """Claude changes one short to meet the host's open notes on it (cuts, hook, title); the notes are then marked done."""
+    """Claude changes one short to meet the host's open notes on it (cuts, hook, title); the notes are then marked done. Afterwards the short is measured
+    (how much of it is still spoken over the host's face) so the result says so."""
     raw = shortsapp.read_raw(work, name)
     if not any(x["id"] == sid for x in raw.get("shorts", [])):
         raise ValueError("no such short")
-    prompt = shortsapp.feedback_prompt(work, name, sid)             # refuses when there are no open notes
+    if not shortsapp.open_feedback(raw, sid):
+        raise ValueError("write some feedback on this short first")
     job = _job("shorts", [f"Claude applies your feedback to {sid.upper()}"])
 
     def apply(path, result):
@@ -1318,7 +1320,16 @@ def start_shorts_feedback(work, name, sid):
         return True, (f"{sid.upper()}: changed {' and '.join(bits)}." + (f" Not done: {'; '.join(r['unmet'])}." if r["unmet"] else ""))
 
     def run():
-        _claude_run(job, WORK / work / "shorts" / "_feedback" / sid, prompt, "tighten.json", apply, budget="1.0", kind="shorts")
+        try:
+            prompt = shortsapp.feedback_prompt(work, name, sid)         # looks at the video to find where the face is on screen: a few seconds, outside the lock
+            _claude_run(job, WORK / work / "shorts" / "_feedback" / sid, prompt, "tighten.json", apply, budget="1.0", kind="shorts")
+            if job.get("ok"):
+                face = shortsapp.record_face_share(work, name, sid)
+                if face is not None:
+                    job["log"] += f" About {round(face * 100)}% of the words are still spoken over your face."
+        except Exception as e:                  # noqa: BLE001
+            job["log"] += f"\n{e}"
+            job["ok"] = False
         job["done"] = True
         job["elapsed"] = round(time.time() - job["started"], 1)
     threading.Thread(target=run, daemon=True).start()

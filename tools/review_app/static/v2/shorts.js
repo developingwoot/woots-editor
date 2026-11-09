@@ -125,7 +125,8 @@ export async function renderStep(root, key, setBusy) {
         general ? null : h('button', { class: 'main small fbApply', disabled: d.busy || !f.open, onclick: () => run('feedback', { id: sid }) }, f.open ? `Apply ${f.open} note${f.open !== 1 ? 's' : ''}` : 'Apply my notes'),
         h('span', { class: 'muted small' }, general ? 'Claude reads these every time it chooses, tightens, plans or titles shorts.' : 'Claude changes the cuts, hook or title to match; sound, captions and crops stay yours.')),
       !general && f.result ? h('div', { class: 'muted small fbResult' }, f.result) : null,
-      !general && f.unmet.length ? h('div', { class: 'muted small fbUnmet' }, 'Left for you: ' + f.unmet.join('; ')) : null].filter(Boolean);
+      !general && f.face != null ? h('div', { class: 'small fbFace' }, `${Math.round(f.face * 100)}% of the words are spoken over your face.`) : null,
+      !general && f.unmet.length ? h('div', { class: 'small fbUnmet' }, 'Claude could not do: ' + f.unmet.join('; ')) : null].filter(Boolean);
   }
 
   function openPanel(d, s) {

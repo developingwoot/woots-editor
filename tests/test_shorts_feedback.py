@@ -131,3 +131,45 @@ def test_the_feedback_job_runs_the_shorts_model_and_applies_the_answer(tmp_path,
     assert job["ok"], job["log"]
     s = shortsapp.read_raw(work, name)["shorts"][0]
     assert s["ranges"] == [[5, 30]] and s["feedback"][0]["status"] == "done"
+
+
+def fake_faces(monkeypatch, free):
+    """The face is on screen except in the `free` spans (seconds): what sample_faces would measure on the video."""
+    monkeypatch.setattr(shortsapp, "sample_faces", lambda work, name, lo, hi: [(round(t, 2), not any(a <= t < b for a, b in free))
+                                                                              for t in [lo + k * shortsapp.STEP_S for k in range(int((hi - lo) / shortsapp.STEP_S) + 1)]])
+
+
+def test_the_no_face_spans_come_from_the_samples():
+    samples = [(0.0, True), (0.5, False), (1.0, False), (1.5, True), (2.0, False)]
+    assert shortsapp.no_face_spans(samples) == [(0.5, 1.5), (2.0, 2.5)]
+    assert shortsapp.no_face_spans([]) == []
+
+
+def test_the_face_share_counts_the_words_spoken_over_the_face(monkeypatch):
+    work, name = project("Fb Share")
+    short = shortsapp.read_raw(work, name)["shorts"][0]
+    monkeypatch.setattr(shortsapp, "sample_faces", lambda *a: [])
+    assert shortsapp.face_share(work, name, short) is None                  # the video cannot be read: unknown, not zero
+    fake_faces(monkeypatch, [(2.0, 6.0), (10.0, 20.0)])
+    assert shortsapp.face_share(work, name, short) == 0.53                  # 60 words over 30 s: 28 of them are spoken over b-roll
+    assert shortsapp.face_share(work, name, {"ranges": [[10, 20]]}) == 0.0
+
+
+def test_the_feedback_prompt_tells_claude_where_the_face_is_not_and_the_result_says_how_much_is_left(tmp_path, monkeypatch):
+    work, name = project("Fb Prompt Picture")
+    fake_faces(monkeypatch, [(10.0, 20.0)])
+    shortsapp.add_feedback(work, name, "s1", "No talking head")
+    p = shortsapp.feedback_prompt(work, name, "s1")
+    assert "NOT on screen" in p and "10.0-20.0" in p
+    out = tmp_path / "tighten.json"
+    out.write_text(json.dumps({"ranges": [[10, 20]], "drop": [], "kept_text": "x", "note": "Kept the gear part."}), encoding="utf-8")
+    shortsapp.apply_feedback(work, name, "s1", out)
+    assert shortsapp.record_face_share(work, name, "s1") == 0.0
+    assert shortsview.feedback_of(shortsapp.read_raw(work, name)["shorts"][0])["face"] == 0.0
+
+
+def test_a_prompt_for_a_video_that_is_all_face_says_so(monkeypatch):
+    work, name = project("Fb All Face")
+    fake_faces(monkeypatch, [])
+    shortsapp.add_feedback(work, name, "s1", "No talking head")
+    assert "the whole time" in shortsapp.feedback_prompt(work, name, "s1")
