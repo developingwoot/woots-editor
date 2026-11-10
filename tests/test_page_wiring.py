@@ -38,7 +38,7 @@ def test_every_screen_module_parses():
         pytest.skip("node missing")
     bad = []
     for f in MODULES:
-        r = subprocess.run([node, "--check", "--input-type=module"], input=f.read_text(encoding="utf-8"), capture_output=True, text=True)
+        r = subprocess.run([node, "--check", "--input-type=module"], input=f.read_bytes(), capture_output=True)
         if r.returncode:
-            bad.append(f"{f.name}: {r.stderr.strip().splitlines()[0] if r.stderr.strip() else ''}")
+            bad.append(f"{f.name}: {r.stderr.decode('utf-8', 'replace').strip()[:200]}")
     assert not bad, bad
