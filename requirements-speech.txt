@@ -2,7 +2,7 @@
 # Install the torch build for the machine first: https://pytorch.org/get-started/locally/ (developed with torch 2.11.0+cu128 on an Nvidia GPU).
 # Without an Nvidia GPU transcription still works on the CPU but is much slower: read a short recording or work from the saved transcripts.
 torch==2.11.0
-torchaudio==2.11.0
+torchaudio==2.11.1
 transformers==5.20.1
 nemo-toolkit==3.0.0
 
