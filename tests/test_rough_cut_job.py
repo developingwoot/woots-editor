@@ -38,7 +38,9 @@ def test_make_the_rough_cut_end_to_end(server):
     job = wait(server.start_rough_cut(w, n))
     assert job["ok"] is True and "Kept as Cut 1." in job["log"], job["log"]
     vs = reviewnotes.versions(w, n, "cut")
-    assert [v["n"] for v in vs] == [1] and vs[0]["changes"][:3] == ["Cut 3 recordings together in outline order", "1 of 2 shots have footage", "1 shot still has nothing"] and vs[0]["changes"][-1].startswith("Rule check")
+    assert [v["n"] for v in vs] == [1] and [c for c in vs[0]["changes"] if not c.startswith("Not done")][:3] == ["Cut 3 recordings together in outline order", "1 of 2 shots have footage", "1 shot still has nothing"] and vs[0]["changes"][-1].startswith("Rule check")
+    skipped = [c for c in vs[0]["changes"] if c.startswith("Not done")]          # the fake Claude has no answers: each Claude step is named as skipped, first in the list
+    assert vs[0]["changes"][:len(skipped)] == skipped and any("reading the cut" in c for c in skipped) and all("fake claude has no" in c for c in skipped)
     assert len(vs[0]["clips"]) == 3 and (d / vs[0]["file"]).exists()
     beats = json.loads((d / f"{n}.beatmap.json").read_text(encoding="utf-8"))["beats"]
     assert beats[1]["on_screen"]["broll"][0]["file"] == "B Roll/gears close up.mp4"

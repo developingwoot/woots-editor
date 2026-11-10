@@ -129,7 +129,7 @@ def _run(work, name):
         model, effort = claudemodels.get("accuracy")
         data["model"] = model
         _write(work, name, data)
-        cmd = clauderun.command(builder.find_claude(), "Read,Write,WebSearch,WebFetch", ["Read", "Write", "WebSearch", "WebFetch"], "3.0", ["--model", model, "--effort", effort])
+        cmd = clauderun.command(builder.find_claude(), "Read,Write,WebSearch,WebFetch", ["Read", "Write", "WebSearch", "WebFetch"], claudemodels.budget("accuracy", "1.0"), ["--model", model, "--effort", effort])
         proc = clauderun.start(cmd, PROMPT.format(name=name), sb, builder.tool_env())
         err = []
         threading.Thread(target=lambda: err.append(proc.stderr.read()), daemon=True).start()

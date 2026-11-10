@@ -531,7 +531,7 @@ def _claude_run(job, fd, prompt, out_name, apply, budget="1.5", kind="edit"):
         job["log"] += msg
         job["ok"] = ok
         return
-    cmd = clauderun.command(builder.find_claude(), "Read,Write", ["Read", "Write"], budget, claudemodels.flags(kind))
+    cmd = clauderun.command(builder.find_claude(), "Read,Write", ["Read", "Write"], claudemodels.budget(kind, budget), claudemodels.flags(kind))
     result = None
     try:
         p = clauderun.start(cmd, prompt, fd, tool_env())
@@ -557,6 +557,8 @@ def _claude_run(job, fd, prompt, out_name, apply, budget="1.5", kind="edit"):
             job["ok"] = ok
         else:
             why = (result or {}).get("result") if (result or {}).get("is_error") else (result or {}).get("subtype")      # "OAuth session expired", not "success"
+            if why and "budget" in str(why):
+                why = "Claude ran out of budget for this step"
             job["log"] += (why or (err[0].strip()[-300:] if err and err[0] else f"exit {rc}")) + " (nothing was added)"
             job["ok"] = False
     except Exception as e:                      # noqa: BLE001
@@ -677,6 +679,14 @@ def start_rough_cut(work, name):
 
     def run():
         import hashlib
+        skipped = []
+
+        def claude_step(label, *a, **kw):                      # a step that fails does not stop the cut, but the host is told it was not done
+            n = len(job["log"])
+            _claude_run(job, *a, **kw)
+            if not job.get("ok"):
+                skipped.append(f"Not done: {label} ({job['log'][n:].strip()[:140] or 'it did not finish'})")
+            job["ok"] = True
         try:
             job["ok"] = True
             if rec["unread_refs"] and not fake:
@@ -702,27 +712,27 @@ def start_rough_cut(work, name):
                 found = shotmatch.match(work, name)
             if takes.load(work, name).get("v") != takes.VERSION:                # passages said more than once: the best take stays, the others become options
                 fd = WORK / work / "v2-run" / "takes"
-                _claude_run(job, fd, takes.brief(work, name, fd), "takes.json", lambda p, r: takes.apply_review(work, name, p), budget="0.6")
+                claude_step("comparing takes of the same passage", fd, takes.brief(work, name, fd), "takes.json", lambda p, r: takes.apply_review(work, name, p), budget="0.6", kind="story")
                 job["ok"] = True                       # without the read both takes stay in the cut
             with _lock:
                 other_takes = cutreview.apply(work, name, recut.MAX_PAUSE_S, recut.SILENCE_PAD_S, recut.SILENCE_LEAD_S, takes.drops(work, name), takes.restores(work, name))
                 held_back = list(cutreview.LOCKED_SKIPPED)
             if not coldopen.load(work, name).get("options") and not coldopen.load(work, name).get("skip"):
                 fd = WORK / work / "v2-run" / "coldopen"
-                _claude_run(job, fd, coldopen.brief(work, name, fd), "hooks.json", lambda p, r: coldopen.apply_options(work, name, p), budget="0.6")
+                claude_step("looking for a cold open", fd, coldopen.brief(work, name, fd), "hooks.json", lambda p, r: coldopen.apply_options(work, name, p), budget="0.6", kind="story")
                 job["ok"] = True                       # no cold open is fine: the cut still starts with the intro
             with _lock:
                 coldopen.insert(work, name)
             if cutreview.load(work, name).get("v") != cutreview.VERSION:         # the read of the cut comes after the cold open: the opening must fit the hook budget
                 fd = WORK / work / "v2-run" / "cutreview"
-                _claude_run(job, fd, cutreview.brief(work, name, fd), "review.json", lambda p, r: cutreview.apply_review(work, name, p), budget="0.6")
+                claude_step("reading the cut for repeats and contradictions", fd, cutreview.brief(work, name, fd), "review.json", lambda p, r: cutreview.apply_review(work, name, p), budget="0.6", kind="story")
                 job["ok"] = True                       # a cut nobody read is still a cut
             with _lock:
                 dropped = cutreview.apply(work, name, recut.MAX_PAUSE_S, recut.SILENCE_PAD_S, recut.SILENCE_LEAD_S)
                 held_back += [d for d in cutreview.LOCKED_SKIPPED if d not in held_back]
             if shotmatch.ambiguous(work, name):
                 fd = WORK / work / "v2-run" / "shots"
-                _claude_run(job, fd, shotmatch.pick_brief(work, name, fd), "picks.json", lambda p, r: shotmatch.apply_picks(work, name, p), budget="0.6")
+                claude_step("choosing between footage for the shots", fd, shotmatch.pick_brief(work, name, fd), "picks.json", lambda p, r: shotmatch.apply_picks(work, name, p), budget="0.6")
                 job["ok"] = True                       # the first choice stands when Claude could not choose
             with _lock:
                 recut.place_broll(work, name, shotmatch.load(work, name), shotmatch.plan(work, name))
@@ -733,7 +743,7 @@ def start_rough_cut(work, name):
             if lack:
                 fd = WORK / work / "v2-run" / "framing"
                 cfg = clipmap.read_json(WORK / work / f"{name}.footage.json", {}) or {}
-                _claude_run(job, fd, framing.brief(work, name, cfg.get("folder", ""), lack, fd), "framing.json", lambda p, r: framing.apply_answer(work, name, p, fd), budget="0.4")
+                claude_step("finding where the eyes are for punch-ins", fd, framing.brief(work, name, cfg.get("folder", ""), lack, fd), "framing.json", lambda p, r: framing.apply_answer(work, name, p, fd), budget="0.4")
                 job["ok"] = True                       # no zoom is made where the eyes are not known
             try:                                       # where the face is across the picture: a punch-in is centered on it (the creator 2026-10-29)
                 framing.find_faces(work, name, (clipmap.read_json(WORK / work / f"{name}.footage.json", {}) or {}).get("folder", ""),
@@ -747,7 +757,7 @@ def start_rough_cut(work, name):
             job["step"] = 3
             video, rows = cutview.render(work, name)
             left = [Path(x["rel"]).stem for x in built["left_out"] if "earlier take" in x["why"] or "said again" in x["why"]]
-            changes = [f"Cut {len(built['recordings'])} recordings together in outline order", f"{found['ready']} of {found['total']} shots have footage"]
+            changes = [*skipped, f"Cut {len(built['recordings'])} recordings together in outline order", f"{found['ready']} of {found['total']} shots have footage"]
             if left:
                 changes.append("Left out earlier takes of: " + ", ".join(left))
             for g in takes.load(work, name).get("groups", []):
@@ -830,7 +840,7 @@ def start_outline(work, name, note=""):
     prompt = outline.brief(work, name, fd, note)
 
     def run():
-        _claude_run(job, fd, prompt, "outline.md", lambda p, r: outline.apply_answer(work, name, p), budget="1.2")
+        _claude_run(job, fd, prompt, "outline.md", lambda p, r: outline.apply_answer(work, name, p), budget="1.2", kind="story")
         job["done"] = True
         job["elapsed"] = round(time.time() - job["started"], 1)
     threading.Thread(target=run, daemon=True).start()
@@ -845,7 +855,7 @@ def start_publish(work, name, note=""):
     prompt = publish.brief(work, name, fd, note)
 
     def run():
-        _claude_run(job, fd, prompt, "publish.json", lambda p, r: publish.apply_answer(work, name, p), budget="0.8")
+        _claude_run(job, fd, prompt, "publish.json", lambda p, r: publish.apply_answer(work, name, p), budget="0.8", kind="story")
         job["done"] = True
         job["elapsed"] = round(time.time() - job["started"], 1)
     threading.Thread(target=run, daemon=True).start()
@@ -1045,7 +1055,7 @@ def start_shorts_tighten(work, name, ids):
             out.unlink()
         prompt = shortsapp.tighten_prompt(work, name, sid)
         (fd / "PROMPT.md").write_text(channel.prompt(prompt), encoding="utf-8")
-        cmd = clauderun.command(builder.find_claude(), "Read,Write", ["Read", "Write"], "1.0", claudemodels.flags("shorts"))
+        cmd = clauderun.command(builder.find_claude(), "Read,Write", ["Read", "Write"], claudemodels.budget("shorts", "1.0"), claudemodels.flags("shorts"))
         p = clauderun.start(cmd, prompt, fd, tool_env())
         err, result = [], None
         threading.Thread(target=lambda: err.append(p.stderr.read()), daemon=True).start()
@@ -1091,7 +1101,7 @@ def _claude_json_run(fd, prompt, out_name, budget="1.0"):
     if out.exists():
         out.unlink()
     (fd / "PROMPT.md").write_text(channel.prompt(prompt), encoding="utf-8")
-    cmd = clauderun.command(builder.find_claude(), "Read,Write", ["Read", "Write"], budget, claudemodels.flags("shorts"))
+    cmd = clauderun.command(builder.find_claude(), "Read,Write", ["Read", "Write"], claudemodels.budget("shorts", budget), claudemodels.flags("shorts"))
     p = clauderun.start(cmd, prompt, fd, tool_env())
     err, result = [], None
     threading.Thread(target=lambda: err.append(p.stderr.read()), daemon=True).start()

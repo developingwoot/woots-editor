@@ -1,6 +1,7 @@
 """Which Claude model, and how hard it thinks, for each kind of background run. Chosen in Settings, saved in the per-user settings file.
 
-Jobs:  edit      the cut, outline, takes, cold open, shot matching, framing, publishing text: everything that is not graphics or shorts
+Jobs:  story     the outline, the hook, reading the cut, choosing between takes, titles: where judgement pays
+       edit      shot matching, framing, applying a note: the mechanical runs
        graphics  the Claude run that designs and builds a graphic
        critic    the second Claude that looks at a built graphic ("off" = no critic pass)
        accuracy  the fact check of the script and graphics
@@ -14,13 +15,20 @@ import config
 MODELS = ("sonnet", "opus", "haiku", "fable")
 EFFORTS = ("low", "medium", "high", "xhigh", "max")
 JOBS = {
-    "edit": ("Editing", "The rough cut, outline, takes, hooks, shot matching, framing and publishing text.", "sonnet", "medium"),
+    "story": ("Story", "The outline, the hook, reading the cut, choosing between takes, titles.", "opus", "high"),
+    "edit": ("Editing", "Matching shots, framing, and applying your notes to the cut.", "sonnet", "medium"),
     "graphics": ("Graphics", "Designing and building each graphic.", "sonnet", "medium"),
     "critic": ("Graphics critic", "Looks at each built graphic and lists what to fix. Off skips this pass.", "opus", "medium"),
     "accuracy": ("Fact check", "Checks the claims in the script and graphics against the web.", "opus", "high"),
     "shorts": ("Shorts", "Choosing shorts, tightening them, planning graphics, writing titles and applying your feedback.", "sonnet", "medium"),
 }
 OFF_OK = ("critic",)
+BUDGET_FACTOR = {"haiku": 0.5, "sonnet": 1.0, "opus": 3.0, "fable": 5.0}           # a dearer model gets a larger cap for the same job
+
+
+def budget(job: str, base) -> str:
+    """The money cap for one run: the cap written for Sonnet times the factor of the model this job uses."""
+    return f"{float(base) * BUDGET_FACTOR.get(get(job)[0], 1.0):.2f}"
 
 
 def default(job: str) -> tuple:

@@ -243,3 +243,5 @@ ul.facts .quote { font-style: italic; }
 .bed { padding: 8px 0; border-top: 1px solid #ddd; }
 .bed .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .auditionPlayer { width: 100%; max-width: 420px; margin-top: 6px; }
+
+.changes li.warn { color: #b45309; font-weight: 600; }

@@ -67,7 +67,30 @@ def test_the_graphics_choice_is_the_default_of_every_video_but_a_video_can_keep_
 
 def test_the_settings_screen_lists_every_job_with_its_choices():
     v = claudemodels.view()
-    assert [j["job"] for j in v["jobs"]] == ["edit", "graphics", "critic", "accuracy", "shorts"]
+    assert [j["job"] for j in v["jobs"]] == ["story", "edit", "graphics", "critic", "accuracy", "shorts"]
     assert "off" in next(j for j in v["jobs"] if j["job"] == "critic")["models"]
     assert "off" not in next(j for j in v["jobs"] if j["job"] == "shorts")["models"]
     assert v["efforts"] == ["low", "medium", "high", "xhigh", "max"]
+
+
+def test_the_story_job_is_opus_and_the_budget_follows_the_model():
+    assert claudemodels.get("story") == ("opus", "high")
+    assert claudemodels.budget("story", "0.6") == "1.80" and claudemodels.budget("edit", "0.6") == "0.60"
+    claudemodels.save({"edit": {"model": "haiku"}})
+    assert claudemodels.budget("edit", "1.0") == "0.50"
+    claudemodels.save({"edit": {"model": "fable"}})
+    assert claudemodels.budget("edit", "1.0") == "5.00"
+
+
+def test_each_run_uses_the_kind_the_plan_gives_it():
+    import re
+    from pathlib import Path
+    src = (Path(claudemodels.__file__).parent / "review_app" / "server.py").read_text(encoding="utf-8")
+    for label in ("comparing takes of the same passage", "looking for a cold open", "reading the cut for repeats and contradictions"):
+        line = next(x for x in src.splitlines() if f'claude_step("{label}"' in x)
+        assert 'kind="story"' in line, label
+    for out in ('"outline.md"', '"publish.json"'):
+        line = next(x for x in src.splitlines() if "_claude_run(job, fd, prompt, " + out in x)
+        assert 'kind="story"' in line, out
+    for label in ("choosing between footage", "finding where the eyes"):
+        assert 'kind="story"' not in next(x for x in src.splitlines() if f'claude_step("{label}' in x)
