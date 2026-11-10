@@ -173,7 +173,9 @@ export async function render(root, key, stage, setBusy) {
           : 'Space plays, arrows jump 5 seconds, N adds a note. Shift and drag over the clips to note a range.'), marks && marks.card, teach, stage === 'preview' ? musicCard(key) : null, stage === 'preview' ? factCheckCard(key) : null),
       h('aside', { class: 'right card' },
         h('div', { class: 'rhead' }, h('b', {}, 'Notes'), verMenu),
-        v.changes.length ? h('details', { class: 'changes' }, h('summary', {}, `What changed in ${v.label}`), h('ul', {}, ...v.changes.map(c => h('li', { class: c.startsWith('Not done') ? 'warn' : '' }, c)))) : null,
+        v.changes.length ? h('details', { class: 'changes' }, h('summary', {}, `What changed in ${v.label}`), ...(v.suggestions.length ? [h('div', { class: 'suggest', id: 'suggestions' }, h('b', {}, 'Claude suggests'),
+          ...v.suggestions.map(s => h('div', { class: 'row' }, h('span', { class: 'small' }, s.text),
+            h('button', { class: 'quiet', disabled: data.notes.some(n => n.text === s.text.replace(/\s+/g, ' ')), onclick: async () => draw(await post('/api/v2/notes', { op: 'add', text: s.text, t: s.t })) }, 'Add as a note'))))] : []), h('ul', {}, ...v.changes.map(c => h('li', { class: c.startsWith('Not done') ? 'warn' : '' }, c)))) : null,
         notesList, noteBox, rangeHint,
         h('div', { class: 'makebox' }, makeButton(b), h('div', { class: 'muted small' }, [b.detail, b.estimate].filter(Boolean).join(' · ')), copy))));
     if (reopen) { selected = reopen; reopen = null; const c = data.clips.find(x => x.ref === selected); if (c) { await openPanel(c); document.getElementById('actReplace').click(); } }

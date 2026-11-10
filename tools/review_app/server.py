@@ -803,7 +803,8 @@ def start_rough_cut(work, name):
                 changes.append(f"Rule check: {len(kept) - len(failing)} of {len(kept)} rules of the skill kept" + (". Not kept: " + "; ".join(failing) if failing else ""))
             except Exception as e:                      # the check is a report, never a reason to lose the cut
                 changes.append(f"Rule check could not run: {e}")
-            v = makeversion.finish_cut(work, name, video, rows, {"changes": changes, "applied_ids": []})
+            import story
+            v = makeversion.finish_cut(work, name, video, rows, {"changes": changes, "applied_ids": [], "suggestions": story.note_suggestions(work, name)})
             job["log"] += f" Kept as {reviewnotes.label('cut', v['n'])}."
         except Exception as e:                      # noqa: BLE001 - report anything to the UI
             fail(f"\n{e}")

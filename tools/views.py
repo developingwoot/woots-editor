@@ -254,7 +254,7 @@ def review(work: str, name: str, stage: str, version: int | None = None, running
         out["versions"].append({"n": v["n"], "label": label(v["n"]), "changes": v["changes"], "current": bool(cur) and v["n"] == cur["n"],
                                 "latest": v["n"] == vs[-1]["n"]})
     if cur:
-        out["version"] = {"n": cur["n"], "label": label(cur["n"]), "changes": cur["changes"],
+        out["version"] = {"n": cur["n"], "label": label(cur["n"]), "changes": cur["changes"], "suggestions": cur.get("suggestions", []),
                           "video": f"/media/{quote(work)}/{quote(cur['file'])}",
                           "latest": cur["n"] == vs[-1]["n"]}
         total = max([c["start"] + c["dur"] for c in cur["clips"]] + [0.0])

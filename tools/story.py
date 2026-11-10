@@ -104,6 +104,24 @@ def suggestions(work: str, name: str) -> list:
     return out
 
 
+def time_of(work: str, name: str, said: str) -> float:
+    """Seconds into the cut where a sentence is said (the start of the beat that holds it); 0 when it is not found."""
+    data = clipmap.read_json(beatmap.path_of(work, name), {"beats": []}) or {"beats": []}
+    want = cutreview.norm(said)[:60]
+    for b in data["beats"]:
+        if want and want in cutreview.norm(b.get("said") or ""):
+            return round(float(b.get("start", 0)), 1)
+    return 0.0
+
+
+def note_suggestions(work: str, name: str) -> list:
+    """Everything the cut read and the story read think could be better, as notes the host can add in one click: [{"text", "t"}]. Nothing is done until the host adds one and asks for the next cut."""
+    import cutreview as cr
+    out = [{"text": s["text"], "t": time_of(work, name, s["said"])} for s in suggestions(work, name)]
+    out += [{"text": f"Move \"{x['text'][:100]}\" before \"{x['before'][:80]}\" - {x['why']}", "t": time_of(work, name, x["text"])} for x in cr.load(work, name).get("suggestions", [])]
+    return out
+
+
 def opening_hint(work: str, name: str) -> str:
     """For the cold open run: the story's best opening, in words."""
     o = load(work, name).get("opening") or []

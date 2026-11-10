@@ -97,7 +97,7 @@ def finish_cut(work: str, name: str, video: Path, rows: list, result: dict) -> d
     """The rendered rough cut becomes the next version. `result` = {applied_ids, changes}; the first cut has none."""
     changes = result.get("changes") or (["The first cut"] if not reviewnotes.versions(work, name, "cut") else ["Made again, nothing changed"])
     clips = [{"start": r["start"], "dur": r["dur"], "ref": r["ref"]} for r in rows]
-    return reviewnotes.add_version(work, name, "cut", video, changes, clips, result.get("applied_ids"))
+    return reviewnotes.add_version(work, name, "cut", video, changes, clips, result.get("applied_ids"), result.get("suggestions"))
 
 
 def finish(work: str, name: str, stage: str, result: dict) -> dict:

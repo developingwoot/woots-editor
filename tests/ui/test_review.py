@@ -133,3 +133,21 @@ def test_picture_clip_needs_the_footage_looked_at_then_offers_shots(screen):
     assert "Looks like" in page.locator(".option").first.inner_text()
     assert page.locator("#visionNote").count() == 0
     assert clutter(visible_text(page)) == []
+
+
+def test_a_suggestion_in_what_changed_becomes_a_note_in_one_click(screen):
+    import cutview
+    import makeversion
+    import views
+    r = make_project.build(cut=True, title="ui suggest")
+    video, rows = cutview.render(r["work"], r["name"])
+    text = 'Move "so I changed the tooth shape" before "then the gears kept breaking" - a viewer needs the cause first'
+    makeversion.finish_cut(r["work"], r["name"], video, rows, {"changes": ["Cut it together"], "suggestions": [{"text": text, "t": 3.0}]})
+    page = screen(f"/v2/#/v/{views.key_of(r['work'], r['name'])}/rough-cut")
+    page.wait_for_selector(".changes")
+    page.click(".changes summary")
+    assert "Claude suggests" in page.inner_text("#suggestions")
+    page.click("#suggestions button")
+    expect(page.locator("#notes li")).to_have_count(1)
+    assert "tooth shape" in page.inner_text("#notes") and "B0" not in page.inner_text("#notes")
+    expect(page.locator("#suggestions button")).to_be_disabled()

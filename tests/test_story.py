@@ -61,3 +61,15 @@ def test_suggestions_are_notes_in_the_hosts_words_not_ids(tmp_path):
     story.apply_answer("zz-story4", "zz-story4", answer(tmp_path, {"weak": [{"ids": ["B07.1"], "why": "repeats"}], "order": [{"ids": ["B08.1"], "before": "B02.1", "why": "clearer"}]}))
     got = story.suggestions("zz-story4", "zz-story4")
     assert [g["kind"] for g in got] == ["weak", "order"] and OTHER[3] in got[0]["text"] and "B0" not in got[0]["text"] + got[1]["text"]
+
+
+def test_story_and_cut_review_suggestions_carry_the_time_they_are_said(tmp_path):
+    setup("zz-story5")
+    data = clipmap.read_json(beatmap.path_of("zz-story5", "zz-story5"))
+    for k, b in enumerate(data["beats"]):
+        b["start"] = 10.0 * k
+    clipmap.write_json(beatmap.path_of("zz-story5", "zz-story5"), data)
+    story.apply_answer("zz-story5", "zz-story5", answer(tmp_path, {"weak": [{"ids": ["B07.1"], "why": "repeats"}]}))
+    projectstore.write_json(cutreview.path("zz-story5", "zz-story5"), {"v": cutreview.VERSION, "suggestions": [{"text": OTHER[4], "before": TAKE1[0], "why": "clearer"}]})
+    got = story.note_suggestions("zz-story5", "zz-story5")
+    assert len(got) == 2 and got[0]["t"] == 60.0 and got[1]["t"] == 70.0 and OTHER[4] in got[1]["text"]
