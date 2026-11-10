@@ -29,4 +29,5 @@ See `docs/how-it-works.md` for the map of the code.
 - The rough cut follows the `youtube-edit` skill: numbers in `skills/youtube-edit/rough-cut.json`, rules in `rough-cut.md` (`tools/skillrules.py` reads them; the user's copy in
   `~/.claude/skills` wins; Claude runs are given copies). When a note teaches something general, update the skill and the code together.
 - Prompts say "the host" and "the channel"; `channel.prompt` puts the user's profile in front. A test fails if a string names a person.
-- Models are never in the repository: `tools/engines.py` lists them and downloads them on first use.
+- Large models are never in the repository: `tools/engines.py` lists them, each pinned to one commit (`revision`), and downloads them on first use; loaders take the local path it returns, never a bare repo name, and never `trust_remote_code`.
+  Only the two small face detectors in `models/` are kept in git (licences in `NOTICE.md`).

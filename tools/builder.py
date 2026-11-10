@@ -294,23 +294,21 @@ Then render the section at half size:  {posix(PYV)} {posix(HERE)}/sectionrender.
 It writes out/preview-half.mp4 and out/render.json. If it fails, read the message and fix the cause.
 Then write out/built.json = {{"B": {{"file": "<absolute .mov path>", "at": <seconds into the beat>}}}} for every graphic you rendered, and report.md (under 200 words): what you built, anything you are unsure about, anything that did not fit.
 
-HOW YOU WORK: create and change every file with the Write or Edit tool (Write makes the folders itself). Bash is allowed ONLY for the commands in steps 3, 4 and the section render above, plus ffprobe and ffmpeg: run each one as a single command, never chained with && or ; and never with cd, mkdir, cat, echo or python -c (they are refused, and a refused command wastes a turn). If a command is refused, do not give up: use the Write tool instead, or the allowed command exactly as written above. The overlay cannot outlast its beat (the section render cuts it at the end of the beat): if a graphic is longer than its beat, make it end with the beat and say so in report.md.
+HOW YOU WORK: create and change every file with the Write or Edit tool (Write makes the folders itself). Bash is allowed ONLY for the commands in steps 3, 4 and the section render above, plus ffprobe: run each one as a single command, never chained with && or ; and never with cd, mkdir, cat, echo or python -c (they are refused, and a refused command wastes a turn). If a command is refused, do not give up: use the Write tool instead, or the allowed command exactly as written above. The overlay cannot outlast its beat (the section render cuts it at the end of the beat): if a graphic is longer than its beat, make it end with the beat and say so in report.md.
 RULES: write only inside this folder. Never render at full quality. Do not add a graphic that is not in inputs/beats.json. Do not edit inputs/. No lower-thirds or name titles. If a graphic cannot work (e.g. it must cover the face), do NOT force it: say so in report.md and leave it out.
 """
 
 
-def agent_command(st: dict, prompt: str, role: str = "builder") -> list[str]:
+def agent_command(st: dict, role: str = "builder") -> list[str]:
+    """The argument list for a graphics run (the prompt goes in on standard input: clauderun.start)."""
+    import clauderun
     if role == "critic":                                                 # looks and writes a report: no editing of graphics, no rendering
         allow = ["Read", "Write", f"Bash(npx --yes {HF} snapshot *)", "Bash(ffprobe *)"]
-        return [find_claude(), "-p", channel.prompt(prompt), "--model", st["critic_model"], "--effort", st["critic_effort"], "--restricted",
-                "--tools", "Read,Write,Bash", "--allowedTools", *allow, "--permission-mode", "dontAsk", "--permission-prompts", "none",
-                "--max-budget-usd", str(st["critic_budget_usd"]), "--output-format", "stream-json", "--verbose"]
-    allow = ["Read", "Write", "Edit",
+        return clauderun.command(find_claude(), "Read,Write,Bash", allow, st["critic_budget_usd"], ["--model", st["critic_model"], "--effort", st["critic_effort"]])
+    allow = ["Read", "Write", "Edit",                                    # npx: only the two HyperFrames commands the brief uses; ffprobe reads a clip's length
              f"Bash({posix(PYV)} {posix(HERE)}/sectionrender.py *)",
-             f"Bash(npx --yes {HF} *)", "Bash(ffprobe *)", "Bash(ffmpeg *)"]
-    return [find_claude(), "-p", channel.prompt(prompt), "--model", st["build_model"], "--effort", st["build_effort"], "--restricted",
-            "--tools", "Read,Write,Edit,Bash", "--allowedTools", *allow, "--permission-mode", "dontAsk", "--permission-prompts", "none",
-            "--max-budget-usd", str(st["build_budget_usd"]), "--output-format", "stream-json", "--verbose"]
+             f"Bash(npx --yes {HF} render *)", f"Bash(npx --yes {HF} snapshot *)", "Bash(ffprobe *)"]
+    return clauderun.command(find_claude(), "Read,Write,Edit,Bash", allow, st["build_budget_usd"], ["--model", st["build_model"], "--effort", st["build_effort"]])
 
 
 FAKE_AGENT = r"""
@@ -363,10 +361,13 @@ def run_agent(work, name, sid, sb, key, st, prompt, role="builder", tag=""):
         cmd = [sys.executable, "-c", FAKE_AGENT, str(sb), os.environ.get("WOOT_BUILD_FAKE_SECS", "2"),
                os.environ.get("WOOT_BUILD_FAKE_EVIL", ""), str(PYV), str(HERE / "sectionrender.py")]
     else:
-        cmd = agent_command(st, prompt, role)
+        cmd = agent_command(st, role)
     (sb / f"BRIEF{tag}.md").write_text(channel.prompt(prompt), encoding="utf-8")
-    proc = subprocess.Popen(cmd, cwd=sb, env=tool_env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
-                            text=True, encoding="utf-8", errors="replace")
+    if fake:
+        proc = subprocess.Popen(cmd, cwd=sb, env=tool_env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True, encoding="utf-8", errors="replace")
+    else:
+        import clauderun
+        proc = clauderun.start(cmd, prompt, sb, tool_env())
     _running[key]["proc"] = proc
     err_chunks = []
     threading.Thread(target=lambda: err_chunks.append(proc.stderr.read()), daemon=True).start()

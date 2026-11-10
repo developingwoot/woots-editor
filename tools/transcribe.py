@@ -48,7 +48,7 @@ class Whisper:
     """The Whisper family (faster-whisper): runs on an Nvidia card or on the CPU, gives a time for every word. Same job as Parakeet for computers without Parakeet's requirements."""
     is_whisper = True
 
-    def __init__(self, repo: str, device: str | None = None):
+    def __init__(self, repo: str, device: str | None = None, path: str | None = None):
         try:                                                     # ctranslate2 finds the CUDA libraries that ship with torch
             import torch
             lib = Path(torch.__file__).parent / "lib"
@@ -68,7 +68,7 @@ class Whisper:
         gpus = hardware.gpus()
         device = device or ("cuda" if gpus else "cpu")
         self.repo, self.device = repo, device
-        self.model = WhisperModel(repo, device=device, compute_type=compute_type(device, max((g["vram_gb"] for g in gpus), default=0)))
+        self.model = WhisperModel(path or repo, device=device, compute_type=compute_type(device, max((g["vram_gb"] for g in gpus), default=0)))
 
     def transcribe(self, wav: str, prompt: str = ""):
         import soundfile as sf                                   # the 16 kHz mono file we made: no need for faster-whisper's own decoder (it needs a newer `av`)
@@ -115,9 +115,10 @@ def load_model():
             e = engines.by_id("whisper-large-v3" if hardware.gpus() else "whisper-small")
             print(f"Parakeet is not available ({why}); reading with {e['name']} instead.", flush=True)
     if e.get("runner") == "whisper":
-        return Whisper(e["repo"])
+        return Whisper(e["repo"], path=engines.local_path(e))
     import nemo.collections.asr as nemo_asr
-    model = nemo_asr.models.ASRModel.from_pretrained(MODEL_NAME)
+    nemo_file = next(Path(engines.local_path(e)).glob("*.nemo"))      # the pinned revision, loaded from disk
+    model = nemo_asr.models.ASRModel.restore_from(str(nemo_file))
     return model.cuda().eval()
 
 

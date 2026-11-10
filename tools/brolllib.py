@@ -150,7 +150,7 @@ def build(work: str, limit: int | None, name: str | None = None):
     if todo and not fake():
         import torch
         from transformers import AutoModelForImageTextToText, AutoProcessor, BitsAndBytesConfig
-        vlm = engines.chosen("vision")["repo"]                      # the model the user picked in Settings (Qwen3-VL 8B unless changed)
+        vlm = engines.local_path(engines.chosen("vision"))          # the model the user picked in Settings (Qwen3-VL 8B unless changed), the pinned revision, from disk
         proc = AutoProcessor.from_pretrained(vlm)
         model = AutoModelForImageTextToText.from_pretrained(vlm, quantization_config=BitsAndBytesConfig(
             load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16), device_map="cuda")
@@ -204,8 +204,8 @@ def build(work: str, limit: int | None, name: str | None = None):
         import torch
         from PIL import Image
         from transformers import AutoModel, AutoProcessor
-        sm = AutoModel.from_pretrained(SIGLIP).to("cuda").eval()
-        sp = AutoProcessor.from_pretrained(SIGLIP)
+        sm = AutoModel.from_pretrained(engines.local_path(engines.by_id("siglip"))).to("cuda").eval()
+        sp = AutoProcessor.from_pretrained(engines.local_path(engines.by_id("siglip")))
         for i in range(0, len(items), 16):
             batch = items[i:i + 16]
             x = sp(images=[Image.open(f).convert("RGB") for _, f, _ in batch], return_tensors="pt").to("cuda")
@@ -238,8 +238,8 @@ def search(work: str, query: str, top: int = 8, name: str | None = None, exclude
     else:
         import torch
         from transformers import AutoModel, AutoProcessor
-        sm = AutoModel.from_pretrained(SIGLIP).eval()                                   # the text side is small: the CPU is fine
-        sp = AutoProcessor.from_pretrained(SIGLIP)
+        sm = AutoModel.from_pretrained(engines.local_path(engines.by_id("siglip"))).eval()                                   # the text side is small: the CPU is fine
+        sp = AutoProcessor.from_pretrained(engines.local_path(engines.by_id("siglip")))
         x = sp(text=[query], padding="max_length", return_tensors="pt")
         with torch.no_grad():
             q = sm.get_text_features(**x)

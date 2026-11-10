@@ -69,14 +69,14 @@ def test_download_runs_in_the_background_and_reports_errors(monkeypatch):
     import threading
     gate = threading.Event()
     monkeypatch.setattr(engines.hardware, "free_gb", lambda p: 500.0)
-    monkeypatch.setattr(engines, "_fetch", lambda repo: gate.wait(5))
+    monkeypatch.setattr(engines, "_fetch", lambda repo, revision: gate.wait(5))
     e = engines.by_id("siglip")
     assert engines.download("siglip")["state"] == "running"
     assert engines.download("siglip")["state"] == "running"          # a second press starts nothing new
     gate.set()
     engines._dl_thread_join = [t.join(5) for t in threading.enumerate() if t.name == "download-siglip"]
     assert engines._dl[e["repo"]]["state"] == "done"
-    monkeypatch.setattr(engines, "_fetch", lambda repo: (_ for _ in ()).throw(OSError("no network")))
+    monkeypatch.setattr(engines, "_fetch", lambda repo, revision: (_ for _ in ()).throw(OSError("no network")))
     engines._dl.clear()
     engines.download("siglip")
     [t.join(5) for t in threading.enumerate() if t.name == "download-siglip"]
@@ -120,7 +120,8 @@ def test_whisper_segments_become_the_transcript_format():
 def test_without_parakeet_the_reader_falls_back_to_whisper(monkeypatch, capsys):
     import transcribe
     made = []
-    monkeypatch.setattr(transcribe, "Whisper", lambda repo: made.append(repo) or "whisper")
+    monkeypatch.setattr(transcribe, "Whisper", lambda repo, path=None: made.append(repo) or "whisper")
+    monkeypatch.setattr(transcribe.engines, "local_path", lambda e: "/x")
     monkeypatch.setattr(transcribe, "_parakeet_unavailable", lambda: "there is no Nvidia graphics card")
     monkeypatch.setattr(transcribe.hardware if hasattr(transcribe, "hardware") else hardware, "gpus", lambda: [])
     assert transcribe.load_model() == "whisper" and made == ["Systran/faster-whisper-small"]
@@ -133,3 +134,25 @@ def test_a_hyphen_or_apostrophe_joins_the_word_before_it():
     words, _, _ = transcribe.words_from(segs)
     assert [w["word"] for w in words] == ["The", "G-code,", "it's", "here"]
     assert words[1]["start"] == 0.2 and words[1]["end"] == 0.8
+
+
+def test_every_model_is_pinned_to_one_commit_and_the_download_uses_it(monkeypatch):
+    import re
+    import sys
+    import types
+    for e in engines.CATALOG:
+        assert re.fullmatch(r"[0-9a-f]{40}", e.get("revision", "")), e["id"]
+    seen = []
+    fake = types.SimpleNamespace(snapshot_download=lambda repo, **kw: seen.append((repo, kw.get("revision"))) or "/x")
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake)
+    e = engines.CATALOG[0]
+    assert engines.local_path(e) == "/x" and seen == [(e["repo"], e["revision"])]
+
+
+def test_no_loader_passes_trust_remote_code_or_a_bare_repo_name():
+    from pathlib import Path
+    for f in (Path(engines.__file__).parent).glob("*.py"):
+        text = f.read_text(encoding="utf-8")
+        assert "trust_remote_code=True" not in text.replace("never trust_remote_code", ""), f.name
+    for name in ("transcribe.py", "brolllib.py"):
+        assert "from_pretrained(MODEL_NAME)" not in (Path(engines.__file__).parent / name).read_text(encoding="utf-8")

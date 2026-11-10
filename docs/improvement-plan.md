@@ -25,7 +25,9 @@ It sits next to `quality-plan.md` (footage, rhythm, templates) and does not repe
 ---
 
 ## Status
-- Done 2026-11-10: A1, A2, A3, V1, V2, V3, D4, D7, D8, D9.
+- Done 2026-11-10: A1, A2, A3, V1, V2, V3, D4, D7, D8, D9, A4, A5.
+- A4 as built: `tools/clauderun.py` builds every background Claude command (restricted mode already confines the file tools to the run's folder in CLI 2.1.312; added `--strict-mcp-config`, the prompt on standard input, only `render` and `snapshot` of the pinned HyperFrames, no `ffmpeg`, a web-text-is-not-instructions line in the fact check). One real run checked by hand. `usage.refresh_plan` (no tools, fixed prompt) is left as it was.
+- A5 as built: every catalogue entry has a 40-character `revision`; loaders use `engines.local_path()`; the Parakeet load (`restore_from` the pinned `.nemo`) was not run here (no GPU test). The rule in CLAUDE.md now says large models.
 - Step 3 as built: `undo.js` (10-second Undo toast after any save that changed a plan file, and a History panel on every video page); `extras.js` (fact check card on Preview and Final, music chooser on Preview, Resolve export on Final, usage line on Home via `/api/usage/week`); Outline has "Ask Claude to fill these" for empty header fields. `projectstore.write_*` now records the file as it was before its first change, so the first edit can be undone too.
   Not done from D7: "Add as a note" on a finding (waits for C3: it needs a time in the video). Dialogs still use `alert` (D2).
 - V1/V2 as built: the 16 older screen files and every route only they used are gone (`/` redirects to `/v2/`); kept routes: everything under `/api/v2/`, `/api/code`, `/api/fs`, `/media/`, `/shortmedia/`, `/api/shorts/frame`, and `/api/history*`, `/api/accuracy`, `/api/music`, `/api/resolve`, `/api/usage`, `/api/dash*` for D4 and D7 to D9. Ten orphan command-line scripts were deleted (catalog_music, contact, doublecuts, intro_previews, pacing, remix_audio, whatsat, splice, speakers, track).

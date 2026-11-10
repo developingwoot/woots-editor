@@ -81,6 +81,7 @@ import publish                                    # noqa: E402  (v2 publishing d
 import teaching                                   # noqa: E402  (v2 teaching moments)
 import clipmap                                    # noqa: E402  (takes -> script lines, the creator's corrections)
 import beatmap                                    # noqa: E402  (the plan: what is said / on screen, graphics, checks)
+import clauderun                                  # noqa: E402  (the one place a background Claude command is built)
 import builder                                    # noqa: E402  (stage 5: sections, 3-slot scheduler, headless Claude runs)
 import usage                                      # noqa: E402  (Dashboard: Claude cost, free local work, time saved)
 import musicaudition                              # noqa: E402  (Build tab: hear another music track in place of a bed)
@@ -529,13 +530,10 @@ def _claude_run(job, fd, prompt, out_name, apply, budget="1.5", kind="edit"):
         job["log"] += msg
         job["ok"] = ok
         return
-    cmd = [builder.find_claude(), "-p", channel.prompt(prompt), *claudemodels.flags(kind), "--restricted", "--tools", "Read,Write",
-           "--allowedTools", "Read", "Write", "--permission-mode", "dontAsk", "--permission-prompts", "none", "--max-budget-usd", budget,
-           "--output-format", "stream-json", "--verbose"]
+    cmd = clauderun.command(builder.find_claude(), "Read,Write", ["Read", "Write"], budget, claudemodels.flags(kind))
     result = None
     try:
-        p = subprocess.Popen(cmd, cwd=fd, env=tool_env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
-                             text=True, encoding="utf-8", errors="replace")
+        p = clauderun.start(cmd, prompt, fd, tool_env())
         err = []
         threading.Thread(target=lambda: err.append(p.stderr.read()), daemon=True).start()
         for line in p.stdout:
@@ -1046,11 +1044,8 @@ def start_shorts_tighten(work, name, ids):
             out.unlink()
         prompt = shortsapp.tighten_prompt(work, name, sid)
         (fd / "PROMPT.md").write_text(channel.prompt(prompt), encoding="utf-8")
-        cmd = [builder.find_claude(), "-p", channel.prompt(prompt), *claudemodels.flags("shorts"), "--restricted", "--tools", "Read,Write",
-               "--allowedTools", "Read", "Write", "--permission-mode", "dontAsk", "--permission-prompts", "none", "--max-budget-usd", "1.0",
-               "--output-format", "stream-json", "--verbose"]
-        p = subprocess.Popen(cmd, cwd=fd, env=tool_env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
-                             text=True, encoding="utf-8", errors="replace")
+        cmd = clauderun.command(builder.find_claude(), "Read,Write", ["Read", "Write"], "1.0", claudemodels.flags("shorts"))
+        p = clauderun.start(cmd, prompt, fd, tool_env())
         err, result = [], None
         threading.Thread(target=lambda: err.append(p.stderr.read()), daemon=True).start()
         for line in p.stdout:
@@ -1095,11 +1090,8 @@ def _claude_json_run(fd, prompt, out_name, budget="1.0"):
     if out.exists():
         out.unlink()
     (fd / "PROMPT.md").write_text(channel.prompt(prompt), encoding="utf-8")
-    cmd = [builder.find_claude(), "-p", channel.prompt(prompt), *claudemodels.flags("shorts"), "--restricted", "--tools", "Read,Write",
-           "--allowedTools", "Read", "Write", "--permission-mode", "dontAsk", "--permission-prompts", "none", "--max-budget-usd", budget,
-           "--output-format", "stream-json", "--verbose"]
-    p = subprocess.Popen(cmd, cwd=fd, env=tool_env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL,
-                         text=True, encoding="utf-8", errors="replace")
+    cmd = clauderun.command(builder.find_claude(), "Read,Write", ["Read", "Write"], budget, claudemodels.flags("shorts"))
+    p = clauderun.start(cmd, prompt, fd, tool_env())
     err, result = [], None
     threading.Thread(target=lambda: err.append(p.stderr.read()), daemon=True).start()
     for line in p.stdout:
