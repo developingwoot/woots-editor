@@ -156,9 +156,18 @@ def plan(work, name, sid) -> dict:
     return {"id": sid, "pieces": out, "total": round(total, 1), "src": list(cfg.get("_size") or sh.DEFAULT_SIZE), "text": text}
 
 
-def _num_ranges(v, what):
+def _num_ranges(v, what, sources=None):
+    """Clean list of [start, end] spans. For a short made of several recordings (`sources` = their ids) each one is {"src", "a", "b"} and stays so."""
     out = []
     for r in v or []:
+        if sources is not None:
+            if not (isinstance(r, dict) and r.get("src") in sources):
+                raise ValueError(f"{what}: each one needs a recording ({', '.join(sorted(sources))}), a start and an end")
+            a, b = float(r["a"]), float(r["b"])
+            if not (0 <= a < b):
+                raise ValueError(f"{what}: {a}-{b} is not a start before an end")
+            out.append({"src": r["src"], "a": round(a, 2), "b": round(b, 2)})
+            continue
         if not (isinstance(r, (list, tuple)) and len(r) == 2):
             raise ValueError(f"{what}: each one needs a start and an end")
         a, b = float(r[0]), float(r[1])
@@ -532,21 +541,40 @@ Output: write tighten.json in the current folder (Write tool), exactly this shap
 """
 
 
+def is_multi(short: dict) -> bool:
+    """True for a short made from several recordings (raw footage): its ranges and cuts are {"src", "a", "b"}."""
+    return any(isinstance(r, dict) for r in short.get("ranges") or [])
+
+
+MULTI_NOTE = """
+This short is joined from several recordings, so every range and every drop span is an object {"src": the recording's id, "a": start, "b": end} instead of [start, end], times in that recording's own seconds.
+"""
+
+
 def tighten_prompt(work: str, name: str, sid: str) -> str:
     cfg = sh.load(cfg_file(work, name))
     short = _short(cfg, sid)
-    words = cfg["_tr"]["words"]
-    lo = max(0.0, min(a for a, _ in short["ranges"]) - 12)
-    hi = max(b for _, b in short["ranges"]) + 15
-    ctx = []
-    for s in cfg["_spk"] or [{"start": x["start"], "end": x["end"], "speaker": "", "text": x["text"]} for x in cfg["_tr"]["segments"]]:
-        if s["end"] >= lo and s["start"] <= hi:
-            ctx.append(f"[{s['start']:.1f}-{s['end']:.1f}] {s.get('speaker') or ''}: {s['text']}")
-    sel = []
-    for ri, (a, b) in enumerate(short["ranges"]):
-        ws = [w for w in words if w["start"] >= a - 0.06 and w["end"] <= b + 0.04]
-        sel.append(f"RANGE {ri + 1} ({a}-{b}):\n" + " ".join(f"{w['word']}<{w['start']:.2f}-{w['end']:.2f}>" for w in ws))
-    return (TIGHTEN_RULES + f"\nThe short: \"{short.get('title', '')}\". On-screen hook title: \"{short.get('hook', '')}\".\n"
+    multi = is_multi(short)
+    rules = TIGHTEN_RULES + (MULTI_NOTE if multi else "")
+    ctx, sel = [], []
+    if multi:                                                   # several recordings: every range names its own
+        sources = sh.srcs(cfg)
+        for ri, (src, a, b) in enumerate(sh.norm_ranges(cfg, short)):
+            tr = sources[src]["tr"]
+            ctx.extend(f"[{src} {s['start']:.1f}-{s['end']:.1f}]: {s['text']}" for s in tr["segments"] if s["end"] >= a - 12 and s["start"] <= b + 15)
+            ws = [w for w in tr["words"] if w["start"] >= a - 0.06 and w["end"] <= b + 0.04]
+            sel.append(f"RANGE {ri + 1} (recording {src}, {a}-{b}):\n" + " ".join(f"{w['word']}<{w['start']:.2f}-{w['end']:.2f}>" for w in ws))
+    else:
+        words = cfg["_tr"]["words"]
+        lo = max(0.0, min(a for a, _ in short["ranges"]) - 12)
+        hi = max(b for _, b in short["ranges"]) + 15
+        for s in cfg["_spk"] or [{"start": x["start"], "end": x["end"], "speaker": "", "text": x["text"]} for x in cfg["_tr"]["segments"]]:
+            if s["end"] >= lo and s["start"] <= hi:
+                ctx.append(f"[{s['start']:.1f}-{s['end']:.1f}] {s.get('speaker') or ''}: {s['text']}")
+        for ri, (a, b) in enumerate(short["ranges"]):
+            ws = [w for w in words if w["start"] >= a - 0.06 and w["end"] <= b + 0.04]
+            sel.append(f"RANGE {ri + 1} ({a}-{b}):\n" + " ".join(f"{w['word']}<{w['start']:.2f}-{w['end']:.2f}>" for w in ws))
+    return (rules + f"\nThe short: \"{short.get('title', '')}\". On-screen hook title: \"{short.get('hook', '')}\".\n"
             + ("Why it was picked: " + short["why"] + "\n" if short.get("why") else "")
             + "\nCURRENT SELECTION (every word with its start-end seconds; the transcript mishears " + (", ".join(channel.spellings()) or "some words") + "):\n" + "\n".join(sel)
             + "\n\nSURROUNDING TRANSCRIPT (for context and for choosing better start/end points):\n" + "\n".join(ctx) + "\n"
@@ -557,12 +585,13 @@ def apply_tighten(work: str, name: str, sid: str, path: Path) -> dict:
     data = json.loads(path.read_text(encoding="utf-8-sig"))
     raw = read_raw(work, name)
     s = _short(raw, sid)
-    ranges = _num_ranges(data.get("ranges"), "ranges") or s["ranges"]
-    drop = _num_ranges(data.get("drop"), "cuts")
+    cfg = sh.load(cfg_file(work, name))
+    ids = set(sh.srcs(cfg)) if is_multi(s) else None
+    ranges = _num_ranges(data.get("ranges"), "ranges", ids) or s["ranges"]
+    drop = _num_ranges(data.get("drop"), "cuts", ids)
     if not drop and ranges == s["ranges"]:
         raise ValueError("Claude proposed no cuts")
     trial = dict(s, ranges=ranges, drop=drop)
-    cfg = sh.load(cfg_file(work, name))
     kept = sh.kept_words(cfg, trial)
     speech = sum(w["e"] - w["s"] for w in kept)
     if len(kept) < 8 or speech < 4:
@@ -717,12 +746,19 @@ Output: write tighten.json in the current folder (Write tool), exactly this shap
 """
 
 
+FACE_RULE = FEEDBACK_RULES[FEEDBACK_RULES.index("If the host does not want the talking head"):FEEDBACK_RULES.index("Output: write tighten.json")]
+RAW_FACE_RULE = ("This short is made from raw recordings: b-roll is laid over the words separately and this run cannot add, move or remove it. If a note is about the picture "
+                 "(no talking head, more b-roll), say in \"unmet\" that it has to be done on the b-roll, and still apply what the words can do.\n\n")
+
+
 def feedback_prompt(work: str, name: str, sid: str) -> str:
     raw = read_raw(work, name)
     if not open_feedback(raw, sid):
         raise ValueError("write some feedback on this short first")
     body = tighten_prompt(work, name, sid).split("\nThe short: ", 1)[1]
     spans = picture_map(work, name, _short(raw, sid))
+    if is_multi(_short(raw, sid)):                             # raw footage: the picture is the talking recording, with b-roll laid over by overlays that this run does not change
+        return FEEDBACK_RULES.replace(FACE_RULE, RAW_FACE_RULE) + MULTI_NOTE + "\nThe short: " + body
     pic = ("\nPICTURE (measured on the video): the host's face is NOT on screen during these seconds (b-roll, a graphic or a screen capture); any other second shows the face:\n"
            + "\n".join(f"  {a:.1f}-{b:.1f}" for a, b in spans) + "\n") if spans else (
         "\nPICTURE: the face is on screen the whole time around this short, or the video could not be read, so no second is known to be free of it.\n")
@@ -734,12 +770,13 @@ def apply_feedback(work: str, name: str, sid: str, path: Path) -> dict:
     data = json.loads(path.read_text(encoding="utf-8-sig"))
     raw = read_raw(work, name)
     s = _short(raw, sid)
-    ranges = _num_ranges(data.get("ranges"), "ranges") or s["ranges"]
-    drop = _num_ranges(data.get("drop"), "cuts") if "drop" in data else s.get("drop", [])
+    cfg = sh.load(cfg_file(work, name))
+    ids = set(sh.srcs(cfg)) if is_multi(s) else None
+    ranges = _num_ranges(data.get("ranges"), "ranges", ids) or s["ranges"]
+    drop = _num_ranges(data.get("drop"), "cuts", ids) if "drop" in data else s.get("drop", [])
     changed_cuts = ranges != s["ranges"] or drop != s.get("drop", [])
     if changed_cuts:
         trial = dict(s, ranges=ranges, drop=drop)
-        cfg = sh.load(cfg_file(work, name))
         kept = sh.kept_words(cfg, trial)
         speech = sum(w["e"] - w["s"] for w in kept)
         if len(kept) < 8 or speech < 4:

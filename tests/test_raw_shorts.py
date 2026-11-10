@@ -254,3 +254,33 @@ def test_a_newer_story_from_the_raw_footage_carries_the_hosts_brief_and_leaves_t
                                      "sources": [{"id": "t1", "path": str(talk), "transcript": str(rawtr), "kind": "talk", "mistakes": []}], "shorts": []})
     assert "THE HOST'S BRIEF" in shortsapp.find_prompt(work, rname) and "redo without the slicer part" in shortsapp.find_prompt(work, rname)
     assert [s["id"] for s in shortsapp.read_raw(work, name)["shorts"]] == ["s1"]   # the original project is untouched
+
+
+def raw_project_with_a_short(tmp_path):
+    work = workflow.create("Raw Feedback")["work"]
+    wd = workflow.WORK / work
+    talk = tmp_path / "take1.mp4"
+    tr = wd / "take1.transcript.json"
+    said(tr, TALK, seconds=20)
+    name = "raw-fb"
+    shortsapp.save_raw(work, name, {"mode": "raw", "folder": str(tmp_path), "source": str(talk), "transcript": str(tr), "speakers": "",
+                                     "sources": [{"id": "t1", "path": str(talk), "transcript": str(tr), "kind": "talk", "mistakes": []}],
+                                     "shorts": [{"id": "s1", "title": "Gears", "hook": "H", "ranges": [{"src": "t1", "a": 0.2, "b": 8.0}], "status": ""}]})
+    return work, name
+
+
+def test_feedback_and_tighten_work_on_a_short_from_raw_footage(tmp_path):
+    work, name = raw_project_with_a_short(tmp_path)
+    shortsapp.add_feedback(work, name, "s1", "Start on the answer")
+    p = shortsapp.feedback_prompt(work, name, "s1")                          # used to fail: too many values to unpack
+    assert "recording t1" in p and "Start on the answer" in p and '"src"' in p
+    assert "recording t1" in shortsapp.tighten_prompt(work, name, "s1")
+    out = tmp_path / "tighten.json"
+    out.write_text(json.dumps({"ranges": [{"src": "t1", "a": 0.2, "b": 8.0}], "drop": [{"src": "t1", "a": 1.2, "b": 1.8}], "kept_text": "x", "note": "Cut a bit."}), encoding="utf-8")
+    shortsapp.apply_feedback(work, name, "s1", out)
+    s = shortsapp.read_raw(work, name)["shorts"][0]
+    assert s["drop"] == [{"src": "t1", "a": 1.2, "b": 1.8}] and s["feedback"][0]["status"] == "done"
+    assert shortsapp.record_face_share(work, name, "s1") is None             # no finished video to measure
+    out.write_text(json.dumps({"ranges": [{"src": "zz", "a": 0.2, "b": 8.0}]}), encoding="utf-8")
+    with pytest.raises(ValueError, match="recording"):
+        shortsapp.apply_tighten(work, name, "s1", out)
