@@ -1,0 +1,7 @@
+{
+  "title_max_chars": 60,
+  "titles": 5,
+  "hook_max_chars": 200,
+  "tags_max": 12,
+  "thumb_words_max": 3
+}

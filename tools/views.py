@@ -354,7 +354,7 @@ def final(work: str, name: str, running: bool = False) -> dict:
                       "detail": why or ("Ready to render" if not warnings else f"{len(warnings)} thing{'s' if len(warnings) != 1 else ''} to look at first"),
                       "estimate": minutes_text(_PIPELINES["final"][2])},
            "finals": finals, "latest": None,
-           "publish": {"titles": pd["titles"], "title": pd["title"], "description": pd["description"], "tags": pd["tags"],
+           "publish": {"titles": pd["titles"], "title_why": pd["title_why"], "pinned_comment": pd["pinned_comment"], "title": pd["title"], "description": pd["description"], "tags": pd["tags"],
                        "thumbnail_prompts": pd["thumbnail_prompts"], "thumbnail_text": pd["thumbnail_text"], "thumb": pd["thumb"],
                        "draft": f"/api/v2/thumbdraft?key={quote(key)}&v={int(os.path.getmtime(thumb))}" if thumb.exists() else None,
                        "button": "Ask Claude to redo" if pd["titles"] else "Ask Claude to write the publishing details", "enabled": not running},

@@ -41,7 +41,7 @@ def base(tmp_path_factory):
     (fake / "answer.json").write_text(json.dumps({"applied": [{"id": 1, "summary": "Moved the shirt clip earlier"}]}), encoding="utf-8")
     (fake / "teaching.json").write_text(json.dumps({"moments": [{"beat": "B02", "term": "retraction", "why": "A newcomer does not know the word"}]}), encoding="utf-8")
     (fake / "options.json").write_text(json.dumps({"options": [{"rel": "take2.mp4", "start": 0.0, "end": 3.0, "why": "He says it again here"}]}), encoding="utf-8")
-    (fake / "publish.json").write_text(json.dumps({"titles": ["Why my first linkage failed", "I built a linkage and it broke"], "hook": "Why did my 3D printed linkage fail?",
+    (fake / "publish.json").write_text(json.dumps({"titles": [{"title": "Why my first linkage failed", "why": "It promises the cause of the failure"}, "I built a linkage and it broke"], "pinned_comment": "What would you print first?", "hook": "Why did my 3D printed linkage fail?",
                                                     "summary": "I redesigned it until it worked.", "credits": [], "tags": ["linkage", "3d printing"],
                                                     "thumbnail_prompts": ["Sam holding a broken gear, navy and orange, Oswald Bold text"], "thumbnail_text": ["IT BROKE"]}), encoding="utf-8")
     (fake / "outline.md").write_text(OUTLINE_ANSWER, encoding="utf-8")

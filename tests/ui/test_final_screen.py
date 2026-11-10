@@ -48,6 +48,7 @@ def test_claude_writes_publishing_details_which_can_be_chosen_and_edited(screen)
     assert page.inner_text("#writeBtn") == "Ask Claude to write the publishing details"
     page.click("#writeBtn")
     expect(page.locator("#titles li")).to_have_count(2, timeout=30000)
+    assert "It promises the cause" in page.locator("#titles").inner_text() and "What would you print first?" in page.inner_text("#pinnedBox")
     assert "Why did my 3D printed linkage fail?" in page.input_value("#description")
     assert page.input_value("#tags") == "linkage, 3d printing"
     assert "Oswald Bold" in page.locator("#prompts").inner_text()

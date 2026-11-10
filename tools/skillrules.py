@@ -42,6 +42,8 @@ SHORTS_DEFAULTS = {"min_s": 10.0, "favour_s": 60.0, "max_s": 180.0, "minutes_per
                    "raw_min_words": 20, "raw_min_words_per_s": 0.8, "raw_max_shorts": 3, "overlay_lead_s": 0.15, "overlay_min_s": 1.0, "overlay_max_s": 4.0,
                    "caption_style": "pop", "emphasis_gap_s": 3.0, "safe_top_px": 1050, "safe_bottom_px": 380, "safe_right_px": 150, "sfx_gap_s": 0.4,
                    "sfx_max_per_10s": 6, "sfx_cut_lead_s": 0.08, "music_below_speech_db": 26, "duck_db": 9}
+PUBLISH_DEFAULTS = {"title_max_chars": 60, "titles": 5, "hook_max_chars": 200, "tags_max": 12, "thumb_words_max": 3}
+PUBLISH_FILE = "youtube-publish/publish.json"
 RULES_FILE = "youtube-edit/rough-cut.json"
 SHORTS_FILE = "youtube-shorts/shorts.json"
 FOR_CLAUDE = ("youtube-edit/rough-cut.md", "youtube-edit/editing-style.md", "youtube-edit/cut-rules.md", "youtube-script/hook-library.md")
@@ -67,6 +69,11 @@ def rules() -> dict:
     r["pace"] = r["pace"].lower() if r["pace"].lower() in PACES else "calm"
     r.update(PACES.get(r["pace"], {}))
     return r
+
+
+def publish() -> dict:
+    """The limits for the title, description hook, tags and thumbnail words (youtube-publish/publish.json)."""
+    return numbers(PUBLISH_FILE, PUBLISH_DEFAULTS)
 
 
 def shorts() -> dict:

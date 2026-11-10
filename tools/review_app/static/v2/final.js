@@ -59,7 +59,8 @@ export async function render(root, key, setBusy) {
     const titleBox = h('input', { id: 'ownTitle', type: 'text', placeholder: 'Or type your own title', autocomplete: 'off' });
     titleBox.addEventListener('keydown', async e => { if (e.key === 'Enter' && titleBox.value.trim()) await draw(await post('/api/v2/publish/title', { title: titleBox.value })); });
     const titles = h('ul', { class: 'titles', id: 'titles' }, ...pub.titles.map(t => h('li', { class: t === pub.title ? 'chosen' : '' },
-      h('button', { class: 'pick', onclick: async () => draw(await post('/api/v2/publish/title', { title: t })) }, t === pub.title ? '●' : '○'), h('span', {}, t),
+      h('button', { class: 'pick', onclick: async () => draw(await post('/api/v2/publish/title', { title: t })) }, t === pub.title ? '●' : '○'),
+      h('span', {}, t, pub.title_why[t] ? h('div', { class: 'muted small titleWhy' }, pub.title_why[t]) : null),
       h('button', { class: 'quiet', onclick: e => copyText(e.target, t) }, 'Copy'))));
 
     const field = (id, label, value, rows, onSave, copyValue) => {
@@ -97,6 +98,7 @@ export async function render(root, key, setBusy) {
       h('div', { class: 'pubfield' }, h('b', {}, 'Title'), titles.children.length ? titles : h('p', { class: 'muted small' }, 'No title options yet.'), titleBox),
       field('description', 'Description', pub.description, 12, save('description')),
       field('tags', 'Tags', pub.tags.join(', '), 3, save('tags')),
+      pub.pinned_comment ? h('div', { class: 'pubfield', id: 'pinnedBox' }, h('div', { class: 'rhead' }, h('b', {}, 'Pinned comment'), h('button', { class: 'quiet', onclick: e => copyText(e.target, pub.pinned_comment) }, 'Copy')), h('p', {}, pub.pinned_comment)) : null,
       prompts, thumb);
 
     // --- finish and archive

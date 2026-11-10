@@ -163,3 +163,30 @@ def test_finalize_cli_behaviour_is_kept(capsys, monkeypatch):
     monkeypatch.setattr(sys, "argv", ["finalize.py", str(d), "--title", "Fz Cli", "--project", str(footage), "--yes"])
     finalize.main()
     assert (footage / "Fz Cli.mp4").exists() and not out.exists()
+
+
+def test_the_limits_come_from_the_skill_and_titles_over_them_are_dropped(tmp_path, monkeypatch):
+    r = make_project.build(clips=False, title="pub limits")
+    w, n = r["work"], r["name"]
+    monkeypatch.setattr(publish, "chapter_lines", lambda *_: [])
+    long = "A" * 70
+    p = tmp_path / "a.json"
+    p.write_text(json.dumps({"titles": [{"title": "Short one", "why": "It promises the fix", "thumb_text": "it broke again today"}, {"title": long, "why": "x"}, "Plain string title"],
+                             "hook": "h" * 400, "tags": [f"tag number {i}" for i in range(30)], "pinned_comment": "What would you try?",
+                             "thumbnail_text": ["one two three four five"]}), encoding="utf-8")
+    ok, _ = publish.apply_answer(w, n, p)
+    d = publish.load(w, n)
+    assert ok and d["titles"] == ["Short one", "Plain string title"] and d["title_why"] == {"Short one": "It promises the fix"}
+    assert len(d["tags"]) == 12 and d["pinned_comment"] == "What would you try?"
+    assert d["thumbnail_text"][0] == "IT BROKE AGAIN" and all(len(t.split()) <= 3 for t in d["thumbnail_text"])
+    assert len(d["description"].split("\n\n")[0]) <= 200
+    p.write_text(json.dumps({"titles": [long]}), encoding="utf-8")
+    assert publish.apply_answer(w, n, p)[0] is False
+
+
+def test_the_brief_hands_over_the_skill_files_and_what_is_said(tmp_path):
+    r = make_project.build(clips=False, title="pub files")
+    prompt = publish.brief(r["work"], r["name"], tmp_path / "fd")
+    got = {f.name for f in (tmp_path / "fd").iterdir()}
+    assert {"SKILL.md", "metadata.md", "hook-library.md", "said.json", "script.md"} <= got
+    assert "under 60 characters" in prompt and "pinned_comment" in prompt and "said.json" in prompt
