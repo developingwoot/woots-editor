@@ -1,7 +1,8 @@
 # How the code is laid out
 
 ## The pieces
-- `tools/review_app/server.py`: the local web server and every `/api/...` route. `supervisor.py` restarts it when code changes (and when Settings saves new folders, exit code 75).
+- `tools/review_app/server.py`: the local web server and every `/api/...` route. It listens on this computer only. `guard.py` refuses a request that is not from this computer, not for `localhost`/`127.0.0.1`,
+  not JSON on a POST, or from another web page; `config.safe_part` refuses a video name that is not one plain folder name. `supervisor.py` restarts it when code changes (and when Settings saves new folders, exit code 75).
 - `tools/review_app/static/v2/`: the screens (home, outline, footage, review for rough cut and preview, final, settings). `util.js` has the shared helpers.
 - `tools/*.py`: one tool per job. Pure logic lives in functions the tests import.
 

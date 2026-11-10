@@ -48,7 +48,7 @@ def base(tmp_path_factory):
     log_path = fake / "server.log"                                  # an unread PIPE would fill up and freeze the server
     log = open(log_path, "w")
     port = free_port()
-    p = subprocess.Popen([sys.executable, str(SERVER), "--port", str(port), "--host", "127.0.0.1"], env={**os.environ, "WOOTS_FAKE_CLAUDE": str(fake), "WOOTS_FAKE_VISION": "1", "WOOTS_MIN_WORDS": "5", "WOOTS_MIN_PIECE": "1"},
+    p = subprocess.Popen([sys.executable, str(SERVER), "--port", str(port)], env={**os.environ, "WOOTS_FAKE_CLAUDE": str(fake), "WOOTS_FAKE_VISION": "1", "WOOTS_MIN_WORDS": "5", "WOOTS_MIN_PIECE": "1"},
                          stdout=subprocess.DEVNULL, stderr=log)
     url = f"http://127.0.0.1:{port}"
     try:

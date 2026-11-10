@@ -7,9 +7,10 @@ The model file lives in _editor/models/blaze_face_short_range.tflite (229 KB, fr
 A wide 1920x1080 shot has faces only ~3.5 to 4.5 % of the frame wide, too small for one pass, so the frame is searched in three overlapping 1080-wide squares
 and duplicates are merged. Beards lower the score (the host ~0.5 to 0.7, the co-host ~0.9): the threshold is 0.4.
 """
+import os
 from pathlib import Path
 
-MODEL = Path(__file__).resolve().parent.parent / "models" / "blaze_face_short_range.tflite"
+MODEL = Path(os.path.abspath(__file__)).parent.parent / "models" / "blaze_face_short_range.tflite"
 _det = None
 
 

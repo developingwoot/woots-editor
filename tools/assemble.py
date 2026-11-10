@@ -16,6 +16,7 @@ Output time in the assembled video = intro length + output time of the main rend
 """
 import argparse
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -173,7 +174,7 @@ def main():
         sys.exit("footage.json has no intro or outro take chosen")
     if args.main.with_name(args.main.stem + ".assembly.json").exists():
         sys.exit(f"{args.main.name} already has an intro/outro; give the main render, not an assembled video")
-    if args.out.resolve() == args.main.resolve():
+    if os.path.normcase(os.path.abspath(args.out)) == os.path.normcase(os.path.abspath(args.main)):
         sys.exit("out must be a new file")
     quality = args.quality or ("preview" if "preview" in args.main.name.lower() else "final")
     br = rb["bridge"]
@@ -206,7 +207,7 @@ def main():
         how = join(parts, args.out, quality, tmp)
 
     try:
-        main_ref = str(args.main.resolve().relative_to(args.out.parent.resolve()))
+        main_ref = str(Path(os.path.abspath(args.main)).relative_to(os.path.abspath(args.out.parent)))
     except ValueError:
         main_ref = str(args.main)
     side = {"made": datetime.now().isoformat(timespec="seconds"), "main": main_ref, "main_dur": main_dur,

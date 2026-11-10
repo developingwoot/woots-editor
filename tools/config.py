@@ -60,6 +60,26 @@ def replace_retry(tmp, p):
             time.sleep(0.05 * (i + 1))
 
 
+def inside(base, p) -> bool:
+    """True when `p` is below folder `base` (not the folder itself). Compares absolute paths without resolve(), so a mapped drive keeps its letter; '..' is folded away first."""
+    b, q = os.path.normcase(os.path.abspath(str(base))), os.path.normcase(os.path.abspath(str(p)))
+    try:
+        return q != b and os.path.commonpath([b, q]) == b
+    except ValueError:                                        # different drives
+        return False
+
+
+_BAD_NAME = set('/\\:*?"<>|')
+
+
+def safe_part(s) -> str:
+    """One plain folder or file name (a video's `work` or `name`) that came from a request: never a path. Raises ValueError("unknown video") otherwise."""
+    if (not isinstance(s, str) or not s or s != s.strip(" .") or any(c in _BAD_NAME or ord(c) < 32 for c in s)
+            or len(s) > 200):
+        raise ValueError("unknown video")
+    return s
+
+
 def save_user_settings(values: dict) -> None:
     """Merge `values` into the per-user file; an empty string removes a key. Takes effect when the app restarts."""
     cur = user_settings()

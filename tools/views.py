@@ -70,10 +70,9 @@ def key_of(work: str, name: str) -> str:
 
 
 def split_key(key: str) -> tuple[str, str]:
-    work, _, name = key.partition("~")
-    if not work or not name:
-        raise ValueError("unknown video")
-    return work, name
+    import config
+    work, _, name = str(key).partition("~")
+    return config.safe_part(work), config.safe_part(name)
 
 
 def facts(work: str, name: str) -> dict:

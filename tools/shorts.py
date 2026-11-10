@@ -790,7 +790,7 @@ def render(cfg, short, out, pieces=None, quality="preview", report=None):
         cmd = ["ffmpeg", "-y", "-v", "error", "-stats", *ins,
                "-/filter_complex", "g.txt", "-map", "[vout]", "-map", "[aout]", "-t", f"{total:.2f}",
                *encoders.adapt(["-c:v", "h264_nvenc", *enc["v"]]), "-pix_fmt", "yuv420p", "-r", "30",
-               "-c:a", "aac", "-b:a", enc["audio"], "-movflags", "+faststart", str(Path(out).resolve())]
+               "-c:a", "aac", "-b:a", enc["audio"], "-movflags", "+faststart", os.path.abspath(out)]
         subprocess.run(cmd, cwd=tmp, check=True)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

@@ -7,7 +7,7 @@ toggle cuts in a paper edit, see every layer on a timeline, and retime / re-word
 graphics with a live preview. Rendering stays in Claude Code (the app shows the commands).
 
 Usage:
-    python server.py [--port 8765] [--host 0.0.0.0]
+    python server.py [--port 8765]   (listens on this computer only)
     (or double-click review_app\\start.bat)
 
 Python stdlib only. Reads/writes the plan JSON files in _editor\\work\\<video>\\ and the
@@ -19,11 +19,11 @@ import mimetypes
 import os
 import re
 import shutil
-import socket
 import subprocess
 import sys
 import threading
 import time
+import traceback
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -63,6 +63,7 @@ def _code_newest() -> float:
     return newest
 
 
+import guard                                      # noqa: E402  (who may talk to the app)
 import footage_cfg                                # noqa: E402
 import channel                                    # noqa: E402  (names in the prompts)
 import projectstore                               # noqa: E402  (what changed, who changed it, undo: ADR 0005)
@@ -100,7 +101,7 @@ import shortsplan                                 # noqa: E402  (how many shorts
 import skillrules                                # noqa: E402  (the numbers shorts are made with)
 import shortsview                                 # noqa: E402  (the v2 Shorts screen)
 
-_lock = threading.Lock()                     # one writer at a time (PC + phone)
+_lock = threading.Lock()                     # one writer at a time (several browser tabs)
 _probe_cache: dict = {}
 _jobs: dict = {}
 
@@ -132,12 +133,12 @@ def write_json(path: Path, data, indent=1):
     """Atomic UTF-8 write without BOM (PowerShell's BOM broke json.loads once)."""
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(data, indent=indent, ensure_ascii=False), encoding="utf-8")
-    os.replace(tmp, path)
+    config.replace_retry(tmp, path)
 
 
 def work_dir(work: str) -> Path:
-    d = WORK / work
-    if d.resolve().parent != WORK.resolve() or not d.is_dir():
+    d = WORK / config.safe_part(work)
+    if not d.is_dir():
         raise ValueError(f"unknown work folder {work!r}")
     return d
 
@@ -353,7 +354,7 @@ def footage_path_ok(work, name, rel) -> Path:
         raise ValueError("no footage folder chosen")
     folder = Path(cfg["folder"])
     p = folder / rel
-    if folder.resolve() not in p.resolve().parents or p.suffix.lower() not in (footage_cfg.VIDEO_EXT | {".wav", ".m4a", ".mp3", ".aac", ".flac"}) or not p.is_file():
+    if not config.inside(folder, p) or p.suffix.lower() not in (footage_cfg.VIDEO_EXT | {".wav", ".m4a", ".mp3", ".aac", ".flac"}) or not p.is_file():
         raise ValueError("not a clip in the footage folder")
     return p
 
@@ -1505,6 +1506,33 @@ SB_IMG_RE = re.compile(r"^[A-Za-z0-9_-]+\.jpg$")
 
 
 # ----------------------------------------------------------------------------- HTTP
+class TooBig(Exception):
+    pass
+
+
+def check_names(d):
+    """Every video name a request carries (work, name, or key = work~name) must be one plain folder name: nothing here reaches a path unchecked."""
+    if not isinstance(d, dict):
+        return
+    for k in ("work", "name"):
+        if d.get(k) is not None:
+            config.safe_part(d[k])
+    if d.get("key") is not None:
+        work, _, name = str(d["key"]).partition("~")
+        config.safe_part(work)
+        config.safe_part(name)
+
+
+MEDIA_PREFIXES = {"/finalimg/": 1, "/srimg/": 1, "/sbimg/": 1, "/shortmedia/": 1, "/media/": 1, "/bmedia/": 2, "/fmedia/": 2}      # how many leading path parts are video names
+
+
+def check_path_names(path: str):
+    for prefix, n in MEDIA_PREFIXES.items():
+        if path.startswith(prefix):
+            for part in unquote(path[len(prefix):]).split("/")[:n]:
+                config.safe_part(part)
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "WootReview/1"
 
@@ -1521,14 +1549,68 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def send_header(self, keyword, value):
+        super().send_header(keyword, value)
+        if keyword.lower() == "content-type" and str(value).startswith("text/html"):
+            self._html = True
+
+    def end_headers(self):
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+        if getattr(self, "_html", False):
+            self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; "
+                                                         "frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+        super().end_headers()
+
     def body_json(self):
         n = int(self.headers.get("Content-Length") or 0)
+        if n > guard.MAX_BODY:
+            raise TooBig()
         return json.loads(self.rfile.read(n).decode("utf-8")) if n else {}
 
+    def _refuse_or_none(self, method) -> bool:
+        """True (after answering) when the guard refuses this request."""
+        ok, status, why = guard.allowed(method, self.headers, self.client_address[0], self.server.server_address[1])
+        if not ok:
+            self.send_json({"error": why}, status)
+        return not ok
+
+    def _fail(self, e):
+        sys.stderr.write("".join(traceback.format_exception(e)))
+        try:
+            self.send_json({"error": "Something went wrong.", "details": f"{type(e).__name__}: {e}"[:300]}, 500)
+        except OSError:
+            pass
+
     def do_GET(self):
+        if self._refuse_or_none("GET"):
+            return
+        try:
+            return self._route_get()
+        except (ConnectionError, BrokenPipeError):
+            return
+        except Exception as e:                      # noqa: BLE001 - answered as a plain error instead of a dropped connection
+            return self._fail(e)
+
+    def do_POST(self):
+        if self._refuse_or_none("POST"):
+            return
+        try:
+            return self._route_post()
+        except TooBig:
+            return self.send_json({"error": "That request is too big."}, 413)
+        except (ConnectionError, BrokenPipeError):
+            return
+        except Exception as e:                      # noqa: BLE001
+            return self._fail(e)
+
+    def _route_get(self):
         u = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
         try:
+            check_names(q)
+            check_path_names(u.path)
             if u.path in ("/", "/index.html"):
                 return self.send_file(STATIC / "index.html")
             if u.path in ("/v2", "/v2/"):
@@ -1627,8 +1709,8 @@ class Handler(BaseHTTPRequestHandler):
                 tp = usage.thumb_path(work, name)
                 return self.send_file(tp) if tp else self.send_error(404)
             if u.path.startswith("/static/"):
-                p = (STATIC / unquote(u.path[len("/static/"):])).resolve()
-                if STATIC.resolve() not in p.parents:
+                p = STATIC / unquote(u.path[len("/static/"):])
+                if not config.inside(STATIC, p):
                     return self.send_error(404)
                 return self.send_file(p)
             if u.path == "/api/works":
@@ -1755,10 +1837,11 @@ class Handler(BaseHTTPRequestHandler):
         except (ConnectionError, BrokenPipeError):
             return
 
-    def do_POST(self):
+    def _route_post(self):
         u = urlparse(self.path)
         try:
             b = self.body_json()
+            check_names(b)
             if u.path == "/api/v2/settings":
                 import appsetup
                 appsetup.save(b.get("folders") or {})
@@ -2108,7 +2191,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(clips_state(b["work"], b["name"]))
             if u.path.startswith("/api/wf/"):
                 op = u.path.rsplit("/", 1)[1]
-                with _lock:                        # PC + phone: one writer at a time
+                with _lock:                        # one writer at a time
                     if op == "create":
                         return self.send_json(workflow.create(b.get("title", "")))
                     if op == "settings":
@@ -2173,21 +2256,12 @@ class Handler(BaseHTTPRequestHandler):
         self.do_GET()
 
 
-def lan_ip() -> str:
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("192.168.0.1", 9))               # no packet is sent; just picks the LAN interface
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
-    except OSError:
-        return "127.0.0.1"
+HOST = "127.0.0.1"                                   # this computer only: nothing on the network can reach the app
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", type=int, default=8765)
-    ap.add_argument("--host", default="0.0.0.0", help="0.0.0.0 = reachable from the phone on home Wi-Fi")
     ap.add_argument("--open", action="store_true", help="open the browser on this PC")
     ap.add_argument("--sync", type=Path, metavar="INDEX_HTML",
                     help="write a graphic's markup text and clip durations from its CONFIG, then exit")
@@ -2204,11 +2278,10 @@ def main():
     mimetypes.add_type("text/javascript", ".js")
     WORK.mkdir(parents=True, exist_ok=True)          # Settings only creates the workspace folder itself
     builder.recover()                                # runs that were alive when the app closed are not alive now
-    srv = ThreadingHTTPServer((args.host, args.port), Handler)
+    srv = ThreadingHTTPServer((HOST, args.port), Handler)
     srv.daemon_threads = True
     url = f"http://localhost:{args.port}/"
-    print(f"Woot's review app\n  this PC:  {url}\n  phone:    http://{lan_ip()}:{args.port}/  (same Wi-Fi)\n"
-          f"  data:     {WORK}\n  Ctrl+C to stop.", flush=True)
+    print(f"Woot's review app\n  open:     {url}\n  data:     {WORK}\n  Ctrl+C to stop.", flush=True)
     if not FFPROBE:
         print("  warning: ffprobe not found; assuming 30 fps")
     if args.open:

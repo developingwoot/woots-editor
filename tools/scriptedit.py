@@ -17,7 +17,7 @@ import sys
 import time
 from pathlib import Path
 
-TOOLS = Path(__file__).resolve().parent
+TOOLS = Path(os.path.abspath(__file__)).parent
 EDITOR = TOOLS.parent
 import config
 import projectstore

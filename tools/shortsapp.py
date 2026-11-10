@@ -14,7 +14,7 @@ import sys
 import time
 from pathlib import Path
 
-TOOLS = Path(__file__).resolve().parent
+TOOLS = Path(os.path.abspath(__file__)).parent
 sys.path.insert(0, str(TOOLS))
 import shorts as sh                       # noqa: E402
 import shortsplan                         # noqa: E402

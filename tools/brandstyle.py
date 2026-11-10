@@ -3,6 +3,7 @@
 Nothing about a channel is in the code: `shorts.py` and `shortsgfx.py` ask here. The colours text is what the Settings palette writes ("primary #142C44, accent #E2703A,
 colour 3 #E4EDF4"); free text such as "navy #142C44, orange #E2703A" works too (the first colour is the primary, the second the accent).
 """
+import os
 import re
 from pathlib import Path
 
@@ -10,7 +11,7 @@ import channel
 import sysfonts
 
 FALLBACK = {"primary": "#1A1A1A", "accent": "#FFC400", "light": "#FFFFFF", "dark": "#000000"}
-FALLBACK_FONT = ("Oswald", Path(__file__).resolve().parent.parent / "fonts" / "Oswald-Bold.ttf")         # ships with the app (open licence), so every computer has one
+FALLBACK_FONT = ("Oswald", Path(os.path.abspath(__file__)).parent.parent / "fonts" / "Oswald-Bold.ttf")         # ships with the app (open licence), so every computer has one
 HEX = re.compile(r"(#[0-9a-f]{6}|#[0-9a-f]{3})\b", re.I)
 
 

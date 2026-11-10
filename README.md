@@ -36,7 +36,7 @@ python -m venv .venv
 tools\review_app\start.bat
 ```
 
-The app opens at http://localhost:8765/v2. The first run asks for your folders and your channel (name, audience, voice, brand colours) and shows the Claude sign-in. The Settings screen lists the models that fit your computer with their sizes; nothing downloads until you press Download.
+The app opens at http://localhost:8765/v2. It answers on this computer only: nothing else on your network can reach it. The first run asks for your folders and your channel (name, audience, voice, brand colours) and shows the Claude sign-in. The Settings screen lists the models that fit your computer with their sizes; nothing downloads until you press Download.
 
 Music and sound effects are not included: put your own in the Music and SFX folders you choose in Settings.
 

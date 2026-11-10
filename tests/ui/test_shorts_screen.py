@@ -99,7 +99,10 @@ def test_opening_a_short_cuts_words_and_saves_the_hook(screen):
     page.wait_for_function("() => document.querySelector('.shortCard .vbody').innerText.includes('A NEW HOOK')")
     assert raw_of(r)["shorts"][0]["hook"] == "A NEW HOOK"
     page.select_option("#paceSelect", "tight")
-    page.wait_for_function("() => document.querySelector('#paceSelect').value === 'tight'")
+    for _ in range(50):                                      # the select already shows "tight": wait for the save, not for the select
+        if raw_of(r)["shorts"][0].get("pace") == "tight":
+            break
+        page.wait_for_timeout(100)
     assert raw_of(r)["shorts"][0]["pace"] == "tight"
     assert clutter(visible_text(page)) == []
 

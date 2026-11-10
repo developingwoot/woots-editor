@@ -19,6 +19,7 @@ with item = {"key", "type": visual|aroll|vo|teaching|graphic|data|entry|note, "t
 file (the wording of a talking point is rows line+1..end); `raw` is the first row as it was when parsed, so an edit can tell the file changed.
 Line ids of the old format (S01) stay inside the file: the screen never shows them.
 """
+import os
 import re
 import unicodedata
 from pathlib import Path
@@ -327,7 +328,7 @@ def brief(work: str, name: str, fd: Path, note: str = "", icons: bool = True) ->
     """Write what Claude needs into fd and return the prompt; Claude answers in outline.md. With no outline yet this is a draft, otherwise a revision."""
     import shutil
     fd.mkdir(parents=True, exist_ok=True)
-    example = Path(__file__).resolve().parent.parent / "docs" / "outline-example.md"
+    example = Path(os.path.abspath(__file__)).parent.parent / "docs" / "outline-example.md"
     if example.exists():
         shutil.copyfile(example, fd / "example.md")
     found = skillrules.files("youtube-script")

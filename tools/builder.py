@@ -508,7 +508,7 @@ def merge_built(work: str, name: str, sb: Path, beats: list):
                 continue
             f = Path(str(e.get("file", "")))
             try:
-                ok = f.exists() and sb.resolve() in f.resolve().parents
+                ok = f.exists() and config.inside(sb, f)
             except OSError:
                 ok = False
             if ok:

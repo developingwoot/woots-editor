@@ -1,7 +1,6 @@
 @echo off
 rem Woot's review app. Double-click, or run this file from the repo's tools\review_app folder.
-rem Opens http://localhost:8765 here; the phone address (same Wi-Fi) is printed below.
-rem First run: if Windows Firewall asks about Python, allow it on PRIVATE networks (home Wi-Fi) only.
+rem Opens http://localhost:8765 here. The app listens on this computer only.
 rem The supervisor restarts the app by itself when its code changes (and the open page reloads itself): leave this window open.
 rem Python: %WOOTS_PYTHON% if set, else the repo's own .venv, else a venv in %USERPROFILE%\.venvs\wootseditor, else whatever "python" is on PATH.
 title Woot's review app

@@ -28,7 +28,7 @@ def base():
     import workflow
     workflow.create("Smoke Video")
     port = free_port()
-    p = subprocess.Popen([sys.executable, str(SERVER), "--port", str(port), "--host", "127.0.0.1"],
+    p = subprocess.Popen([sys.executable, str(SERVER), "--port", str(port)],
                          env=os.environ.copy(), stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     url = f"http://127.0.0.1:{port}"
     try:
