@@ -3,7 +3,7 @@
 # Without an Nvidia GPU transcription still works on the CPU but is much slower: read a short recording or work from the saved transcripts.
 torch==2.11.0
 torchaudio==2.11.0
-transformers==5.20.1
+transformers==5.22.2
 nemo-toolkit==3.0.0
 
 # Whisper on an Nvidia card WITHOUT the CUDA build of torch above (for example a small card that cannot run Parakeet): these two give faster-whisper its CUDA libraries.
