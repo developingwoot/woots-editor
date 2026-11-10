@@ -22,6 +22,7 @@ async function show() {
 // Job bar: one sentence, a progress bar, an estimate and Stop for whatever is running; a plain error with "Show details" if the last job failed.
 let handled;                                           // id of the last finished job the page already knows about (undefined until the first poll)
 let dismissed = null;
+let shownFailure = null;                               // id of the failed job whose message is on screen
 let timer = null;
 const pollSoon = () => { clearTimeout(timer); pollJob(); };
 
@@ -39,11 +40,17 @@ async function pollJob() {
       if (last && last.id !== handled) { handled = last.id; show(); }       // a job finished (even one too quick to be seen running): redraw
       const failed = last && last.state === 'failed' && last.id !== dismissed;
       bar.hidden = !failed;
-      if (failed) {
+      if (failed && shownFailure !== last.id) {              // drawn once per failure: redrawing every poll would close the details box while it is being read
+        shownFailure = last.id;
+        const copy = h('button', { class: 'quiet onDark', id: 'copyDetails', onclick: async () => {
+          try { await navigator.clipboard.writeText(last.details || ''); copy.textContent = 'Copied'; } catch { copy.textContent = 'Select the text and copy it'; }
+        } }, 'Copy the details');
         bar.replaceChildren(h('span', {}, last.error),
           h('details', { class: 'jobDetails' }, h('summary', {}, 'Show details'), h('pre', {}, last.details || 'No details.')),
+          copy,
           h('button', { class: 'quiet onDark', onclick: () => { dismissed = last.id; pollSoon(); } }, 'Dismiss'));
       }
+      if (!failed) shownFailure = null;
     }
   } catch { bar.hidden = true; }
   timer = setTimeout(pollJob, 2000);
