@@ -22,6 +22,12 @@ import skillrules
 
 WORK = config.WORK
 END_RE = re.compile(r"[.?!]$")
+def _held(work: str, name: str) -> set:
+    """Sentences nothing here may drop: the host's good marks plus the moments the story read says to keep."""
+    import story
+    return locks.texts(work, name) | story.held(work, name)
+
+
 LOCKED_SKIPPED: list = []         # what the last `apply` left alone because the creator marked it good: [{text, kind, why}]
 KINDS = ("contradiction", "general-then-specific", "repeat", "does-not-fit", "cut-off", "unclear")
 VERSION = 3                      # 2: emphasis, checks, the hook budget; 3: unclear sentences, restores
@@ -129,7 +135,7 @@ def hook_budget(data: dict, hook_total: float) -> dict:
 def brief(work: str, name: str, fd: Path) -> str:
     fd.mkdir(parents=True, exist_ok=True)
     data = json.loads(beatmap.path_of(work, name).read_text(encoding="utf-8-sig"))
-    (fd / "cut.json").write_text(json.dumps(sentences(data, with_left_out=True, held=locks.texts(work, name)), indent=1), encoding="utf-8")
+    (fd / "cut.json").write_text(json.dumps(sentences(data, with_left_out=True, held=_held(work, name)), indent=1), encoding="utf-8")
     got = skillrules.copy_into(fd, "cutreview")
     hb = hook_budget(data, skillrules.rules()["hook_total_s"])
     over = hb["intro_s"] - hb["intro_allowed_s"]
@@ -171,7 +177,7 @@ def apply_review(work: str, name: str, p: Path) -> tuple[bool, str]:
     import takes
     chosen = {norm(r["text"]) for r in takes.restores(work, name)}                  # the take the takes read chose to play: this read does not drop it as a repeat
     by_id = {s["id"]: s for s in sentences(data, with_left_out=True)}
-    held = locks.texts(work, name)
+    held = _held(work, name)
     drops = [{"text": by_id[d["id"]]["text"], "kind": d.get("kind") if d.get("kind") in KINDS else "repeat", "why": str(d.get("why") or "")[:200]}
              for d in raw.get("drops", []) if isinstance(d, dict) and d.get("id") in by_id and not by_id[d["id"]].get("left_out") and norm(by_id[d["id"]]["text"]) not in chosen and norm(by_id[d["id"]]["text"]) not in held]
     restores = []
@@ -199,7 +205,7 @@ def apply(work: str, name: str, max_pause: float, pad: float, lead: float, extra
     data = clipmap.read_json(bp, None)
     if not data:
         return []
-    held = locks.texts(work, name)                                                     # sentences the creator marked good: nothing here is dropped
+    held = _held(work, name)                                                           # sentences the creator marked good, or the story says to keep: nothing here is dropped
     LOCKED_SKIPPED.clear()
     want = {}
     for d in saved + dangling(data):

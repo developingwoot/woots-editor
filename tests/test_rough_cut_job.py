@@ -122,3 +122,18 @@ def test_the_other_take_of_a_passage_is_left_out_and_reported(server, tmp_path):
     assert not any("gears kept breaking" in b["said"] for b in beats)
     ch = reviewnotes.versions(w, n, "cut")[0]["changes"]
     assert any(c.startswith("Said more than once: \"the gears\"") for c in ch)
+
+
+def test_the_story_step_runs_once_and_is_named_when_it_fails(server, tmp_path):
+    import os
+    import story
+    r = make_project.build_footage("rc story")
+    w, n = r["work"], r["name"]
+    job = wait(server.start_rough_cut(w, n))
+    changes = reviewnotes.versions(w, n, "cut")[0]["changes"]
+    assert any(c.startswith("Not done: finding the story") for c in changes) and story.load(w, n) == {}
+    (tmp_path / "story.json").write_text(json.dumps({"logline": "A test", "question": "Does it work?"}), encoding="utf-8")
+    job = wait(server.start_rough_cut(w, n))
+    assert story.load(w, n)["question"] == "Does it work?"
+    changes = reviewnotes.versions(w, n, "cut")[-1]["changes"]
+    assert not any(c.startswith("Not done: finding the story") for c in changes)

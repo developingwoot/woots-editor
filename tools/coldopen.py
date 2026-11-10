@@ -93,6 +93,7 @@ def brief(work: str, name: str, fd: Path) -> str:
     sents = sentences(data)
     (fd / "sentences.json").write_text(json.dumps([{"id": s["id"], "seconds": round(s["end"] - s["start"], 1), "text": s["text"]} for s in sents], indent=1),
                                        encoding="utf-8")
+    import story
     got = skillrules.copy_into(fd, "coldopen")
     model = outline.load(work, name)
     title = model.get("title") or name
@@ -100,6 +101,7 @@ def brief(work: str, name: str, fd: Path) -> str:
     return (f"You are choosing the cold open for the host's YouTube video '{title}'. sentences.json lists every sentence the host says in the rough cut, with an id and its length. "
             + skillrules.read_first_line(got) + "hook-library.md holds the host's hook patterns and the Hook QA checklist. "
             f"The host's outline opens with: \"{hook[:300]}\".\n"
+            + (f"The story read of the recordings found these strong openings (prefer them, or something better): {story.opening_hint(work, name)}.\n" if story.opening_hint(work, name) else "") +
             f"First decide whether a cold open is needed at all. The cut already opens with these words (the first {opening_seconds(data):.0f} seconds): \"{opening(data)}\" "
             "If that opening is already a strong hook (a clear question or stake in the first 15 seconds, a result, a surprise, a promise a viewer wants kept), a cold open only delays it: "
             'write {"options": [], "skip": true, "why": "<one plain sentence>"} and stop. Otherwise:\n'

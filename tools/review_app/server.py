@@ -714,6 +714,10 @@ def start_rough_cut(work, name):
                 fd = WORK / work / "v2-run" / "takes"
                 claude_step("comparing takes of the same passage", fd, takes.brief(work, name, fd), "takes.json", lambda p, r: takes.apply_review(work, name, p), budget="0.6", kind="story")
                 job["ok"] = True                       # without the read both takes stay in the cut
+            import story
+            if story.load(work, name).get("v") != story.VERSION:               # the story of the recordings, once per set of recordings: the cold open and the cut read use it
+                fd = WORK / work / "v2-run" / "story"
+                claude_step("finding the story in your recordings", fd, story.brief(work, name, fd), "story.json", lambda p, r: story.apply_answer(work, name, p), budget="0.8", kind="story")
             with _lock:
                 other_takes = cutreview.apply(work, name, recut.MAX_PAUSE_S, recut.SILENCE_PAD_S, recut.SILENCE_LEAD_S, takes.drops(work, name), takes.restores(work, name))
                 held_back = list(cutreview.LOCKED_SKIPPED)
@@ -767,7 +771,7 @@ def start_rough_cut(work, name):
             for d in [x for x in other_takes if x["kind"] != "other-take"] + dropped:
                 changes.append(f"Took out ({d['kind']}):\"{d['text'][:70]}\" - {d['why']}")
             for d in held_back:
-                changes.append(f"Locked, not changed: \"{d['text'][:70]}\" (marked good; the rules wanted it out: {d.get('why') or d.get('kind', '')})")
+                changes.append(f"Locked, not changed: \"{d['text'][:70]}\" (a good moment to keep; the rules wanted it out: {d.get('why') or d.get('kind', '')})")
             for c in cutreview.load(work, name).get("checks", []):
                 changes.append(f"Check the fact: \"{c['text'][:70]}\" - {c['why']}")
             for s in cutreview.load(work, name).get("suggestions", []):

@@ -21,7 +21,7 @@ from pathlib import Path
 PLAN_SUFFIXES = (".script.md", ".clips.json", ".beatmap.json", ".graphicsplan.json", ".graphicsreview.json",
                  ".storyboard.marks.json", ".sectionnotes.json", ".watchnotes.json", ".shootplan.json",
                  ".shootplan.marks.json", ".footage.json", ".trims.json", ".voiceovers.json", ".selfreview.marks.json",
-                 ".workflow.json", ".notes.json", ".teaching.json", ".publish.json", ".shots.json", ".coldopen.json", ".cutreview.json", ".takes.json", ".tags.json", ".locks.json", ".shorts.json")
+                 ".workflow.json", ".notes.json", ".teaching.json", ".publish.json", ".shots.json", ".coldopen.json", ".cutreview.json", ".takes.json", ".tags.json", ".locks.json", ".shorts.json", ".story.json")
 HISTORY = ".history"
 OUTSIDE = "outside the app"
 AUTO = "auto"                                         # files the app creates by itself (empty plans): not counted as changes
