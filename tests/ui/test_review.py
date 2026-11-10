@@ -110,6 +110,16 @@ def test_claude_can_suggest_more_teaching_moments(screen):
     assert clutter(visible_text(page)) == []
 
 
+def test_claude_can_suggest_fun_moments_and_a_tick_accepts_one(screen):
+    page, _ = open_cut(screen, "ui cut fun moments")
+    page.click("#findFun")
+    expect(page.locator("#moments li")).to_have_count(1, timeout=30000)
+    assert "IT BROKE" in page.locator("#moments").inner_text()
+    page.locator("#moments li button").first.click()
+    expect(page.locator("#moments li.yes")).to_have_count(1)
+    assert clutter(visible_text(page)) == []
+
+
 def test_search_all_footage_adds_takes_for_a_clip_with_none(screen):
     page, _ = open_cut(screen, "ui cut search")
     page.locator("#strip .clip").nth(3).click()            # the last clip has no other take

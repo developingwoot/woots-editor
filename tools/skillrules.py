@@ -44,6 +44,8 @@ SHORTS_DEFAULTS = {"min_s": 10.0, "favour_s": 60.0, "max_s": 180.0, "minutes_per
                    "sfx_max_per_10s": 6, "sfx_cut_lead_s": 0.08, "music_below_speech_db": 26, "duck_db": 9}
 PUBLISH_DEFAULTS = {"title_max_chars": 60, "titles": 5, "hook_max_chars": 200, "tags_max": 12, "thumb_words_max": 3}
 PUBLISH_FILE = "youtube-publish/publish.json"
+GRAPHICS_DEFAULTS = {"moments_per_min_max": 1.5, "moment_gap_s": 8.0, "moment_max_s": 1.5}
+GRAPHICS_FILE = "youtube-graphics/graphics.json"
 RULES_FILE = "youtube-edit/rough-cut.json"
 SHORTS_FILE = "youtube-shorts/shorts.json"
 FOR_CLAUDE = ("youtube-edit/rough-cut.md", "youtube-edit/editing-style.md", "youtube-edit/cut-rules.md", "youtube-script/hook-library.md")
@@ -88,6 +90,11 @@ def rules() -> dict:
 def publish() -> dict:
     """The limits for the title, description hook, tags and thumbnail words (youtube-publish/publish.json)."""
     return numbers(PUBLISH_FILE, PUBLISH_DEFAULTS)
+
+
+def graphics() -> dict:
+    """The limits for fun moments (youtube-graphics/graphics.json): how many per minute, the gap between two, how long one lasts."""
+    return numbers(GRAPHICS_FILE, GRAPHICS_DEFAULTS)
 
 
 def shorts() -> dict:

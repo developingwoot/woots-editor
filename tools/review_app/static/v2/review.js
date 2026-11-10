@@ -163,6 +163,14 @@ export async function render(root, key, stage, setBusy) {
         h('button', { class: 'tick' + (m.status === 'yes' ? ' on' : ''), title: 'Explain this in the video', onclick: async () => draw(await post('/api/v2/teaching', { id: m.id, status: m.status === 'yes' ? 'suggested' : 'yes' })) }, '✓'),
         h('button', { class: 'tick' + (m.status === 'no' ? ' on' : ''), title: 'No explanation needed', onclick: async () => draw(await post('/api/v2/teaching', { id: m.id, status: m.status === 'no' ? 'suggested' : 'no' })) }, '✕'))))
         : h('p', { class: 'muted small' }, 'None yet.')) : null;
+    const fun = stage === 'cut' ? h('div', { class: 'card teach', id: 'moments' },
+      h('div', { class: 'rhead' }, h('b', {}, 'Fun moments'),
+        h('button', { class: 'quiet', id: 'findFun', onclick: async () => { try { await api('/api/v2/moments/find', { key }); setBusy(); } catch (e) { alert(e.message); } } }, 'Ask Claude for some')),
+      data.moments.length ? h('ul', { class: 'moments' }, ...data.moments.map(m => h('li', { class: m.status },
+        h('span', { class: 'when' }, m.when), h('span', { class: 'ntext' }, h('b', {}, m.text), ' ', h('span', { class: 'muted' }, `${m.kind} · ${m.why}`)),
+        h('button', { class: 'tick' + (m.status === 'yes' ? ' on' : ''), title: 'Show this pop-up', onclick: async () => draw(await post('/api/v2/moments', { id: m.id, status: m.status === 'yes' ? 'suggested' : 'yes' })) }, '✓'),
+        h('button', { class: 'tick' + (m.status === 'no' ? ' on' : ''), title: 'No pop-up here', onclick: async () => draw(await post('/api/v2/moments', { id: m.id, status: m.status === 'no' ? 'suggested' : 'no' })) }, '✕'))))
+        : h('p', { class: 'muted small' }, 'None yet. A fun moment is a short sticker or number on a good line.')) : null;
 
     const marks = stage === 'cut' && v.latest && total ? marksCard(key, video, total) : null;
     const b = data.button;
@@ -170,7 +178,7 @@ export async function render(root, key, stage, setBusy) {
       h('div', { class: 'left' }, video, strip, marks && marks.overlay, panel,
         h('div', { class: 'muted small' }, stage === 'cut'
           ? 'Click a clip to keep, replace, trim or remove it. Space plays, arrows jump 5 seconds, N adds a note.'
-          : 'Space plays, arrows jump 5 seconds, N adds a note. Shift and drag over the clips to note a range.'), marks && marks.card, teach, stage === 'preview' ? musicCard(key) : null, stage === 'preview' ? factCheckCard(key) : null),
+          : 'Space plays, arrows jump 5 seconds, N adds a note. Shift and drag over the clips to note a range.'), marks && marks.card, teach, fun, stage === 'preview' ? musicCard(key) : null, stage === 'preview' ? factCheckCard(key) : null),
       h('aside', { class: 'right card' },
         h('div', { class: 'rhead' }, h('b', {}, 'Notes'), verMenu),
         v.changes.length ? h('details', { class: 'changes' }, h('summary', {}, `What changed in ${v.label}`), ...(v.suggestions.length ? [h('div', { class: 'suggest', id: 'suggestions' }, h('b', {}, 'Claude suggests'),

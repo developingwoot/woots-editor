@@ -79,6 +79,7 @@ import recut                                     # noqa: E402  (v2: the cut from
 import outline                                    # noqa: E402  (v2 outline: both script formats)
 import publish                                    # noqa: E402  (v2 publishing details)
 import teaching                                   # noqa: E402  (v2 teaching moments)
+import moments                                    # noqa: E402  (v2 fun moments)
 import clipmap                                    # noqa: E402  (takes -> script lines, the creator's corrections)
 import beatmap                                    # noqa: E402  (the plan: what is said / on screen, graphics, checks)
 import platformx                                  # noqa: E402  (the few operating-system specifics)
@@ -911,6 +912,20 @@ def start_find_teaching(work, name):
     return job
 
 
+def start_find_moments(work, name):
+    """Claude reads what the host says and suggests the lines where a very short pop-up would land (a small run; changes no plan but moments.json)."""
+    job = _job("moments", ["Claude reads the clips"])
+    job.update(work=work, name=name)
+
+    def run():
+        fd = WORK / work / "v2-run" / "moments"
+        _claude_run(job, fd, moments.find_prompt(work, name, fd), "moments.json", lambda p, r: moments.import_found(work, name, p), budget="0.6")
+        job["done"] = True
+        job["elapsed"] = round(time.time() - job["started"], 1)
+    threading.Thread(target=run, daemon=True).start()
+    return job
+
+
 def start_shorts_gfxplan(work, name, sid):
     """Claude plans the graphics of ONE short (where each goes, what it is): a small run; nothing is built."""
     raw = shortsapp.read_raw(work, name)
@@ -1524,6 +1539,11 @@ class Handler(BaseHTTPRequestHandler):
                 with _lock:
                     teaching.set_status(work, name, b["id"], b["status"])
                 return self.send_json(views.review(work, name, "cut"))
+            if u.path == "/api/v2/moments":
+                work, name = views.split_key(b["key"])
+                with _lock:
+                    moments.set_status(work, name, b["id"], b["status"])
+                return self.send_json(views.review(work, name, "cut"))
             if u.path == "/api/v2/footage/folder":
                 work, name = views.split_key(b["key"])
                 f = Path(os.path.abspath(b["folder"]))
@@ -1652,6 +1672,9 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/api/v2/teaching/find":
                 work, name = views.split_key(b["key"])
                 return self.send_json({"id": start_find_teaching(work, name)["id"]})
+            if u.path == "/api/v2/moments/find":
+                work, name = views.split_key(b["key"])
+                return self.send_json({"id": start_find_moments(work, name)["id"]})
             if u.path == "/api/v2/make":
                 work, name = views.split_key(b["key"])
                 return self.send_json({"id": start_make_version(work, name, b["stage"])["id"]})

@@ -15,6 +15,7 @@ _PIPELINES = {
     "vision": ("Looking at your footage", "Footage looked at", 20),
     "options": ("Looking for more takes", "More takes found", 2),
     "teaching": ("Looking for teaching moments", "Teaching moments found", 1),
+    "moments": ("Looking for fun moments", "Fun moments found", 1),
     "publish": ("Writing the publishing details", "Publishing details ready", 2),
     "shorts": ("Working on your shorts", "Shorts ready", None),
     "score": ("Measuring the final against the reference videos", "Final measured", 3),
@@ -61,7 +62,7 @@ def job_sentence(job: dict, now: float | None = None) -> dict:
 # ----------------------------------------------------------------------------- home and step bar
 STEPS = [("outline", "Outline"), ("footage", "Footage"), ("rough-cut", "Rough cut"), ("preview", "Preview"), ("final", "Final"), ("shorts", "Shorts")]
 STEP_IDS = [s for s, _ in STEPS]
-_PIPELINE_STEP = {"archive": "final", "vision": "footage", "options": "rough-cut", "teaching": "rough-cut", "analyze": "footage", "clipmap": "footage", "cut": "rough-cut", "preview": "preview", "outline": "outline", "final": "final",
+_PIPELINE_STEP = {"archive": "final", "vision": "footage", "options": "rough-cut", "teaching": "rough-cut", "moments": "rough-cut", "analyze": "footage", "clipmap": "footage", "cut": "rough-cut", "preview": "preview", "outline": "outline", "final": "final",
                   "publish": "final", "shorts": "shorts", "score": "final"}
 
 
@@ -249,7 +250,7 @@ def review(work: str, name: str, stage: str, version: int | None = None, running
     pending = {n["clip"]: n["kind"] for n in open_n if n.get("choice") is not None and n.get("clip")}
     label = lambda n: reviewnotes.label(stage, n)           # noqa: E731
     out = {"key": key, "stage": stage, "has_video": cur is not None, "version": None, "versions": [], "notes": [], "clips": [], "button": None,
-           "teaching": []}
+           "teaching": [], "moments": []}
     for v in reversed(vs):
         out["versions"].append({"n": v["n"], "label": label(v["n"]), "changes": v["changes"], "current": bool(cur) and v["n"] == cur["n"],
                                 "latest": v["n"] == vs[-1]["n"]})
@@ -287,6 +288,11 @@ def review(work: str, name: str, stage: str, version: int | None = None, running
             out["teaching"].append({"id": m["id"], "when": time_text(starts.get(m["beat"], 0.0)), "t": starts.get(m["beat"], 0.0),
                                     "term": m["term"], "why": m["why"], "status": m["status"]})
         out["teaching"].sort(key=lambda m: m["t"])
+        import moments
+        for m in moments.load(work, name):
+            t = starts.get(m["beat"], 0.0)
+            out["moments"].append({"id": m["id"], "when": time_text(t), "t": t, "kind": m["kind"], "text": m["text"], "why": m["why"], "status": m["status"]})
+        out["moments"].sort(key=lambda m: m["t"])
     return out
 
 
