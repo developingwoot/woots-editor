@@ -123,5 +123,25 @@ def copy_into(fd: Path, rels=FOR_CLAUDE) -> list:
     return got
 
 
+def add_lesson(sentence: str, today: str | None = None) -> bool:
+    """Append a dated line to the Lessons section of the user's copy of youtube-edit/rough-cut.md (copied from the starter file first). Returns False when the sentence is already there.
+    Never writes into the starter skills of the repository."""
+    import time
+    sentence = " ".join(str(sentence).split())
+    rel = "youtube-edit/rough-cut.md"
+    mine = SKILLS / rel
+    if not mine.is_file():
+        src = STARTER / rel
+        mine.parent.mkdir(parents=True, exist_ok=True)
+        mine.write_text(src.read_text(encoding="utf-8-sig") if src.is_file() else "# Rough cut\n\n## Lessons\n", encoding="utf-8")
+    text = mine.read_text(encoding="utf-8-sig")
+    if sentence.lower() in text.lower():
+        return False
+    if "## Lessons" not in text:
+        text = text.rstrip("\n") + "\n\n## Lessons\n"
+    mine.write_text(text.rstrip("\n") + f"\n- {today or time.strftime('%Y-%m-%d')}: {sentence}\n", encoding="utf-8")
+    return True
+
+
 def read_first_line(names: list) -> str:
     return ("Read " + ", ".join(names) + " first: they hold the rules the host has set for the host's cuts and the host's hook patterns. " if names else "")

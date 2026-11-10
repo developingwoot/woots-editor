@@ -603,6 +603,7 @@ def start_make_version(work, name, stage):
         if ok:
             result["applied_ids"] += r["applied_ids"]
             result["changes"] += r["changes"]
+            result["lesson"] = r.get("lesson", "")
         return ok, msg
 
     def run():
@@ -1486,6 +1487,15 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/api/v2/computer/graphics":
                 import appsetup
                 return self.send_json(appsetup.get_graphics_tool())
+            if u.path == "/api/v2/lesson":                          # the host adds the lesson Claude offered after a note to their own editing rules
+                work, name = views.split_key(b["key"])
+                v = next((x for x in reviewnotes.versions(work, name, b["stage"]) if x["n"] == int(b["n"])), None)
+                if not v or not v.get("lesson"):
+                    raise ValueError("there is no lesson to add")
+                with _lock:
+                    added = skillrules.add_lesson(v["lesson"])
+                    reviewnotes.mark_lesson_added(work, name, b["stage"], v["n"])
+                return self.send_json({"added": added})
             if u.path == "/api/v2/notes":
                 work, name = views.split_key(b["key"])
                 with _lock:

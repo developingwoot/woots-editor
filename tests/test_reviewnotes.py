@@ -74,7 +74,7 @@ def test_apply_answer_rules(tmp_path):
     assert not ok and json.loads((d / f"{n}.beatmap.json").read_text(encoding="utf-8")) == {"beats": [{"id": "B01"}]}
     p.write_text(json.dumps({"applied": [{"id": a["id"], "summary": "Moved the shirt earlier"}], "beatmap": {"beats": [{"id": "B02"}]}}), encoding="utf-8")
     ok, msg, res = makeversion.apply_answer(w, n, "preview", p)
-    assert ok and res == {"applied_ids": [a["id"]], "changes": ["Moved the shirt earlier"]}
+    assert ok and res == {"applied_ids": [a["id"]], "changes": ["Moved the shirt earlier"], "lesson": ""}
     assert json.loads((d / f"{n}.beatmap.json").read_text(encoding="utf-8"))["beats"] == [{"id": "B02"}]
     assert any(e["file"].endswith(".beatmap.json") for e in projectstore.history(d))
 

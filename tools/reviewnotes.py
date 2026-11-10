@@ -127,6 +127,15 @@ def versions(work: str, name: str, stage: str) -> list:
     return load(work, name)["versions"][_stage(stage)]
 
 
+def mark_lesson_added(work: str, name: str, stage: str, n: int) -> None:
+    with _lock:
+        j = load(work, name)
+        for v in j["versions"][_stage(stage)]:
+            if v["n"] == n:
+                v["lesson_added"] = True
+        save(work, name, j)
+
+
 def keep_file(work: str, name: str, stage: str, n: int, src: Path) -> str:
     """Keep a version's video under its own name: stitching deletes the older previews, a hard link costs no space (a copy where links fail)."""
     dst = wd_of(work) / f"{name}.{stage}-v{n}.mp4"
@@ -138,14 +147,14 @@ def keep_file(work: str, name: str, stage: str, n: int, src: Path) -> str:
     return dst.name
 
 
-def add_version(work: str, name: str, stage: str, src: Path, changes: list, clips: list, applied_ids: list | None = None, suggestions: list | None = None) -> dict:
+def add_version(work: str, name: str, stage: str, src: Path, changes: list, clips: list, applied_ids: list | None = None, suggestions: list | None = None, lesson: str = "") -> dict:
     """Record the video at `src` as the next version; the notes in applied_ids become 'done in <this version>'."""
     wd = wd_of(work)
     with _lock:
         j = load(work, name)
         n = 1 + max([v["n"] for v in j["versions"][_stage(stage)]] + [0])
         v = {"n": n, "file": keep_file(work, name, stage, n, src), "made": time.strftime("%Y-%m-%dT%H:%M:%S"), "changes": list(changes),
-             "clips": clips, "marker": f"{stage}{n}", "suggestions": list(suggestions or [])}
+             "clips": clips, "marker": f"{stage}{n}", "suggestions": list(suggestions or []), "lesson": lesson or "", "lesson_added": False}
         j["versions"][stage].append(v)
         for note in j[stage]:
             if note["id"] in (applied_ids or []):

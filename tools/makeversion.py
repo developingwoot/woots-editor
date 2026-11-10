@@ -5,6 +5,7 @@
   4. finish()       - record the new video as the next version, the applied notes become 'done in <version>'
 """
 import json
+import re
 import time
 from pathlib import Path
 
@@ -69,6 +70,7 @@ def brief(work: str, name: str, stage: str, fd: Path) -> str:
         "Write answer.json in this folder:\n"
         '{"applied": [{"id": <note id>, "summary": "<one plain sentence about what you changed, no ids or file names>"}],\n'
         ' "skipped": [{"id": <note id>, "why": "<one plain sentence>"}],\n'
+        ' "lesson": "<optional: ONE general sentence, no times and no video names, only when a note taught something that applies to other videos>",\n'
         ' "beatmap": <the whole edited beat map, only if you changed it>}\n'
         "Change as little as possible. Keep every field you do not need to change exactly as it is. Do not write anywhere else.")
 
@@ -90,21 +92,29 @@ def apply_answer(work: str, name: str, stage: str, path: Path) -> tuple[bool, st
     changes = [" ".join(str(a["summary"]).split())[:200] for a in applied]
     n_skipped = len([s for s in ans.get("skipped") or [] if isinstance(s, dict)])
     msg = f"Applied {len(applied)} note{'s' if len(applied) != 1 else ''}" + (f"; {n_skipped} could not be applied." if n_skipped else ".")
-    return True, msg, {"applied_ids": [a["id"] for a in applied], "changes": changes}
+    return True, msg, {"applied_ids": [a["id"] for a in applied], "changes": changes, "lesson": clean_lesson(ans.get("lesson"))}
+
+
+def clean_lesson(x) -> str:
+    """One general sentence: no times, no ids, not long. Anything else is not offered."""
+    t = " ".join(str(x or "").split())
+    if not 12 <= len(t) <= 240 or re.search(r"\d+:\d\d|\b[SBG]\d{2}\b", t):
+        return ""
+    return t
 
 
 def finish_cut(work: str, name: str, video: Path, rows: list, result: dict) -> dict:
     """The rendered rough cut becomes the next version. `result` = {applied_ids, changes}; the first cut has none."""
     changes = result.get("changes") or (["The first cut"] if not reviewnotes.versions(work, name, "cut") else ["Made again, nothing changed"])
     clips = [{"start": r["start"], "dur": r["dur"], "ref": r["ref"]} for r in rows]
-    return reviewnotes.add_version(work, name, "cut", video, changes, clips, result.get("applied_ids"), result.get("suggestions"))
+    return reviewnotes.add_version(work, name, "cut", video, changes, clips, result.get("applied_ids"), result.get("suggestions"), result.get("lesson", ""))
 
 
 def finish(work: str, name: str, stage: str, result: dict) -> dict:
     src = preview_file(work, name)
     if not src:
         raise ValueError("there is no new video to keep")
-    return reviewnotes.add_version(work, name, stage, src, result["changes"], clips_of(work, name), result["applied_ids"])
+    return reviewnotes.add_version(work, name, stage, src, result["changes"], clips_of(work, name), result["applied_ids"], lesson=result.get("lesson", ""))
 
 
 def fake_stitch(work: str, name: str):
