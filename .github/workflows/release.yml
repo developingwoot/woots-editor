@@ -25,7 +25,7 @@ jobs:
           git archive --format=zip --prefix="woots-editor-$version/" -o "woots-editor-$version.zip" HEAD
           sha256sum "woots-editor-$version.zip" > "woots-editor-$version.zip.sha256"
           awk -v v="$version" '/^## /{p=($2==v)} p' CHANGELOG.md > release-notes.md
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           body_path: release-notes.md
           files: |
