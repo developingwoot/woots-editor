@@ -1,6 +1,6 @@
 """A read of the rough cut as a viewer hears it (the host, 2026-10-29): Claude gets the words of the cut in order and finds what no cut of one recording can see.
 
- - two statements that contradict ("Onshape gets B tier. Onshape gets A tier."): the one the host corrected goes, the later stays;
+ - two statements that contradict ("The app gets B tier. The app gets A tier."): the one the host corrected goes, the later stays;
  - a general line right before the specific one ("it took me a little longer. It took me 22 minutes"): the general one goes;
  - the same idea said twice in other words, or a line that does not make sense where it now stands;
  - passages that belong somewhere else (said as a suggestion; the cut does not move them yet).
@@ -136,13 +136,13 @@ def brief(work: str, name: str, fd: Path) -> str:
     return ("You are reading the rough cut of the host's YouTube video the way a viewer will hear it. cut.json lists every sentence of the cut in order: its id, the recording it "
             "comes from and its words; sentences marked locked are ones the host marked good: never drop, restore a replacement for, move or flag them. Sentences marked left_out (ids like B08.L1) are in the recording between the others but the cut does not play them. " + skillrules.read_first_line(got) +
             "Find what makes a viewer stop following. Only these kinds:\n"
-            "- contradiction: two statements that disagree (the host said 'Onshape gets B tier' and right after 'Onshape gets A tier'). The host corrected himself: drop the earlier one.\n"
+            "- contradiction: two statements that disagree (the host said 'the app gets B tier' and right after 'the app gets A tier'). The host corrected the line: drop the earlier one.\n"
             "- general-then-specific: a vague line and then the specific one saying the same ('it took me a little bit longer' then 'it took me 22 minutes'). Drop the vague one.\n"
             "- repeat: the same idea said twice in other words, or a phrase said twice. Drop the weaker copy.\n"
             "- does-not-fit: a sentence that makes no sense where it stands (refers to something not yet said, or is left over from a stumble).\n"
             "- cut-off: a sentence that stops before its thought is finished ('it's only a couple.' with nothing after it). Drop it.\n"
             + "- unclear: a sentence a first-time viewer cannot follow because the cut left out what it refers to ('Not a big game changer, but...' with no earlier mention of what; 'stuff that you don't need "
-              "to click on' with no mention of what is clickable; 'highlight and comment it out' before saying he edits config). Read the cut as someone who has never seen the video. Fix it by `restore`: list the "
+              "to click on' with no mention of what is clickable; 'highlight and comment it out' before saying the host edits config). Read the cut as someone who has never seen the video. Fix it by `restore`: list the "
               "left_out sentence ids just before it that set it up (the reason, the example, the missing subject), at most three; only when none of them does, drop the unclear sentence. "
               "Never restore a sentence that repeats one already in the cut.\n"
             + (f"- intro-too-long: the opening is the cold open ({hb['cold_open_s']} s) plus the sentences marked part=intro ({hb['intro_s']} s). The viewer must reach the content by "

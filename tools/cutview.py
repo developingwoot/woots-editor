@@ -275,8 +275,8 @@ def search_prompt(work: str, name: str, ref: str, fd: Path) -> str:
     fd.mkdir(parents=True, exist_ok=True)
     (fd / "transcripts.json").write_text(json.dumps(transcript_chunks(work, name), indent=0), encoding="utf-8")
     (fd / "wanted.json").write_text(json.dumps({"said": b.get("said", ""), "in_use": {"rel": b["aroll"]["rel"], "start": b["aroll"]["in"]}}), encoding="utf-8")
-    return ("wanted.json is what the host says in one clip of his video. transcripts.json is everything said in all his recordings "
-            "(each chunk has the recording, start and end in seconds, and the words). Find up to 3 other places where he says the same thing, "
+    return ("wanted.json is what the host says in one clip of the host's video. transcripts.json is everything said in all the host's recordings "
+            "(each chunk has the recording, start and end in seconds, and the words). Find up to 3 other places where the host says the same thing, "
             "not the one in use. A good take reads the whole line cleanly, with no restart. Write options.json here:\n"
             '{"options": [{"rel": "<recording from transcripts.json>", "start": <seconds>, "end": <seconds>, "why": "<one plain sentence>"}]}\n'
             "Use only recordings and times that appear in transcripts.json. Write nowhere else.")

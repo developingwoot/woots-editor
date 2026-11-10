@@ -86,7 +86,7 @@ def brief(work: str, name: str, fd: Path) -> str:
     hints = candidates([s for s in sents if not s.get("left_out")])
     got = skillrules.copy_into(fd)
     smin = skillrules.rules()["splice_min_words"]
-    return ("You are looking at the rough cut of the host's YouTube video for passages he says MORE THAN ONCE. He records a passage several times (often one after another inside one long recording, "
+    return ("You are looking at the rough cut of the host's YouTube video for passages the host says MORE THAN ONCE. The host records a passage several times (often one after another inside one long recording, "
             "after a restart) and the cut then plays the same point twice, in the same or other words. cut.json lists every sentence of the recordings in order: id, recording, `at` (seconds into that recording), "
             "length and words. Sentences marked left_out (ids like B08.L1) are in the recording but the cut does not play them; they can be another take of the same line. " + skillrules.read_first_line(got) +
             "Find the groups: one topic, said in two or more takes. A take is a run of consecutive sentence ids (a few sentences to a whole section), left_out ones included. "

@@ -91,10 +91,9 @@ def find_claude() -> str:
 
 def tool_env() -> dict:
     env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")
-    base = Path(os.environ.get("LOCALAPPDATA", ""))
-    for p in base.glob("Microsoft/WinGet/Packages/Gyan.FFmpeg*/*/bin"):
+    import platformx
+    for p in platformx.ffmpeg_dirs()[:1]:
         env["PATH"] = str(p) + os.pathsep + env.get("PATH", "")
-        break
     return env
 
 
@@ -277,14 +276,14 @@ Section {psec['id']} "{psec['title']}": beats {', '.join(psec['beats'])} ({psec[
 READ FIRST (all in this folder):
 - inputs/beats.json: the plan for these beats (the words said, the take, what is on screen, the graphic, why). Build what it asks and change nothing in it: it is an input, not yours to edit.
 - inputs/words.json: word timings in SOURCE seconds for each beat's take, to time a graphic to the exact words.
-- inputs/style/*.md: the host's style rules and notes: brand tokens, how graphics move, how HyperFrames compositions are written, what he likes and dislikes.
+- inputs/style/*.md: the host's style rules and notes: brand tokens, how graphics move, how HyperFrames compositions are written, what the host likes and dislikes.
 - section.edit.json: the cut list, already built. Finished graphics are already overlays in it.
 
 YOUR JOB: design and render these graphics (nothing else needs Claude; cutting and rendering are done by tools):
 {chr(10).join(todo) or '  (none)'}
 {ask_text}
 For each graphic on beat B:
- 1. Write graphics/B/index.html: a HyperFrames composition, 1920x1080, 30 fps, TRANSPARENT background (a graphic that sits over the host's footage must leave his face visible: keep it in the lower third or a side, as the beat's note says, or in the PLACEMENT the host asked for. EXCEPTION: a title card, an end card (kind title or end) and anything whose PLACEMENT is "full screen" cover the whole frame on purpose: give those an OPAQUE brand-navy background over the full 1920x1080, not a transparent one, and do not put a band across the lower third). Follow inputs/style closely; keep it simple, few elements, brand tokens only.
+ 1. Write graphics/B/index.html: a HyperFrames composition, 1920x1080, 30 fps, TRANSPARENT background (a graphic that sits over the host's footage must leave the host's face visible: keep it in the lower third or a side, as the beat's note says, or in the PLACEMENT the host asked for. EXCEPTION: a title card, an end card (kind title or end) and anything whose PLACEMENT is "full screen" cover the whole frame on purpose: give those an OPAQUE background in the brand's main colour (see inputs/style) over the full 1920x1080, not a transparent one, and do not put a band across the lower third). Follow inputs/style closely; keep it simple, few elements, brand tokens only.
  2. Time it to the words. The take starts at source time aroll.in (see beats.json); the first timed word starts at the time given in words.json. The overlay `at` in section.edit.json is seconds into the BEAT: (first word start - aroll.in) minus the graphic's own lead-in before its key moment.
  3. Render it once, transparent: npx --yes {HF} render graphics/B -o graphics/B/B.mov --format mov --quality draft --fps 30 --quiet
     (replace B with the beat id; HyperFrames cannot render smaller than 1080p: the preview tool shrinks it, and the final render reuses this file)
@@ -339,8 +338,8 @@ def short(tool: str, inp: dict, sb: Path) -> str:
 
 # ----------------------------------------------------------------------------- one run
 def _kill(proc):
-    if proc and proc.poll() is None:
-        subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)
+    import platformx
+    platformx.kill_tree(proc)
 
 
 def run_local(work, name, sid, sb, key):
@@ -414,7 +413,7 @@ def critic_brief(name: str, psec: dict, beats: list, targets: list, sb: Path, st
     for b in targets:
         g = plan_mod.live_graphic(b)
         lines.append(f"  - beat {b['id']} ({g.get('kind')}): idea “{g.get('idea', '')}”; timed to the words “{g.get('words', '')}”; on-screen text “{g.get('text', '')}”; "
-                     f"{g.get('dur', 3)} s; placement {PLACES.get(g.get('place')) or 'automatic (leave his face clear)'}"
+                     f"{g.get('dur', 3)} s; placement {PLACES.get(g.get('place')) or 'automatic (leave the face clear)'}"
                      + (f"; the host's design note: “{g['plan_note']}”" if g.get("plan_note") else "")
                      + (f"; the host asked for this change last time: “{g['review_note']}”" if g.get("review_note") else "")
                      + (f"; VOICE-OVER BEAT, sound is {b['vo']['file']}" if b.get("vo") else ""))
@@ -429,8 +428,8 @@ GRAPHICS TO REVIEW:
 
 For each graphic:
  1. Look at it: npx --yes {HF} snapshot graphics/<beat> --at 0.4,1.5,3,5,7,9,11 -o graphics/<beat>/critic-snaps   (use times inside its length), then open the PNGs with the Read tool. Also read graphics/<beat>/index.html to see the timing (CONFIG beats) and compare it with inputs/words.json.
- 2. Judge it on: (a) nothing overlaps, is cut off or is too small to read; text stays up for its reading budget ({read_s}); (b) it is where the host asked (placement) and nothing sits over his face; a full-screen graphic is opaque over the whole frame; (c) it is timed to the words: each part appears as its word is said; (d) the idea reads: what is the viewer supposed to understand, and does the picture teach it? Check every label and number against inputs/video-notes.md: a wrong tooth count, ratio or measurement is a "fix"; (e) the motion: one clear idea, eased, plays once, not busy; brand tokens only; (f) polish: depth, spacing, alignment, hierarchy; does it look designed or merely correct?
- 3. Be a tough, fair critic. "fix" = the host would notice and dislike it, or it teaches something wrong or is off the placement he asked for. "look" = a matter of taste. At most 5 issues per graphic, the most important first. Each issue needs a CONCRETE change the builder can make to index.html (for example "move the swing arm label 40 px right so it clears the gear" or "start the yaw arrow at the word 'yaw', now it starts 1.2 s early").
+ 2. Judge it on: (a) nothing overlaps, is cut off or is too small to read; text stays up for its reading budget ({read_s}); (b) it is where the host asked (placement) and nothing sits over the host's face; a full-screen graphic is opaque over the whole frame; (c) it is timed to the words: each part appears as its word is said; (d) the idea reads: what is the viewer supposed to understand, and does the picture teach it? Check every label and number against inputs/video-notes.md: a wrong tooth count, ratio or measurement is a "fix"; (e) the motion: one clear idea, eased, plays once, not busy; brand tokens only; (f) polish: depth, spacing, alignment, hierarchy; does it look designed or merely correct?
+ 3. Be a tough, fair critic. "fix" = the host would notice and dislike it, or it teaches something wrong or is off the placement the host asked for. "look" = a matter of taste. At most 5 issues per graphic, the most important first. Each issue needs a CONCRETE change the builder can make to index.html (for example "move the swing arm label 40 px right so it clears the gear" or "start the yaw arrow at the word 'yaw', now it starts 1.2 s early").
 
 Write critique.json exactly like this (and nothing else is read): {{"<beat>": {{"verdict": "ok" or "fix", "issues": [{{"severity": "fix" or "look", "what": "...", "fix": "..."}}]}}}} and critique.md (under 150 words: what is good, what you want changed). Verdict "ok" when it has no "fix" issues.
 RULES: write only critique.json, critique.md and the snapshots; never edit inputs/ or graphics/<beat>/index.html.

@@ -27,3 +27,18 @@ def test_every_import_points_at_a_file_and_a_name_it_exports(module):
             for n in (x.split(" as ")[0].strip() for x in names.strip("{} ").split(",") if x.strip()):
                 e = re.escape(n)
                 assert re.search(r"export\s+(async\s+)?(function|const|let|class)\s+%s(?![\w$])|export\s*\{[^}]*(?<![\w$])%s(?![\w$])" % (e, e), code), f"{module.name}: {src} does not export {n}"
+
+
+def test_every_screen_module_parses():
+    import shutil
+    import subprocess
+    node = shutil.which("node")
+    if not node:
+        import pytest
+        pytest.skip("node missing")
+    bad = []
+    for f in MODULES:
+        r = subprocess.run([node, "--check", "--input-type=module"], input=f.read_text(encoding="utf-8"), capture_output=True, text=True)
+        if r.returncode:
+            bad.append(f"{f.name}: {r.stderr.strip().splitlines()[0] if r.stderr.strip() else ''}")
+    assert not bad, bad

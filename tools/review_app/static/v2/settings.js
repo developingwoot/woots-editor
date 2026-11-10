@@ -39,6 +39,7 @@ export async function render(root) {
       channelCard(),
       claudeModelsCard(),
       modelsCard(),
+      computerCard(),
       h('section', { class: 'card setCard', id: 'claudeCard' },
         h('h2', {}, 'Claude'),
         h('p', { id: 'claudeDetail' }, s.claude.detail),
@@ -47,8 +48,29 @@ export async function render(root) {
           s.claude.installed && !s.claude.signed_in ? h('button', { class: 'main', id: 'claudeSignIn', onclick: signIn }, 'Sign in') : null,
           h('button', { class: 'quiet', id: 'claudeCheck', onclick: check }, 'Check again'))),
       h('p', { class: 'muted small' }, `Saved in ${s.settings_file}`),
+      h('p', { class: 'muted small', id: 'appVersion' }, `Woots Editor ${s.version} `,
+        h('button', { class: 'quiet', id: 'updateCheck', onclick: async e => {
+          const r = await api('/api/v2/update-check', {});
+          const out = document.getElementById('updateResult');
+          out.replaceChildren(r.error ? r.error : r.newer ? h('span', {}, `Version ${r.latest} is out. `, h('a', { href: r.url, target: '_blank', rel: 'noopener noreferrer' }, 'Download it'),
+            ', run setup.bat again after unzipping. Your files are kept elsewhere.') : 'You have the newest version.');
+        } }, 'Check for updates'), ' ', h('span', { id: 'updateResult' })),
       s.first_run ? null : h('a', { class: 'quiet', href: '#/' }, '← Back to your videos')].filter(Boolean));
   };
+
+  let computer = null;                                 // {rows:[{id,label,ok,detail,fix}], graphics:{ready,state,error,package}}
+  const computerCard = () => h('section', { class: 'card setCard', id: 'computerCard' }, h('h2', {}, 'This computer'),
+    computer ? h('div', {}, ...computer.rows.map(r => h('div', { class: 'setRow', 'data-check': r.id },
+      h('b', {}, `${r.ok ? '✓' : '✗'} ${r.label}`), h('span', { class: 'muted small' }, ` ${r.detail}`), r.fix ? h('div', { class: 'small' }, r.fix) : null)),
+      h('div', { class: 'setRow', 'data-check': 'graphics' }, h('b', {}, `${computer.graphics.ready ? '✓' : '✗'} Graphics tool`),
+        h('span', { class: 'muted small' }, computer.graphics.ready ? ' Ready.' : computer.graphics.state === 'running' ? ' Getting it…' : ' Not fetched yet: the first graphic would start with a download.'),
+        computer.graphics.error ? h('div', { class: 'small' }, computer.graphics.error) : null,
+        computer.graphics.ready ? null : h('button', { class: 'quiet', id: 'getGraphics', disabled: computer.graphics.state === 'running', onclick: async () => {
+          computer.graphics = await api('/api/v2/computer/graphics', {}); draw();
+          const t = setInterval(async () => { computer = await api('/api/v2/computer'); if (!document.getElementById('computerCard') || computer.graphics.state !== 'running') clearInterval(t); draw(); }, 3000);
+        } }, 'Get the graphics tool')),
+      h('button', { class: 'quiet', id: 'computerCheck', onclick: async () => { computer = await api('/api/v2/computer'); draw(); } }, 'Check again'))
+      : h('p', { class: 'muted small' }, 'Looking…'));
 
   let channel = null;                                  // {fields:[{key, help, value, default}], file}
   const LABELS = { name: 'Your name', channel: 'Channel name', topic: 'What the channel is about', cohost: 'Second voice', terms: 'Words speech recognition gets wrong', audience: 'Who watches', voice: 'Your voice and habits',
@@ -115,7 +137,7 @@ export async function render(root) {
         h('b', {}, JOBS[job][0]), h('div', { class: 'muted small' }, JOBS[job][1]),
         ...rows.map(r => h('div', { class: 'modelRow' + (r.fits && r.built ? '' : ' off'), 'data-id': r.id },
           h('div', { class: 'modelName' }, h('b', {}, r.name), r.recommended ? h('span', { class: 'chip2 ok' }, 'recommended') : null, r.chosen ? h('span', { class: 'chip2' }, 'in use') : null,
-            h('div', { class: 'muted small' }, [r.note, !r.built ? 'Not available yet.' : '', r.why ? `Does not fit: ${r.why}.` : '', `Download ${r.gb} GB.`].filter(Boolean).join(' '))),
+            h('div', { class: 'muted small' }, [r.note, !r.built ? 'Not available yet.' : '', r.why ? `Does not fit: ${r.why}.` : '', `Download ${r.gb} GB.`].filter(Boolean).join(' '), ' ', h('span', { class: 'small' }, `Licence: ${r.licence}. `, h('a', { href: r.card, target: '_blank', rel: 'noopener noreferrer' }, 'Model card')))),
           h('div', { class: 'modelAct' },
             r.state === 'running' ? h('progress', { max: 1, value: r.progress }) : null,
             r.state === 'installed' ? h('span', { class: 'chip2 ok' }, 'downloaded') : null,
@@ -171,6 +193,7 @@ export async function render(root) {
     }, 2000);
   };
   draw();
+  api('/api/v2/computer').then(c => { computer = c; if (document.getElementById('computerCard')) draw(); }).catch(() => {});
   api('/api/v2/channel').then(c => { channel = c; if (document.getElementById('channelCard')) draw(); }).catch(() => {});
   api('/api/v2/claude-models').then(m => { claudeModels = m; if (document.getElementById('claudeModelsCard')) draw(); }).catch(() => {});
   api('/api/v2/engines').then(m => { models = m; if (document.getElementById('modelsCard')) { draw(); watchDownloads(); } }).catch(() => {});

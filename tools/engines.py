@@ -12,19 +12,19 @@ import config
 import hardware
 
 CATALOG = [
-    {"id": "parakeet-0.6b", "job": "speech", "name": "Parakeet 0.6B (Nvidia)", "repo": "nvidia/parakeet-tdt-0.6b-v2", "revision": "ae9ad07059c7c739ffaf932226a8fe64ae2620b0", "gb": 2.5, "min_vram": 6, "needs_gpu": True,
+    {"id": "parakeet-0.6b", "job": "speech", "name": "Parakeet 0.6B (Nvidia)", "repo": "nvidia/parakeet-tdt-0.6b-v2", "licence": "CC BY 4.0", "revision": "ae9ad07059c7c739ffaf932226a8fe64ae2620b0", "gb": 2.5, "min_vram": 6, "needs_gpu": True,
      "built": True, "note": "Fast, with a time for every word. Needs an Nvidia graphics card."},
-    {"id": "whisper-large-v3", "job": "speech", "name": "Whisper large-v3", "repo": "Systran/faster-whisper-large-v3", "revision": "edaa852ec7e145841d8ffdb056a99866b5f0a478", "gb": 3.1, "min_vram": 4, "needs_gpu": True,
+    {"id": "whisper-large-v3", "job": "speech", "name": "Whisper large-v3", "repo": "Systran/faster-whisper-large-v3", "licence": "MIT", "revision": "edaa852ec7e145841d8ffdb056a99866b5f0a478", "gb": 3.1, "min_vram": 4, "needs_gpu": True,
      "built": True, "runner": "whisper", "note": "Accurate, with a time for every word. Runs on an Nvidia card (8-bit weights on a 4 to 6 GB card); use it where Parakeet does not work."},
-    {"id": "whisper-small", "job": "speech", "name": "Whisper small (any computer)", "repo": "Systran/faster-whisper-small", "revision": "536b0662742c02347bc0e980a01041f333bce120", "gb": 0.5, "min_vram": 0, "needs_gpu": False,
+    {"id": "whisper-small", "job": "speech", "name": "Whisper small (any computer)", "repo": "Systran/faster-whisper-small", "licence": "MIT", "revision": "536b0662742c02347bc0e980a01041f333bce120", "gb": 0.5, "min_vram": 0, "needs_gpu": False,
      "built": True, "runner": "whisper", "note": "For computers without an Nvidia card: runs on the processor, slower than real time on long recordings and less exact on technical words."},
-    {"id": "qwen3-vl-8b", "job": "vision", "name": "Qwen3-VL 8B", "repo": "Qwen/Qwen3-VL-8B-Instruct", "revision": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b", "gb": 17.6, "min_vram": 10, "needs_gpu": True,
+    {"id": "qwen3-vl-8b", "job": "vision", "name": "Qwen3-VL 8B", "repo": "Qwen/Qwen3-VL-8B-Instruct", "licence": "Apache 2.0", "revision": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b", "gb": 17.6, "min_vram": 10, "needs_gpu": True,
      "built": True, "note": "Best descriptions. Loaded in 4-bit, so it fits a 12 GB card; the download is large."},
-    {"id": "qwen3-vl-4b", "job": "vision", "name": "Qwen3-VL 4B", "repo": "Qwen/Qwen3-VL-4B-Instruct", "revision": "ebb281ec70b05090aa6165b016eac8ec08e71b17", "gb": 8.9, "min_vram": 6, "needs_gpu": True,
+    {"id": "qwen3-vl-4b", "job": "vision", "name": "Qwen3-VL 4B", "repo": "Qwen/Qwen3-VL-4B-Instruct", "licence": "Apache 2.0", "revision": "ebb281ec70b05090aa6165b016eac8ec08e71b17", "gb": 8.9, "min_vram": 6, "needs_gpu": True,
      "built": True, "note": "Smaller and quicker; descriptions are less detailed (quality not measured yet)."},
-    {"id": "qwen3-vl-2b", "job": "vision", "name": "Qwen3-VL 2B", "repo": "Qwen/Qwen3-VL-2B-Instruct", "revision": "89644892e4d85e24eaac8bacfd4f463576704203", "gb": 4.3, "min_vram": 4, "needs_gpu": True,
+    {"id": "qwen3-vl-2b", "job": "vision", "name": "Qwen3-VL 2B", "repo": "Qwen/Qwen3-VL-2B-Instruct", "licence": "Apache 2.0", "revision": "89644892e4d85e24eaac8bacfd4f463576704203", "gb": 4.3, "min_vram": 4, "needs_gpu": True,
      "built": True, "note": "For small cards; short descriptions (quality not measured yet). Tag your footage to make up for it."},
-    {"id": "siglip", "job": "embed", "name": "SigLIP (finds clips by what they show)", "repo": "google/siglip-base-patch16-224", "revision": "7fd15f0689c79d79e38b1c2e2e2370a7bf2761ed", "gb": 1.6, "min_vram": 0, "needs_gpu": False,
+    {"id": "siglip", "job": "embed", "name": "SigLIP (finds clips by what they show)", "repo": "google/siglip-base-patch16-224", "licence": "Apache 2.0", "revision": "7fd15f0689c79d79e38b1c2e2e2370a7bf2761ed", "gb": 1.6, "min_vram": 0, "needs_gpu": False,
      "built": True, "note": "Small; every setup uses it."},
 ]
 DEFAULTS = {"speech": "parakeet-0.6b", "vision": "qwen3-vl-8b", "embed": "siglip"}       # what the code ran on before there was a choice
@@ -160,7 +160,7 @@ def view(hw: dict | None = None) -> dict:
         rows = []
         for e in (x for x in CATALOG if x["job"] == job):
             ok, why = fits(e, hw)
-            rows.append({"id": e["id"], "name": e["name"], "gb": e["gb"], "note": e["note"], "built": e["built"], "fits": ok, "why": "" if ok else why,
+            rows.append({"id": e["id"], "name": e["name"], "gb": e["gb"], "note": e["note"], "licence": e["licence"], "card": "https://huggingface.co/" + e["repo"], "built": e["built"], "fits": ok, "why": "" if ok else why,
                          "recommended": e["id"] == rec, "chosen": e["id"] == pick, **status(e)})
         jobs[job] = rows
     return {"hardware": hw, "jobs": jobs}

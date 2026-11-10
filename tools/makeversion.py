@@ -64,7 +64,7 @@ def brief(work: str, name: str, stage: str, fd: Path) -> str:
     if bm is not None:
         (fd / "beatmap.json").write_text(json.dumps(bm, indent=1), encoding="utf-8")
     return (
-        f"The host watched the {'rough cut' if stage == 'cut' else 'preview'} of his video and left notes (notes.json, times are minutes:seconds into the video).\n"
+        f"The host watched the {'rough cut' if stage == 'cut' else 'preview'} of the host's video and left notes (notes.json, times are minutes:seconds into the video).\n"
         "beatmap.json is the plan the video is built from. For each note, decide whether a change to the beat map makes the video match what the host asked.\n"
         "Write answer.json in this folder:\n"
         '{"applied": [{"id": <note id>, "summary": "<one plain sentence about what you changed, no ids or file names>"}],\n'

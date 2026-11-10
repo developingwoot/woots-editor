@@ -81,6 +81,7 @@ import publish                                    # noqa: E402  (v2 publishing d
 import teaching                                   # noqa: E402  (v2 teaching moments)
 import clipmap                                    # noqa: E402  (takes -> script lines, the creator's corrections)
 import beatmap                                    # noqa: E402  (the plan: what is said / on screen, graphics, checks)
+import platformx                                  # noqa: E402  (the few operating-system specifics)
 import clauderun                                  # noqa: E402  (the one place a background Claude command is built)
 import builder                                    # noqa: E402  (stage 5: sections, 3-slot scheduler, headless Claude runs)
 import usage                                      # noqa: E402  (Dashboard: Claude cost, free local work, time saved)
@@ -1199,7 +1200,7 @@ def check_path_names(path: str):
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "WootReview/1"
+    server_version = "WootsEditor/" + __import__("version").__version__
 
     def log_message(self, fmt_, *args):
         if "/media/" not in self.path:
@@ -1298,6 +1299,9 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/api/v2/fonts":
                 import sysfonts
                 return self.send_json({"fonts": sysfonts.installed()})
+            if u.path == "/api/v2/computer":
+                import appsetup
+                return self.send_json({"rows": appsetup.computer_check(), "graphics": appsetup.graphics_tool()})
             if u.path == "/api/v2/claude":
                 import appsetup
                 return self.send_json(appsetup.claude_status())
@@ -1453,6 +1457,12 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/api/v2/claude/login":
                 import appsetup
                 return self.send_json(appsetup.start_login())
+            if u.path == "/api/v2/update-check":
+                import appsetup
+                return self.send_json(appsetup.check_update())
+            if u.path == "/api/v2/computer/graphics":
+                import appsetup
+                return self.send_json(appsetup.get_graphics_tool())
             if u.path == "/api/v2/notes":
                 work, name = views.split_key(b["key"])
                 with _lock:
@@ -1564,7 +1574,7 @@ class Handler(BaseHTTPRequestHandler):
                 work, name = views.split_key(b["key"])
                 folder, _ = shootplan.footage_folder(work, name)
                 d = folder or work_dir(work)
-                os.startfile(str(d))
+                platformx.open_folder(d)
                 return self.send_json({"ok": True})
             if u.path == "/api/v2/publish/write":
                 work, name = views.split_key(b["key"])
@@ -1645,7 +1655,7 @@ class Handler(BaseHTTPRequestHandler):
                 if op == "reveal":                               # open the folder in Explorer
                     d = work_dir(b["work"]) / "resolve"
                     d.mkdir(exist_ok=True)
-                    os.startfile(str(d))
+                    platformx.open_folder(d)
                     return self.send_json({"ok": True})
                 return self.send_error(404)
             if u.path.startswith("/api/music/"):

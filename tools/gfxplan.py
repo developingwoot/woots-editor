@@ -21,7 +21,7 @@ WORK = config.WORK
 sys.path.insert(0, str(TOOLS))
 
 STYLES = [
-    {"id": "brand", "label": "Plain brand card", "desc": "Navy and orange, Oswald Bold headline, calm and clean. The safe default."},
+    {"id": "brand", "label": "Plain brand card", "desc": "Your brand colours and headline font, calm and clean. The safe default."},
     {"id": "depth", "label": "3D depth and camera move", "desc": "Layers at different depths with a slow camera move or parallax, so the graphic feels like a space."},
     {"id": "sticker", "label": "Comic sticker caption", "desc": "A bold caption that pops on like a sticker with a springy bounce."},
     {"id": "ui", "label": "Clean product-UI explainer", "desc": "A flat, tidy interface-style diagram; the parts light up one at a time as they are named."},

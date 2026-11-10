@@ -318,8 +318,8 @@ def _rewrite(fmt: str, it: dict, lines: list, text: str) -> list:
 # ----------------------------------------------------------------------------- Claude: draft and revise
 FORMAT = """Write the outline in the host's format, exactly like example.md:
 - A first line "YouTube Video Script: <topic>", then a header block with "Title: ..." and "Thumbnail Concept: ...", then "Logline: ...", "Thesis: ..." and "Promise: ..." (one line each).
-- Each section starts with {icon_rule} and a short title, e.g. "{example_heading}". Sections can hold numbered entries ("1. Tinkercad") with an "Onscreen Data: ..." line.
-- Each part of a section is: "[VISUAL: what is on screen]" then "HOST (A-ROLL):" (the host talking to camera) or "HOST (VO):" (voice-over) and, on the next line, the suggested wording in quotes. It is a loose guide: the host speaks in his own words.
+- Each section starts with {icon_rule} and a short title, e.g. "{example_heading}". Sections can hold numbered entries ("1. Item name") with an "Onscreen Data: ..." line.
+- Each part of a section is: "[VISUAL: what is on screen]" then "HOST (A-ROLL):" (the host talking to camera) or "HOST (VO):" (voice-over) and, on the next line, the suggested wording in quotes. It is a loose guide: the host speaks in the host's own words.
 - "[GRAPHIC ON SCREEN: ...]" where a graphic helps. Every section needs at least one [VISUAL] line. Explain a term a first-time viewer would not know once, in a voice-over.
 - Put blank lines between parts. Write only the outline."""
 
@@ -345,8 +345,8 @@ def brief(work: str, name: str, fd: Path, note: str = "", icons: bool = True) ->
                         example_heading="🎬 Intro: The Benchmark Challenge" if icons else "Intro: The Benchmark Challenge")
     note = " ".join(str(note or "").split())[:800]
     task = (f"Revise the host's outline (current.md) for this change: {note or 'tighten it and fill any section that has no [VISUAL] line'}. Keep what the host did not ask to change."
-            if have else f"Draft the outline for the host's next video: {note or 'a video idea he has not written down yet; use the title of the video folder as the idea'}.")
-    return (f"{task}\nThe folder skill/ has the host's script rules (read SKILL.md first); example.md is his format.\n{fmt}\nWrite outline.md in this folder and nowhere else.")
+            if have else f"Draft the outline for the host's next video: {note or 'a video idea the host has not written down yet; use the title of the video folder as the idea'}.")
+    return (f"{task}\nThe folder skill/ has the host's script rules (read SKILL.md first); example.md is the host's format.\n{fmt}\nWrite outline.md in this folder and nowhere else.")
 
 
 def apply_answer(work: str, name: str, p: Path) -> tuple[bool, str]:

@@ -101,4 +101,4 @@ def copy_into(fd: Path, rels=FOR_CLAUDE) -> list:
 
 
 def read_first_line(names: list) -> str:
-    return ("Read " + ", ".join(names) + " first: they hold the rules the host has set for his cuts and his hook patterns. " if names else "")
+    return ("Read " + ", ".join(names) + " first: they hold the rules the host has set for the host's cuts and the host's hook patterns. " if names else "")

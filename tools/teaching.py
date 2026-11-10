@@ -73,7 +73,7 @@ def find_prompt(work: str, name: str, fd: Path) -> str:
     (fd / "beats.json").write_text(json.dumps(rows, indent=1), encoding="utf-8")
     known = [m["term"] for m in load(work, name)]
     (fd / "known.json").write_text(json.dumps(known), encoding="utf-8")
-    return ("beats.json is what the host says in each clip of his video. A first-time viewer does not know technical terms. "
+    return ("beats.json is what the host says in each clip of the host's video. A first-time viewer does not know technical terms. "
             "Find up to 6 terms or ideas that need a short explanation (skip the ones in known.json). Write teaching.json here:\n"
             '{"moments": [{"beat": "<beat id from beats.json>", "term": "<the term>", "why": "<one plain sentence: why a newcomer needs it>"}]}\n'
             "Write nowhere else.")

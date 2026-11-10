@@ -112,7 +112,7 @@ def brief(work: str, name: str, folder: str, rels: list, fd: Path) -> str:
         if out.exists():
             lines.append(f"{out.name} = {rel}")
     (fd / "frames.txt").write_text("\n".join(lines), encoding="utf-8")
-    return ("Each picture in this folder is one frame of the host talking to the camera (frames.txt says which recording each is). For each one say how far down the frame his eyes are, "
+    return ("Each picture in this folder is one frame of the host talking to the camera (frames.txt says which recording each is). For each one say how far down the frame the host's eyes are, "
             "as a fraction of the picture height (0 = top edge, 1 = bottom edge; the line through the middle of both eyes). Look at every picture; do not guess from one. "
             'Write framing.json here: {"frames": [{"file": "01.png", "eye_y": 0.38}]}. Write nowhere else.')
 

@@ -16,7 +16,7 @@ def gpus() -> list:
         return []
     try:
         r = subprocess.run([exe, "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=10,
-                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                           creationflags=__import__("platformx").NO_WINDOW)
     except (OSError, subprocess.TimeoutExpired):
         return []
     return parse_gpus(r.stdout) if r.returncode == 0 else []
