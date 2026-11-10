@@ -337,6 +337,7 @@ def brief(work: str, name: str, fd: Path, note: str = "", icons: bool = True) ->
         for f in found[:8]:
             if f.stat().st_size < 60000:
                 shutil.copyfile(f, fd / "skill" / f.name)
+    skillrules.copy_into(fd / "skill", "outline")                 # the host's house style and director's notes, when there are any
     cur = scriptedit.script_path(work, name)
     have = cur.exists() and cur.read_text(encoding="utf-8-sig").strip()
     if have:

@@ -110,9 +110,6 @@ def said_lines(work: str, name: str) -> list:
     return [{"t": round(float(b.get("start", 0)), 1), "said": _clean(b.get("said"), 400)} for b in bm.get("beats", []) if not b.get("skip") and _clean(b.get("said"), 400)]
 
 
-FILES = ("youtube-publish/SKILL.md", "youtube-publish/metadata.md", "youtube-script/hook-library.md")
-
-
 def brief(work: str, name: str, fd: Path, note: str = "") -> str:
     """Write what Claude needs into fd and return the prompt. Claude answers in publish.json (its own name: the notes job answers in answer.json)."""
     fd.mkdir(parents=True, exist_ok=True)
@@ -123,7 +120,7 @@ def brief(work: str, name: str, fd: Path, note: str = "") -> str:
     (fd / "script.md").write_text(script[:20000], encoding="utf-8")
     (fd / "said.json").write_text(json.dumps(said_lines(work, name), indent=1, ensure_ascii=False), encoding="utf-8")
     (fd / "current.json").write_text(json.dumps(load(work, name), indent=1), encoding="utf-8")
-    skillrules.copy_into(fd, FILES)
+    skillrules.copy_into(fd, "publish")
     n = skillrules.publish()
     redo = f"\nThe host asks for this change: {_clean(note, 600)}\n" if _clean(note, 600) else ""
     return (

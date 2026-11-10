@@ -142,7 +142,7 @@ def pick_brief(work: str, name: str, fd: Path) -> str:
     rows = [{"key": k, "shot_idea": e["visual"], "clips": [{"number": i, "what_it_shows": c["what"], "score": c["score"]}
                                                            for i, c in enumerate(e["candidates"]) if c["score"] >= THRESH]} for k, e in ambiguous(work, name)]
     (fd / "shots.json").write_text(json.dumps(rows, indent=1), encoding="utf-8")
-    got = skillrules.copy_into(fd, ("youtube-edit/rough-cut.md", "youtube-edit/editing-style.md", "youtube-edit/lessons.md"))
+    got = skillrules.copy_into(fd, "shots")
     return (skillrules.read_first_line(got) + "shots.json lists shot ideas from the host's outline and, for each, the clips of the host's footage that might fit (what each clip shows, from a vision model). "
             "For each shot idea pick the clip that best shows what the idea asks for, or none if no clip really fits. Write picks.json here:\n"
             '{"picks": [{"key": "<key from shots.json>", "clip": <the clip number, or null for none>, "why": "<one plain sentence>"}]}\n'

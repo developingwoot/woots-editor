@@ -49,6 +49,20 @@ SHORTS_FILE = "youtube-shorts/shorts.json"
 FOR_CLAUDE = ("youtube-edit/rough-cut.md", "youtube-edit/editing-style.md", "youtube-edit/cut-rules.md", "youtube-script/hook-library.md")
 
 
+COMMON = ("woots-channel/house-style.md", "woots-channel/director-notes.md")
+RUN_FILES = {                                                      # which skill files each kind of Claude run is given (a file that does not exist is skipped)
+    "takes": (*COMMON, "youtube-edit/rough-cut.md", "youtube-edit/editing-style.md", "youtube-edit/cut-rules.md", "youtube-edit/takes-and-splicing.md", "youtube-script/hook-library.md"),
+    "coldopen": (*COMMON, "youtube-edit/rough-cut.md", "youtube-edit/editing-style.md", "youtube-edit/cut-rules.md", "youtube-script/hook-library.md", "youtube-script/structure.md"),
+    "cutreview": (*COMMON, "youtube-edit/rough-cut.md", "youtube-edit/editing-style.md", "youtube-edit/cut-rules.md", "youtube-script/hook-library.md",
+                  "youtube-script/structure.md", "youtube-script/story-patterns.md", "youtube-edit/lessons.md"),
+    "story": (*COMMON, "youtube-edit/story.md", "youtube-script/structure.md", "youtube-script/story-patterns.md", "youtube-script/hook-library.md", "youtube-edit/lessons.md"),
+    "shots": (*COMMON, "youtube-edit/rough-cut.md", "youtube-edit/editing-style.md", "youtube-edit/lessons.md"),
+    "publish": (*COMMON, "youtube-publish/SKILL.md", "youtube-publish/metadata.md", "youtube-script/hook-library.md"),
+    "outline": (*COMMON,),
+    "moments": (*COMMON, "youtube-graphics/moments.md", "youtube-graphics/graphics.json"),
+}
+
+
 def numbers(rel: str, defaults: dict) -> dict:
     """The numbers in one skill file: `defaults`, each replaced by the file's value when that is a positive number (a word, where the default is a word)."""
     out = dict(defaults)
@@ -96,7 +110,9 @@ def shorts_notes() -> str:
 
 
 def copy_into(fd: Path, rels=FOR_CLAUDE) -> list:
-    """Copy the skill files a Claude run should read into its folder; returns the file names that were there."""
+    """Copy the skill files a Claude run should read into its folder; returns the file names that were there. `rels` is a list of skill paths or the name of a run (RUN_FILES)."""
+    if isinstance(rels, str):
+        rels = RUN_FILES[rels]
     fd.mkdir(parents=True, exist_ok=True)
     got = []
     for rel in rels:

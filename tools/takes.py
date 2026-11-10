@@ -84,7 +84,7 @@ def brief(work: str, name: str, fd: Path) -> str:
     sents = cutreview.sentences(data, with_left_out=True, held=locks.texts(work, name))
     (fd / "cut.json").write_text(json.dumps(sents, indent=1), encoding="utf-8")
     hints = candidates([s for s in sents if not s.get("left_out")])
-    got = skillrules.copy_into(fd)
+    got = skillrules.copy_into(fd, "takes")
     smin = skillrules.rules()["splice_min_words"]
     return ("You are looking at the rough cut of the host's YouTube video for passages the host says MORE THAN ONCE. The host records a passage several times (often one after another inside one long recording, "
             "after a restart) and the cut then plays the same point twice, in the same or other words. cut.json lists every sentence of the recordings in order: id, recording, `at` (seconds into that recording), "

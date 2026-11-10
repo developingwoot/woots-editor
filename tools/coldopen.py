@@ -93,7 +93,7 @@ def brief(work: str, name: str, fd: Path) -> str:
     sents = sentences(data)
     (fd / "sentences.json").write_text(json.dumps([{"id": s["id"], "seconds": round(s["end"] - s["start"], 1), "text": s["text"]} for s in sents], indent=1),
                                        encoding="utf-8")
-    got = skillrules.copy_into(fd)
+    got = skillrules.copy_into(fd, "coldopen")
     model = outline.load(work, name)
     title = model.get("title") or name
     hook = next((ln["said"] for ln in outline.speech_lines(model)[:3]), "")

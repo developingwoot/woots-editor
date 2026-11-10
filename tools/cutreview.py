@@ -130,7 +130,7 @@ def brief(work: str, name: str, fd: Path) -> str:
     fd.mkdir(parents=True, exist_ok=True)
     data = json.loads(beatmap.path_of(work, name).read_text(encoding="utf-8-sig"))
     (fd / "cut.json").write_text(json.dumps(sentences(data, with_left_out=True, held=locks.texts(work, name)), indent=1), encoding="utf-8")
-    got = skillrules.copy_into(fd)
+    got = skillrules.copy_into(fd, "cutreview")
     hb = hook_budget(data, skillrules.rules()["hook_total_s"])
     over = hb["intro_s"] - hb["intro_allowed_s"]
     return ("You are reading the rough cut of the host's YouTube video the way a viewer will hear it. cut.json lists every sentence of the cut in order: its id, the recording it "
