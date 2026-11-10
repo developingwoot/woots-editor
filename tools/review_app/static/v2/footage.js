@@ -1,4 +1,4 @@
-import { h, api } from './util.js';
+import { h, api, say } from './util.js';
 import { pickFolder } from './folder.js';
 import { tagClip } from './tagclip.js';
 
@@ -31,7 +31,7 @@ export async function render(root, key, setBusy) {
     const folderText = d.folder.set ? h('span', { id: 'folderPath', title: d.folder.path }, d.folder.short) : h('span', { class: 'muted' }, 'No footage folder yet. Choose the folder you recorded into.');
     const change = h('button', { class: 'quiet', id: 'changeFolder', onclick: async () => {
       const f = await pickFolder({ start: d.folder.path || '', suggest: d.folder.path ? [d.folder.path] : [] });
-      if (f) { try { await draw(await post('/api/v2/footage/folder', { folder: f })); } catch (e) { alert(e.message); } }
+      if (f) { try { await draw(await post('/api/v2/footage/folder', { folder: f })); } catch (e) { say(e.message); } }
     } }, d.folder.set ? 'Change folder' : 'Choose folder');
     const folderCard = h('div', { class: 'card' }, h('div', { class: 'rhead' }, h('b', {}, 'Footage folder'), change),
       folderText, d.folder.guessed ? h('span', { class: 'muted small' }, ' (matched to the video’s title)') : null,
@@ -40,7 +40,7 @@ export async function render(root, key, setBusy) {
     const b = d.button;
     const go = h('button', { class: 'main', id: 'cutBtn', disabled: !b.enabled, onclick: async () => {
       go.disabled = true;
-      try { await post('/api/v2/footage/cut'); setBusy(); } catch (e) { alert(e.message); go.disabled = false; }
+      try { await post('/api/v2/footage/cut'); setBusy(); } catch (e) { say(e.message); go.disabled = false; }
     } }, b.label);
     const copy = d.missing.length ? h('button', { class: 'quiet', id: 'copyMissing', onclick: async () => {
       try { await navigator.clipboard.writeText(d.missing.join('\n')); copy.textContent = 'Copied'; } catch { copy.textContent = 'Could not copy'; }

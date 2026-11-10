@@ -1,4 +1,4 @@
-import { h, api } from './util.js';
+import { h, api, say } from './util.js';
 import { marksCard } from './marks.js';
 import { factCheckCard, musicCard } from './extras.js';
 
@@ -26,7 +26,7 @@ export async function render(root, key, stage, setBusy) {
   function makeButton(b) {
     const make = h('button', { class: 'main', id: 'makeBtn', disabled: !b.enabled, onclick: async () => {
       make.disabled = true;
-      try { await api('/api/v2/make', { key, stage }); setBusy(); } catch (e) { alert(e.message); make.disabled = false; }
+      try { await api('/api/v2/make', { key, stage }); setBusy(); } catch (e) { say(e.message); make.disabled = false; }
     } }, b.label);
     return make;
   }
@@ -86,9 +86,9 @@ export async function render(root, key, stage, setBusy) {
       const { options, can_search, picture, vision } = await api(`/api/v2/options?key=${encodeURIComponent(key)}&clip=${encodeURIComponent(clip.ref)}`);
       const look = picture && !vision.ready ? h('div', { class: 'searchMore', id: 'visionNote' },
         h('span', { class: 'muted' }, vision.total ? `${vision.missing} of ${vision.total} recordings have not been looked at yet, so some shots may be missing.` : 'The footage has not been looked at yet.'),
-        h('button', { class: 'quiet', id: 'lookBtn', onclick: async () => { try { await api('/api/v2/vision', { key }); reopen = clip.ref; setBusy(); } catch (e) { alert(e.message); } } }, 'Look at my footage')) : null;
+        h('button', { class: 'quiet', id: 'lookBtn', onclick: async () => { try { await api('/api/v2/vision', { key }); reopen = clip.ref; setBusy(); } catch (e) { say(e.message); } } }, 'Look at my footage')) : null;
       const search = can_search && !picture ? h('div', { class: 'searchMore' },
-        h('button', { class: 'quiet', id: 'findOptions', onclick: async () => { try { await api('/api/v2/options/find', { key, clip: clip.ref }); reopen = clip.ref; setBusy(); } catch (e) { alert(e.message); } } }, 'Search all my footage for more takes'),
+        h('button', { class: 'quiet', id: 'findOptions', onclick: async () => { try { await api('/api/v2/options/find', { key, clip: clip.ref }); reopen = clip.ref; setBusy(); } catch (e) { say(e.message); } } }, 'Search all my footage for more takes'),
         h('span', { class: 'muted small' }, 'This takes a little longer.')) : null;
       if (!options.length) { body.replaceChildren(...[h('p', { class: 'muted' }, picture ? 'Nothing in your footage looks like this yet.' : 'There is no other take of this part yet.'), look, search].filter(Boolean)); return; }
       body.replaceChildren(...[h('div', { class: 'options' }, ...options.map(o => {
@@ -157,7 +157,7 @@ export async function render(root, key, stage, setBusy) {
 
     const teach = stage === 'cut' ? h('div', { class: 'card teach', id: 'teaching' },
       h('div', { class: 'rhead' }, h('b', {}, 'Teaching moments'),
-        h('button', { class: 'quiet', id: 'findTeach', onclick: async () => { try { await api('/api/v2/teaching/find', { key }); setBusy(); } catch (e) { alert(e.message); } } }, 'Ask Claude for more')),
+        h('button', { class: 'quiet', id: 'findTeach', onclick: async () => { try { await api('/api/v2/teaching/find', { key }); setBusy(); } catch (e) { say(e.message); } } }, 'Ask Claude for more')),
       data.teaching.length ? h('ul', { class: 'moments' }, ...data.teaching.map(m => h('li', { class: m.status },
         h('span', { class: 'when' }, m.when), h('span', { class: 'ntext' }, h('b', {}, m.term), ' ', h('span', { class: 'muted' }, m.why)),
         h('button', { class: 'tick' + (m.status === 'yes' ? ' on' : ''), title: 'Explain this in the video', onclick: async () => draw(await post('/api/v2/teaching', { id: m.id, status: m.status === 'yes' ? 'suggested' : 'yes' })) }, '✓'),
@@ -165,7 +165,7 @@ export async function render(root, key, stage, setBusy) {
         : h('p', { class: 'muted small' }, 'None yet.')) : null;
     const fun = stage === 'cut' ? h('div', { class: 'card teach', id: 'moments' },
       h('div', { class: 'rhead' }, h('b', {}, 'Fun moments'),
-        h('button', { class: 'quiet', id: 'findFun', onclick: async () => { try { await api('/api/v2/moments/find', { key }); setBusy(); } catch (e) { alert(e.message); } } }, 'Ask Claude for some')),
+        h('button', { class: 'quiet', id: 'findFun', onclick: async () => { try { await api('/api/v2/moments/find', { key }); setBusy(); } catch (e) { say(e.message); } } }, 'Ask Claude for some')),
       data.moments.length ? h('ul', { class: 'moments' }, ...data.moments.map(m => h('li', { class: m.status },
         h('span', { class: 'when' }, m.when), h('span', { class: 'ntext' }, h('b', {}, m.text), ' ', h('span', { class: 'muted' }, `${m.kind} · ${m.why}`)),
         h('button', { class: 'tick' + (m.status === 'yes' ? ' on' : ''), title: 'Show this pop-up', onclick: async () => draw(await post('/api/v2/moments', { id: m.id, status: m.status === 'yes' ? 'suggested' : 'yes' })) }, '✓'),
@@ -187,6 +187,11 @@ export async function render(root, key, stage, setBusy) {
           v.lesson ? h('div', { class: 'suggest', id: 'lesson' }, h('b', {}, 'Claude learned something'),
             h('div', { class: 'row' }, h('span', { class: 'small' }, v.lesson),
               h('button', { class: 'quiet', onclick: async () => { await post('/api/v2/lesson', { key, stage, n: v.n }); draw(await load()); } }, 'Add to my editing rules'))) : null) : null,
+        stage === 'preview' && data.graphics.length ? h('details', { class: 'card gfxlist', id: 'graphicsList' }, h('summary', {}, `Graphics in this preview (${data.graphics.filter(g => !g.skipped).length})`),
+          h('ul', { class: 'moments' }, ...data.graphics.map(g => h('li', { class: g.skipped ? 'no' : '' },
+            h('span', { class: 'when' }, g.when), h('span', { class: 'ntext' }, h('b', {}, g.what), ' ', h('span', { class: 'muted' }, [g.kind, g.words && `over “${g.words.slice(0, 60)}”`].filter(Boolean).join(' · '))),
+            h('button', { class: 'tick' + (g.skipped ? ' on' : ''), 'aria-label': g.skipped ? 'Build this graphic again' : 'Skip this graphic', title: g.skipped ? 'Skipped: click to build it' : 'Skip this graphic',
+              onclick: async () => draw(await post('/api/v2/graphics/skip', { beat: g.beat, skip: !g.skipped })) }, '✕'))))) : null,
         notesList, noteBox, rangeHint,
         h('div', { class: 'makebox' }, makeButton(b), h('div', { class: 'muted small' }, [b.detail, b.estimate].filter(Boolean).join(' · ')), copy))));
     if (reopen) { selected = reopen; reopen = null; const c = data.clips.find(x => x.ref === selected); if (c) { await openPanel(c); document.getElementById('actReplace').click(); } }

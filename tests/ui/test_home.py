@@ -29,19 +29,22 @@ def test_button_opens_the_video_page_with_the_step_bar(screen):
     page = screen("/v2/")
     page.locator(".vcard", has_text="ui step video").locator("a.main").click()
     page.wait_for_selector(".stepbar")
-    assert page.locator(".step").all_inner_texts() == ["Outline", "Footage", "Rough cut", "Preview", "Final", "Shorts"]
-    assert page.locator(".step.current").inner_text() == "Footage"
+    assert [t.replace("Next", "").strip() for t in page.locator(".step").all_inner_texts()] == ["Outline", "Footage", "Rough cut", "Preview", "Final", "Shorts"]
+    assert page.locator(".step.current").inner_text().startswith("Footage")
+    assert page.locator('.step[data-state="next"]').get_attribute("aria-label") == "Footage: next"
     assert page.locator('.step[data-dot="result"]').all_inner_texts() == ["Outline"]
     assert clutter(visible_text(page)) == []
 
 
 def test_any_step_can_be_opened_and_new_video_works(screen):
     page = screen("/v2/")
-    page.once("dialog", lambda d: d.accept("ui brand new"))
+    page.on("dialog", lambda d: (_ for _ in ()).throw(AssertionError("a browser dialog opened")))
     page.click("#newVideo")
+    page.fill("#askInput", "ui brand new")
+    page.click("#askOk")
     page.wait_for_selector(".stepbar")
     assert page.locator("h1").inner_text() == "ui brand new"
-    assert page.locator(".step.current").inner_text() == "Outline"
+    assert page.locator(".step.current").inner_text().startswith("Outline")
     page.click(".stepbar >> text=Shorts")
     expect(page.locator(".step.current")).to_have_text("Shorts")
     page.click("text=Your videos")
@@ -81,3 +84,8 @@ def test_the_settings_screen_chooses_the_model_and_effort_of_each_job(screen):
     assert claudemodels.get("edit") == ("sonnet", "medium")
     import config
     config.save_user_settings({"model_shorts": "", "effort_shorts": ""})
+
+
+def test_the_top_bar_says_all_shorts(screen):
+    page = screen("/v2/")
+    assert page.inner_text("#shortsLink") == "All shorts"

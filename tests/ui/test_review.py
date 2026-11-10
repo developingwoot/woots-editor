@@ -97,6 +97,7 @@ def test_teaching_moments_can_be_ticked(screen):
     page, _ = open_cut(screen, "ui cut teaching")
     row = page.locator("#teaching li").first
     assert "pressure advance" in row.inner_text()
+    assert row.locator("button").first.get_attribute("aria-label") == "Explain this in the video"       # an icon-only button is named by its title
     row.locator("button").first.click()
     expect(page.locator("#teaching li.yes")).to_have_count(1)
     assert clutter(visible_text(page)) == []
@@ -161,3 +162,23 @@ def test_a_suggestion_in_what_changed_becomes_a_note_in_one_click(screen):
     expect(page.locator("#notes li")).to_have_count(1)
     assert "tooth shape" in page.inner_text("#notes") and "B0" not in page.inner_text("#notes")
     expect(page.locator("#suggestions button")).to_be_disabled()
+
+
+def test_graphics_in_the_preview_can_be_skipped_before_the_build(screen):
+    import json
+    import projectstore
+    import views
+    r = make_project.build(cut=True, preview=True, title="ui graphics list")
+    page = screen(f"/v2/#/v/{views.key_of(r['work'], r['name'])}/preview")
+    bp = r["dir"] / f"{r['name']}.beatmap.json"
+    bm = json.loads(bp.read_text(encoding="utf-8"))
+    bm["beats"][1]["graphic"] = {"kind": "stamp", "text": "IT BROKE", "dur": 1.5, "words": "the tape shirt again", "why": "joke", "strength": 3, "struck": False}
+    projectstore.write_json(bp, bm)
+    page.reload()
+    page.wait_for_selector("#graphicsList")
+    assert "Graphics in this preview (1)" in page.locator("#graphicsList summary").inner_text()
+    page.click("#graphicsList summary")
+    assert "Sticker: IT BROKE" in page.locator("#graphicsList").inner_text()
+    page.locator("#graphicsList .tick").click()
+    expect(page.locator("#graphicsList summary")).to_have_text("Graphics in this preview (0)")
+    assert clutter(visible_text(page)) == []

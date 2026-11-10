@@ -1,4 +1,4 @@
-import { h, api } from './util.js';
+import { h, api, say, ask } from './util.js';
 import { usageLine } from './extras.js';
 
 function card(v) {
@@ -11,12 +11,12 @@ function card(v) {
 }
 
 async function newVideo() {
-  const title = prompt('What is the video called?');
+  const title = await ask('What is the video called?', { placeholder: 'My next video', okLabel: 'Create' });
   if (!title) return;
   try {
     const r = await api('/api/v2/video/new', { title });
     location.hash = `#/v/${r.key}/outline`;
-  } catch (e) { alert(e.message); }
+  } catch (e) { say(e.message); }
 }
 
 export async function render(root) {

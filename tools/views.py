@@ -108,7 +108,13 @@ def _outline_gaps(wd, name: str) -> int:
 def _dots(f: dict, current: str) -> list[dict]:
     have = {"outline": f["outline"], "footage": f["clips"], "rough-cut": f.get("cut_made", f["cut"]), "preview": f["preview"], "final": f["final"],
             "shorts": f["shorts_kept"] > 0}
-    return [{"id": sid, "title": title, "current": sid == current, "dot": "result" if have[sid] else "none"} for sid, title in STEPS]
+    out, gap = [], False                    # gap: an earlier step has no result yet
+    nxt = next((sid for sid, _ in STEPS if not have[sid]), None)
+    for sid, title in STEPS:
+        state = ("made earlier" if gap else "done") if have[sid] else ("next" if sid == nxt else "not started")
+        gap = gap or not have[sid]
+        out.append({"id": sid, "title": title, "current": sid == current, "dot": "result" if have[sid] else "none", "state": state, "label": f"{title}: {state}"})
+    return out
 
 
 def step_of(f: dict, job: dict | None = None) -> dict:
@@ -250,7 +256,7 @@ def review(work: str, name: str, stage: str, version: int | None = None, running
     pending = {n["clip"]: n["kind"] for n in open_n if n.get("choice") is not None and n.get("clip")}
     label = lambda n: reviewnotes.label(stage, n)           # noqa: E731
     out = {"key": key, "stage": stage, "has_video": cur is not None, "version": None, "versions": [], "notes": [], "clips": [], "button": None,
-           "teaching": [], "moments": []}
+           "teaching": [], "moments": [], "graphics": []}
     for v in reversed(vs):
         out["versions"].append({"n": v["n"], "label": label(v["n"]), "changes": v["changes"], "current": bool(cur) and v["n"] == cur["n"],
                                 "latest": v["n"] == vs[-1]["n"]})
@@ -276,11 +282,13 @@ def review(work: str, name: str, stage: str, version: int | None = None, running
     if stage == "cut" and not vs:
         can = (WORK_OF(work) / f"{name}.beatmap.json").exists()
         out["button"] = {"label": "Make the rough cut", "enabled": can and not running, "first": True,
-                         "detail": "" if can else "There is no plan to cut from yet", "estimate": minutes_text(_PIPELINES["cut"][2]) if can else ""}
+                         "detail": "" if can else "There is no plan to cut from yet", "estimate": cut_estimate(_unread(work, name)) if can else ""}
     else:
         out["button"] = {"label": f"Make {word} {nxt} from my notes", "enabled": bool(cur) and bool(parts) and not running, "first": False,
                          "detail": ", ".join(parts) if parts else "Add a note first",
                          "estimate": minutes_text(_PIPELINES["cut" if stage == "cut" else "preview"][2]) if parts else ""}
+    if stage == "preview":
+        out["graphics"] = graphics_list(work, name)
     if stage == "cut":
         import teaching
         starts = {b["id"]: b.get("start", 0.0) for b in _beat_list(work, name)}
@@ -440,7 +448,41 @@ def outline_view(work: str, name: str, running: bool = False) -> dict:
             "summary": (f"{n} section{'s' if n != 1 else ''} still need{'' if n != 1 else 's'} shot ideas" if n and have else "")}
 
 
+KIND_WORDS = {"explainer": "Explainer", "ui": "Screen graphic", "stamp": "Sticker", "counter": "Number", "burst": "Burst", "3d": "3D graphic", "kinetic": "Moving words",
+              "title": "Title card", "end": "End card"}
+
+
+def graphics_list(work: str, name: str) -> list:
+    """The graphics the next preview build makes, in plain words, each with whether the host skips it (a tick on the Preview screen; the build does not wait for it)."""
+    import gfxplan
+    try:
+        cards = gfxplan.state(work, name)["cards"]
+    except Exception:                       # noqa: BLE001  (no beat map yet)
+        return []
+    import teaching
+    teach = {m["beat"] for m in teaching.accepted(work, name)}
+    out = []
+    for c in cards:
+        kind = "Teaching" if c["beat"] in teach or c["beat"].startswith("TP") else ("Fun" if c["kind"] in ("stamp", "counter", "burst", "kinetic") else "")
+        out.append({"beat": c["beat"], "when": time_text(c["start"] or 0.0), "t": c["start"] or 0.0, "what": f"{KIND_WORDS.get(c['kind'], c['kind'])}: {c['text'] or c['idea'] or ''}".strip(": "),
+                    "words": c["words"] or c["said"], "kind": kind, "skipped": c["status"] == "cut"})
+    return sorted(out, key=lambda x: x["t"])
+
+
 # ----------------------------------------------------------------------------- the Footage step
+def cut_estimate(unread: int) -> str:
+    """The time to make the rough cut: the same text on the Footage and the Rough cut screens (recordings still to read add time)."""
+    return minutes_text(_PIPELINES["cut"][2] + (8 if unread else 0))
+
+
+def _unread(work: str, name: str) -> int:
+    import footageview
+    try:
+        return footageview.recordings(work, name, False)["unread"]
+    except Exception:                       # noqa: BLE001  (no footage folder yet: nothing to read)
+        return 0
+
+
 def footage_view(work: str, name: str, running: bool = False, reading: bool = False) -> dict:
     """The footage screen: the folder, the recordings, what we have for each shot, and the one button that makes the rough cut."""
     from urllib.parse import quote
@@ -483,6 +525,6 @@ def footage_view(work: str, name: str, running: bool = False, reading: bool = Fa
             "missing": miss,
             "button": {"label": "Make the rough cut again" if cut_made else "Write the outline and make the rough cut" if not has_outline else "Make the rough cut", "enabled": not why and not running, "why": why,
                        "detail": ("First it " + ", ".join(steps[:-1]) + " and " + steps[-1] + ".") if not why and len(steps) > 1 else "",
-                       "estimate": minutes_text(_PIPELINES["cut"][2] + (8 if rec["unread"] else 0))},
+                       "estimate": cut_estimate(rec["unread"])},
             "summary": (f"{rec['total']} recording{'s' if rec['total'] != 1 else ''}"
                         + (f", {rec['unread']} not read yet" if rec["unread"] else "") + (f", {rec['ignored']} left out" if rec["ignored"] else "") if rec["total"] else "")}

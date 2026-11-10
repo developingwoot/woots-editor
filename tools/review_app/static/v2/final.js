@@ -1,4 +1,4 @@
-import { h, api } from './util.js';
+import { h, api, say } from './util.js';
 import { factCheckCard, resolveCard } from './extras.js';
 
 // The Final step: warnings and one render button, the finished video, the publishing details (each with a Copy button),
@@ -28,7 +28,7 @@ export async function render(root, key, setBusy) {
     const video = latest ? h('video', { id: 'finalPlayer', src: latest.video, controls: true, preload: 'metadata' }) : null;
     const render = h('button', { class: 'main', id: 'renderBtn', disabled: !button.enabled, onclick: async () => {
       render.disabled = true;
-      try { await post('/api/v2/final/render'); setBusy(); } catch (e) { alert(e.message); render.disabled = false; }
+      try { await post('/api/v2/final/render'); setBusy(); } catch (e) { say(e.message); render.disabled = false; }
     } }, button.label);
     const top = h('div', { class: 'card finalTop' },
       h('div', { class: 'rhead' }, h('b', {}, 'Final video'),
@@ -43,7 +43,7 @@ export async function render(root, key, setBusy) {
     const sc = data.scorecard;
     const measure = h('button', { class: 'quiet', id: 'scoreBtn', disabled: !sc.button.enabled, onclick: async () => {
       measure.disabled = true;
-      try { await post('/api/v2/final/score'); setBusy(); } catch (e) { alert(e.message); measure.disabled = false; }
+      try { await post('/api/v2/final/score'); setBusy(); } catch (e) { say(e.message); measure.disabled = false; }
     } }, sc.button.label);
     const val = (v, unit) => `${v}${unit}`;
     const scoreCard = latest ? h('div', { class: 'card', id: 'scoreCard' },
@@ -80,7 +80,7 @@ export async function render(root, key, setBusy) {
     const chips = h('div', { class: 'chips' }, ...pub.thumbnail_text.map(t => h('button', { class: 'quiet', onclick: () => { words.value = t; } }, t)));
     const make = h('button', { class: 'main small', id: 'makeThumb', disabled: !latest, onclick: async () => {
       make.disabled = true;
-      try { await draw(await post('/api/v2/thumb/make', { t: video.currentTime || 0, text: words.value })); } catch (e) { alert(e.message); make.disabled = false; }
+      try { await draw(await post('/api/v2/thumb/make', { t: video.currentTime || 0, text: words.value })); } catch (e) { say(e.message); make.disabled = false; }
     } }, 'Use this frame');
     const thumb = h('div', { class: 'pubfield', id: 'thumbBox' }, h('b', {}, 'Thumbnail layout draft'),
       latest ? h('p', { class: 'muted small' }, 'Play the video above, stop on the frame you like, type the words, then press Use this frame.') : h('p', { class: 'muted small' }, 'Available once the final is rendered.'),
@@ -91,7 +91,7 @@ export async function render(root, key, setBusy) {
     const note = h('input', { id: 'redoNote', type: 'text', placeholder: 'What should change? (optional)', autocomplete: 'off' });
     const write = h('button', { class: 'main small', id: 'writeBtn', disabled: !pub.enabled, onclick: async () => {
       write.disabled = true;
-      try { await post('/api/v2/publish/write', { note: note.value }); setBusy(); } catch (e) { alert(e.message); write.disabled = false; }
+      try { await post('/api/v2/publish/write', { note: note.value }); setBusy(); } catch (e) { say(e.message); write.disabled = false; }
     } }, pub.button);
     const publishCard = h('div', { class: 'card', id: 'publishCard' },
       h('div', { class: 'rhead' }, h('b', {}, 'Publishing details'), h('div', { class: 'redo' }, note, write)),
@@ -106,7 +106,7 @@ export async function render(root, key, setBusy) {
     if (archive.can) {
       arch.append(h('p', { class: 'muted small' }, 'Saves the whole project next to your footage so it can be opened again, moves the final there and clears the files the program can make again.'),
         h('button', { class: 'quiet', id: 'archiveStart', onclick: async () => {
-          try { showPlan(await api(`/api/v2/archive/preview?key=${encodeURIComponent(key)}`)); } catch (e) { alert(e.message); }
+          try { showPlan(await api(`/api/v2/archive/preview?key=${encodeURIComponent(key)}`)); } catch (e) { say(e.message); }
         } }, 'See what this will do'));
     } else {
       arch.append(h('p', { class: 'muted small' }, archive.why));
@@ -120,7 +120,7 @@ export async function render(root, key, setBusy) {
           h('li', {}, `About ${p.frees} is freed.`)),
         h('div', { class: 'row' },
           h('button', { class: 'main', id: 'archiveGo', onclick: async () => {
-            try { await post('/api/v2/archive/run', { confirm: true }); setBusy(); } catch (e) { alert(e.message); }
+            try { await post('/api/v2/archive/run', { confirm: true }); setBusy(); } catch (e) { say(e.message); }
           } }, 'Yes, archive this video'),
           h('button', { class: 'quiet', onclick: async () => draw(await load()) }, 'Cancel')));
     }

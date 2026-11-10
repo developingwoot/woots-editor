@@ -1,4 +1,4 @@
-import { h, api } from './util.js';
+import { h, api, say } from './util.js';
 import { pickFolder } from './folder.js';
 
 // Shorts. One screen, used two ways: the Shorts area (#/shorts: every video that has shorts or a final to make them from)
@@ -12,7 +12,7 @@ export async function render(root, args, setBusy) {
     const path = await pickFolder({ files: true, start, title: 'Choose the finished video' });
     if (!path) return;
     try { localStorage.setItem('wr.videoDir', path.replace(/[\\/][^\\/]*$/, '')); } catch { /* private mode */ }
-    try { await api('/api/v2/shorts/fromfile', { path }); setBusy(); } catch (e) { alert(e.message); }
+    try { await api('/api/v2/shorts/fromfile', { path }); setBusy(); } catch (e) { say(e.message); }
   };
   const fromFolder = async () => {
     let start = '';
@@ -20,7 +20,7 @@ export async function render(root, args, setBusy) {
     const path = await pickFolder({ start, title: 'Choose the folder with the raw footage' });
     if (!path) return;
     try { localStorage.setItem('wr.rawDir', path.replace(/[\\/][^\\/]*$/, '')); } catch { /* private mode */ }
-    try { await api('/api/v2/shorts/fromfolder', { path }); setBusy(); } catch (e) { alert(e.message); }
+    try { await api('/api/v2/shorts/fromfolder', { path }); setBusy(); } catch (e) { say(e.message); }
   };
   root.replaceChildren(
     h('div', { class: 'headrow' }, h('h1', {}, 'Shorts'),
@@ -47,11 +47,11 @@ export async function renderStep(root, key, setBusy) {
   const post = (op, body = {}) => api(`/api/v2/shorts/${op}`, { key, ...body });
   let openId = remembered.key === key ? remembered.id : null;
 
-  const run = async (op, body) => { try { await post(op, body); setBusy(); } catch (e) { alert(e.message); } };
+  const run = async (op, body) => { try { await post(op, body); setBusy(); } catch (e) { say(e.message); } };
 
   async function wordsPanel(box, id) {
     const w = await api(`/api/v2/shorts/words?key=${encodeURIComponent(key)}&id=${encodeURIComponent(id)}`);
-    const toggle = async (word, cut) => { try { drawWords(await post('cut', { id, start: word.s, end: word.e, cut })); } catch (e) { alert(e.message); } };
+    const toggle = async (word, cut) => { try { drawWords(await post('cut', { id, start: word.s, end: word.e, cut })); } catch (e) { say(e.message); } };
     const drawWords = data => box.replaceChildren(
       h('div', { class: 'glabel' }, 'Words (click a word to cut it out, click it again to bring it back)'),
       ...data.ranges.map(r => h('p', { class: 'wordRange' }, ...r.words.map(x =>
@@ -61,7 +61,7 @@ export async function renderStep(root, key, setBusy) {
 
   async function soundPanel(box, d, s) {
     const o = await api('/api/v2/shorts/sounds');
-    const set = (op, body) => async () => { try { draw(await post(op, { id: s.id, ...body })); } catch (e) { alert(e.message); } };
+    const set = (op, body) => async () => { try { draw(await post(op, { id: s.id, ...body })); } catch (e) { say(e.message); } };
     const pick = (id, label, cur, opts, op, key) => h('div', { class: 'soundRow' }, h('label', { class: 'glabel', for: id }, label),
       h('select', { id, onchange: e => set(op, { [key]: e.target.value })() }, ...opts.map(([v, t]) => h('option', { value: v, selected: v === cur }, t))));
     const made = s.sound.made || {};
@@ -77,7 +77,7 @@ export async function renderStep(root, key, setBusy) {
   function graphicsPanel(d, s) {
     const g = s.gfx;
     if (!g.can) return h('div', { class: 'shortGfx', id: 'shortGfx' }, h('div', { class: 'glabel' }, 'Graphics'), h('div', { class: 'muted small' }, 'Graphics are not planned yet for a short joined from several recordings.'));
-    const cut = (x) => async () => { try { draw(await post('gfxcut', { id: s.id, g: x.id, cut: !x.cut })); } catch (e) { alert(e.message); } };
+    const cut = (x) => async () => { try { draw(await post('gfxcut', { id: s.id, g: x.id, cut: !x.cut })); } catch (e) { say(e.message); } };
     return h('div', { class: 'shortGfx', id: 'shortGfx' },
       h('div', { class: 'glabel' }, 'Graphics'),
       ...[g.graphics.length ? g.graphics.map(x => h('div', { class: 'gfxRow' + (x.cut ? ' cut' : ''), 'data-gid': x.id },
@@ -91,7 +91,7 @@ export async function renderStep(root, key, setBusy) {
 
   function publishPanel(d, s) {
     const p = s.publish;
-    const save = (k) => async e => { try { draw(await post('publish', { id: s.id, [k]: e.target.value })); } catch (err) { alert(err.message); } };
+    const save = (k) => async e => { try { draw(await post('publish', { id: s.id, [k]: e.target.value })); } catch (err) { say(err.message); } };
     const field = (id, label, tag, attrs, k) => { const el = h(tag, { id, ...attrs }); el.value = p[k]; el.addEventListener('change', save(k)); return [h('label', { class: 'glabel', for: id }, label), el]; };
     return h('div', { class: 'shortPublish', id: 'shortPublish' },
       h('div', { class: 'glabel' }, 'YouTube details'),
@@ -105,7 +105,7 @@ export async function renderStep(root, key, setBusy) {
 
   // The host's feedback: plain notes. On one short they wait until Claude applies them (cuts, hook, title); the general ones are given to every later run.
   function feedbackList(f, sid, general) {
-    const edit = (n, body) => async () => { try { draw(await post('noteedit', { id: sid, note: n.id, ...body })); } catch (e) { alert(e.message); } };
+    const edit = (n, body) => async () => { try { draw(await post('noteedit', { id: sid, note: n.id, ...body })); } catch (e) { say(e.message); } };
     return f.notes.map(n => h('div', { class: 'noteRow' + (n.status === 'done' ? ' done' : ''), 'data-note': n.id },
       h('div', { class: 'vbody' }, n.text),
       general ? null : h('span', { class: 'chip ' + (n.status === 'done' ? 'ok' : '') }, n.status === 'done' ? 'Applied' : 'Waiting'),
@@ -117,7 +117,7 @@ export async function renderStep(root, key, setBusy) {
       placeholder: general ? 'e.g. “Hooks are too long” or “Start every short on the answer”' : 'e.g. “Start on the number” or “Cut the story about the failed print”' });
     const add = async () => {
       if (!input.value.trim()) return;
-      try { draw(await post('note', { id: sid, text: input.value })); } catch (e) { alert(e.message); }
+      try { draw(await post('note', { id: sid, text: input.value })); } catch (e) { say(e.message); }
     };
     return [...feedbackList(f, sid, general),
       input,
@@ -131,8 +131,8 @@ export async function renderStep(root, key, setBusy) {
 
   function openPanel(d, s) {
     const hook = h('input', { id: 'hookInput', type: 'text', value: s.hook, placeholder: 'Words shown over the first seconds', autocomplete: 'off' });
-    hook.addEventListener('change', async () => { try { draw(await post('hook', { id: s.id, hook: hook.value })); } catch (e) { alert(e.message); } });
-    const pace = h('select', { id: 'paceSelect', onchange: async e => { try { draw(await post('pace', { id: s.id, pace: e.target.value })); } catch (err) { alert(err.message); } } },
+    hook.addEventListener('change', async () => { try { draw(await post('hook', { id: s.id, hook: hook.value })); } catch (e) { say(e.message); } });
+    const pace = h('select', { id: 'paceSelect', onchange: async e => { try { draw(await post('pace', { id: s.id, pace: e.target.value })); } catch (err) { say(err.message); } } },
       ...Object.entries(d.paces).map(([k, label]) => h('option', { value: k, selected: k === s.pace }, label)));
     const preview = s.preview.url
       ? h('video', { id: 'shortPlayer', src: s.preview.url, controls: true, preload: 'metadata' })
@@ -157,7 +157,7 @@ export async function renderStep(root, key, setBusy) {
   }
 
   function shortCard(d, s) {
-    const act = (op, body) => async () => { try { draw(await post(op, body)); } catch (e) { alert(e.message); } };
+    const act = (op, body) => async () => { try { draw(await post(op, body)); } catch (e) { say(e.message); } };
     return h('div', { class: 'shortBlock', 'data-id': s.id },
       h('div', { class: 'vcard shortCard' + (s.status ? ' ' + s.status : ''), 'data-id': s.id, 'data-status': s.status },
         h('img', { class: 'sthumb', src: s.frame, alt: '', loading: 'lazy' }),
@@ -197,7 +197,7 @@ export async function renderStep(root, key, setBusy) {
       h('div', { class: 'row', id: 'deliverRow' },
         h('label', { class: 'glabel', for: 'linkInput' }, 'Full video link'),
         (() => { const i = h('input', { id: 'linkInput', type: 'text', placeholder: 'Put this in each description', autocomplete: 'off' }); i.value = d.full_video_url || '';
-          i.addEventListener('change', async () => { try { draw(await post('link', { url: i.value })); } catch (e) { alert(e.message); } }); return i; })(),
+          i.addEventListener('change', async () => { try { draw(await post('link', { url: i.value })); } catch (e) { say(e.message); } }); return i; })(),
         h('button', { class: 'quiet', id: 'allTitlesBtn', disabled: d.busy || !d.shorts.length, onclick: () => run('titles') }, 'Write all the titles')),
       h('div', { class: 'muted small', id: 'folderNote' }, `The final shorts are saved in ${d.folder}, each with a text file of its title, description and tags.`),
       h('details', { class: 'doneBox', id: 'rawStory' },
@@ -206,7 +206,7 @@ export async function renderStep(root, key, setBusy) {
           const text = h('textarea', { class: 'fbInput', id: 'rawText', rows: 3, autocomplete: 'off', placeholder: 'e.g. “Tell the story of the failed first print and what fixed it” or “Redo this one without the part about the slicer”' });
           const base = h('select', { id: 'rawBase' }, h('option', { value: '' }, 'A new story (not based on a short)'),
             ...d.shorts.map(s => h('option', { value: s.id }, `Redo: ${s.title}`)));
-          const go = async () => { try { await post('fromraw', { id: base.value, text: text.value }); setBusy(); } catch (e) { alert(e.message); } };
+          const go = async () => { try { await post('fromraw', { id: base.value, text: text.value }); setBusy(); } catch (e) { say(e.message); } };
           return h('div', {}, text, h('div', { class: 'row' }, base, h('button', { class: 'main small', id: 'rawGo', disabled: d.busy, onclick: go }, 'Make it from the raw footage')),
             h('div', { class: 'muted small' }, 'Claude reads the recordings this video was filmed from and makes a new short, which appears as its own project in the Shorts list. The shorts you have now stay as they are.'));
         })()),

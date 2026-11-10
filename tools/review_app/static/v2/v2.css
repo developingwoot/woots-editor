@@ -5,7 +5,7 @@
   --card: #fff;
   --line: #DDE2E8;
   --text: #1B2430;
-  --muted: #6B7785;
+  --muted: #5D6875;
   --ok: #2E8B57;
   --bad: #C0392B;
   --radius: 10px;
@@ -245,3 +245,13 @@ ul.facts .quote { font-style: italic; }
 .auditionPlayer { width: 100%; max-width: 420px; margin-top: 6px; }
 
 .changes li.warn { color: #b45309; font-weight: 600; }
+
+/* no browser dialogs */
+#sayBar { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 30; max-width: 80vw; padding: 8px 14px; border-radius: 8px; background: #7a1f1f; color: #fff; font-size: 14px; box-shadow: 0 2px 10px rgba(0,0,0,.3); }
+#sayBar[hidden] { display: none; }
+#askDialog { border: 1px solid #bbb; border-radius: 10px; padding: 16px 18px; min-width: 320px; }
+#askDialog input { width: 100%; box-sizing: border-box; margin: 6px 0 12px; }
+#askDialog .row { display: flex; gap: 8px; justify-content: flex-end; }
+.nexttag { margin-left: 6px; padding: 1px 6px; border-radius: 8px; background: #e8f0fe; color: #1a3d7c; font-size: 11px; font-weight: 600; }
+.setNav { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3px solid #1a3d7c; outline-offset: 2px; }

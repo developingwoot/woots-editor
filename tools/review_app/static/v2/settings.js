@@ -16,8 +16,10 @@ export async function render(root) {
     const dirty = Object.keys(draft).length > 0;
     root.replaceChildren(...[
       h('h1', {}, s.first_run ? 'Welcome: set up your folders and channel' : 'Settings'),
+      h('nav', { class: 'setNav', id: 'setNav' }, ...[['Folders', 'foldersCard'], ['Your channel', 'channelCard'], ['Claude models', 'claudeModelsCard'], ['Models', 'modelsCard'], ['This computer', 'computerCard']]
+        .map(([label, id]) => h('button', { class: 'quiet', type: 'button', onclick: () => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, label))),
       s.first_run ? h('p', { class: 'muted' }, 'Choose where the app keeps your footage and projects, then tell it about your channel. Nothing is uploaded; these folders stay on your computer.') : null,
-      h('section', { class: 'card setCard' },
+      h('section', { class: 'card setCard', id: 'foldersCard' },
         h('h2', {}, 'Folders'),
         ...Object.entries(s.folders).map(([key, f]) => {
           const value = draft[key] ?? f.path;
@@ -73,7 +75,7 @@ export async function render(root) {
       : h('p', { class: 'muted small' }, 'Looking…'));
 
   let channel = null;                                  // {fields:[{key, help, value, default}], file}
-  const LABELS = { name: 'Your name', channel: 'Channel name', topic: 'What the channel is about', cohost: 'Second voice', terms: 'Words speech recognition gets wrong', audience: 'Who watches', voice: 'Your voice and habits',
+  const LABELS = { subjects: 'What your footage shows', name: 'Your name', channel: 'Channel name', topic: 'What the channel is about', cohost: 'Second voice', terms: 'Words speech recognition gets wrong', audience: 'Who watches', voice: 'Your voice and habits',
     headline_font: 'Headline font', label_font: 'Label font', colors: 'Brand colours', tone: 'Tone', always: 'Every video', never: 'No video' };
   const LONG = ['audience', 'voice', 'terms', 'colors', 'always', 'never'];
   const STYLE = ['headline_font', 'label_font', 'colors', 'tone', 'always', 'never'];
@@ -115,9 +117,16 @@ export async function render(root) {
       draw();
     };
     const pick = (job, field, current, options) => h('select', { class: 'cmPick', 'data-job': job, 'data-field': field, onchange: choose(job, field) },
-      ...options.map(o => h('option', { value: o, selected: o === current }, o === 'off' ? 'Off' : o[0].toUpperCase() + o.slice(1))));
+      ...options.map(o => h('option', { value: o, selected: o === current }, (o === 'off' ? 'Off' : o[0].toUpperCase() + o.slice(1)) + (o === defaults[job + field] ? ' (recommended)' : ''))));
+    const defaults = Object.fromEntries(claudeModels.jobs.flatMap(j => [[j.job + 'model', j.default_model], [j.job + 'effort', j.default_effort]]));
+    const backToDefaults = async () => {
+      try { claudeModels = await api('/api/v2/claude-models', { choices: Object.fromEntries(claudeModels.jobs.map(j => [j.job, { model: j.default_model, effort: j.default_effort }])) }); note = ''; }
+      catch (err) { note = err.message; }
+      draw();
+    };
     return h('section', { class: 'card setCard', id: 'claudeModelsCard' }, h('h2', {}, 'Claude models'),
       h('p', { class: 'muted small' }, 'Which Claude does each job, and how hard it thinks. Higher effort is slower and uses more of your plan. Choices apply to the next run.'),
+      h('div', { class: 'row' }, h('button', { class: 'quiet', id: 'modelDefaults', type: 'button', onclick: backToDefaults }, 'Back to defaults')),
       ...claudeModels.jobs.map(j => h('div', { class: 'setRow', 'data-job': j.job },
         h('label', {}, h('b', {}, j.label), h('div', { class: 'muted small' }, j.help)),
         h('div', { class: 'row' }, pick(j.job, 'model', j.model, j.models), j.model === 'off' ? null : pick(j.job, 'effort', j.effort, claudeModels.efforts)))));

@@ -13,8 +13,8 @@ export async function render(root, [key, step], busy) {
   review.leave();
   const v = await api(`/api/v2/video?key=${encodeURIComponent(key)}`);
   const bar = h('nav', { class: 'stepbar' },
-    ...v.steps.map(s => h('a', { href: `#/v/${key}/${s.id}`, class: 'step' + (s.id === step ? ' current' : ''), 'data-dot': s.dot },
-      h('i', { class: 'dot' }), s.title)));
+    ...v.steps.map(s => h('a', { href: `#/v/${key}/${s.id}`, class: 'step' + (s.id === step ? ' current' : ''), 'data-dot': s.dot, 'data-state': s.state, title: s.label, 'aria-label': s.label },
+      h('i', { class: 'dot' }), s.title, s.state === 'next' ? h('small', { class: 'nexttag' }, 'Next') : null)));
   const body = h('div', { id: 'stepBody' });
   const hist = h('div', { id: 'historySlot' });
   const histBtn = h('button', { class: 'quiet', id: 'historyBtn', onclick: async () => {

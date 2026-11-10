@@ -1,4 +1,4 @@
-import { h, api } from './util.js';
+import { h, api, say } from './util.js';
 
 // The Outline step: the header fields, then one card per section with its shot ideas, talking points (the full wording folded underneath),
 // voice-over notes and graphic chips. Everything is edited in place; each change is saved as a version by the server.
@@ -56,7 +56,7 @@ export async function render(root, key, setBusy) {
     const note = h('input', { id: 'outlineNote', type: 'text', placeholder: d.note.placeholder, autocomplete: 'off' });
     const go = h('button', { class: 'main', id: 'outlineBtn', disabled: !d.button.enabled, onclick: async () => {
       go.disabled = true;
-      try { await post('/api/v2/outline/write', { note: note.value }); setBusy(); } catch (e) { alert(e.message); go.disabled = false; }
+      try { await post('/api/v2/outline/write', { note: note.value }); setBusy(); } catch (e) { say(e.message); go.disabled = false; }
     } }, d.button.label);
     const ask = h('div', { class: 'card askBar' }, note, go, h('span', { class: 'muted small' }, d.button.estimate));
 

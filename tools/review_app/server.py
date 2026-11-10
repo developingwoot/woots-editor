@@ -80,6 +80,7 @@ import outline                                    # noqa: E402  (v2 outline: bot
 import publish                                    # noqa: E402  (v2 publishing details)
 import teaching                                   # noqa: E402  (v2 teaching moments)
 import moments                                    # noqa: E402  (v2 fun moments)
+import gfxplan                                    # noqa: E402  (graphics list on the preview screen)
 import clipmap                                    # noqa: E402  (takes -> script lines, the creator's corrections)
 import beatmap                                    # noqa: E402  (the plan: what is said / on screen, graphics, checks)
 import platformx                                  # noqa: E402  (the few operating-system specifics)
@@ -1539,6 +1540,11 @@ class Handler(BaseHTTPRequestHandler):
                 with _lock:
                     teaching.set_status(work, name, b["id"], b["status"])
                 return self.send_json(views.review(work, name, "cut"))
+            if u.path == "/api/v2/graphics/skip":
+                work, name = views.split_key(b["key"])
+                with _lock:
+                    gfxplan.plan_op(work, name, "set", {"beat": b["beat"], "status": "cut" if b["skip"] else ""})
+                return self.send_json(views.review(work, name, "preview"))
             if u.path == "/api/v2/moments":
                 work, name = views.split_key(b["key"])
                 with _lock:
