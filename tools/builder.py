@@ -760,7 +760,7 @@ def state(work: str, name: str) -> dict:
 # ----------------------------------------------------------------------------- stitch
 def music_beds(work: str, name: str, secs: list) -> list:
     """Runs of consecutive beats with the same audio.music name, on the stitched timeline. secs = [{"beats": [ids], "dur": the section preview's length}] in order."""
-    bm = read_json(WORK / work / f"{name}.beatmap.json")
+    bm = read_json(WORK / work / f"{name}.beatmap.json") or {"beats": []}
     B = {b["id"]: b for b in bm["beats"]}
     beds, t, cur = [], 0.0, None
     for s in secs:

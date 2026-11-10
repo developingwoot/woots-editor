@@ -113,12 +113,14 @@ def record(path, who: str | None = None, why: str = ""):
 
 def write_json(path, data, who: str | None = None, why: str = ""):
     p = Path(path)
+    record(p, OUTSIDE)                                       # the file as it is now, so the first change through the app can be undone too
     atomic_write(p, json.dumps(data, indent=1, ensure_ascii=False).encode("utf-8"))
     record(p, who, why)
 
 
 def write_text(path, text: str, who: str | None = None, why: str = ""):
     p = Path(path)
+    record(p, OUTSIDE)
     atomic_write(p, text.encode("utf-8"))
     record(p, who, why)
 

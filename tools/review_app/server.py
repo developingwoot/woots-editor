@@ -1398,6 +1398,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(musicaudition.state(q["work"], q["name"]))
             if u.path == "/api/resolve":
                 return self.send_json(resolve_export.state(q["work"], q["name"]))
+            if u.path == "/api/usage/week":
+                return self.send_json(usage.week_summary())
             if u.path == "/api/usage":
                 return self.send_json({"video": usage.video(q["work"], q["name"]), "all": usage.all_videos()})
             if u.path == "/api/history":

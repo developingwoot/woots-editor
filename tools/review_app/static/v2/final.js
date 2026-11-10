@@ -1,4 +1,5 @@
 import { h, api } from './util.js';
+import { factCheckCard, resolveCard } from './extras.js';
 
 // The Final step: warnings and one render button, the finished video, the publishing details (each with a Copy button),
 // the thumbnail layout draft on a frame the creator picks, and "Finish and archive".
@@ -122,7 +123,7 @@ export async function render(root, key, setBusy) {
           h('button', { class: 'quiet', onclick: async () => draw(await load()) }, 'Cancel')));
     }
 
-    root.replaceChildren(...[top, scoreCard, publishCard, arch].filter(Boolean));
+    root.replaceChildren(...[top, scoreCard, factCheckCard(key), publishCard, resolveCard(key), arch].filter(Boolean));
   };
   const load = () => api(`/api/v2/final?key=${encodeURIComponent(key)}`);
   await draw(await load());

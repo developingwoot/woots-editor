@@ -1,4 +1,5 @@
 import { h, api } from './util.js';
+import { usageLine } from './extras.js';
 
 function card(v) {
   return h('div', { class: 'vcard' },
@@ -27,4 +28,6 @@ export async function render(root) {
     h('div', { class: 'headrow' }, h('h1', {}, 'Your videos'), h('button', { class: 'main', id: 'newVideo', onclick: newVideo }, '+ New video')),
     ...list,
     ...(data.done.length ? [h('details', { class: 'doneBox' }, h('summary', {}, `Done (${data.done.length})`), ...data.done.map(card))] : []));
+  const use = await usageLine();
+  if (use && root.isConnected) root.append(use);
 }

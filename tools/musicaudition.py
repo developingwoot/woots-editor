@@ -1,4 +1,4 @@
-"""Music audition list (Build tab): hear another track in place of a music bed, in the picture, before anything is re-stitched or rendered.
+"""Music audition list (Preview screen): hear another track in place of a music bed, in the picture, before anything is re-stitched or rendered.
 
 A "bed" is a run of consecutive beats that share the same audio.music name (builder.music_beds). For each bed the app offers the music library, and
 "Hear it" renders a short clip of the stitched preview (the bed's own stretch, about 35 s) with the chosen track mixed under the speech exactly as the
@@ -50,14 +50,14 @@ def beds(work, name) -> list:
     sj = _stitch(work, name)
     if not sj:
         return []
-    secs = [{"beats": s["beats"], "dur": s.get("dur")} for s in sj["sections"]]
+    secs = [{"beats": s.get("beats", []), "dur": s.get("dur")} for s in sj.get("sections", [])]
     return [{"i": i, "name": b["name"], "start": round(b["start"], 1), "end": round(b["end"], 1), "beats": b["beats"]} for i, b in enumerate(builder.music_beds(work, name, secs))]
 
 
 def state(work, name) -> dict:
     sj = _stitch(work, name)
     return {"stitched": bool(sj), "ready": _speech(work, name).exists(), "beds": beds(work, name), "tracks": tracks() if sj else [],
-            "note": "" if (sj and _speech(work, name).exists()) else "Stitch the preview once more (this version keeps the sound without music, which the audition needs)."}
+            "note": "" if (sj and _speech(work, name).exists()) else "Make a new preview first: choosing music needs a preview made with this version of the app."}
 
 
 def audition(work, name, i: int, track: str) -> dict:

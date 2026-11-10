@@ -3,6 +3,7 @@ import * as home from './home.js';
 import * as video from './video.js';
 import * as settings from './settings.js';
 import * as shorts from './shorts.js';
+import { watch as watchUndo } from './undo.js';
 
 // Hash router: #/ is home, #/v/<key>/<step> is a video page.
 const routes = [[/^#?\/?$/, home], [/^#\/settings$/, settings], [/^#\/shorts$/, shorts], [/^#\/shorts\/([^/]+)$/, { render: shorts.renderStandalone }], [/^#\/v\/([^/]+)\/([\w-]+)$/, video]];
@@ -57,6 +58,7 @@ async function pollJob() {
 }
 
 addEventListener('hashchange', show);
+watchUndo();
 api('/api/v2/settings').then(r => { if (r.first_run && location.hash !== '#/settings') location.hash = '#/settings'; }).catch(() => {});   // a fresh install starts at setup
 show();
 pollJob();

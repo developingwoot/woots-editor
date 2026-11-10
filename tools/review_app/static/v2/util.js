@@ -13,9 +13,11 @@ export function h(tag, attrs = {}, ...kids) {
 }
 
 export async function api(path, body) {
+  const t0 = Date.now();
   const r = await fetch(path, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data.error || 'Something went wrong.');
+  if (body !== undefined) document.dispatchEvent(new CustomEvent('wr-saved', { detail: { path, t0 } }));   // undo.js looks for a plan file this call changed
   return data;
 }
 

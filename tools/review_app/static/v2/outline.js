@@ -68,6 +68,11 @@ export async function render(root, key, setBusy) {
     const header = h('div', { class: 'card ohead', id: 'outlineHeader' }, ...d.header.map(f => h('div', { class: 'hfield', 'data-field': f.field },
       h('div', { class: 'glabel' }, f.label),
       editable(f.text || '', t => edit({ op: 'set_header', field: f.field, text: t }), f.text ? '' : 'blank'))));
+    const blanks = d.header.filter(f => !f.text).map(f => f.label.toLowerCase());
+    if (blanks.length) header.append(h('div', { class: 'row' },
+      h('button', { class: 'quiet', id: 'fillBlanks', disabled: !d.button.enabled, onclick: async () => {
+        try { await post('/api/v2/outline/write', { note: `Please write the ${blanks.join(', ')} for this video and change nothing else.` }); setBusy(); } catch (e) { go.textContent = e.message; }
+      } }, 'Ask Claude to fill these'), h('span', { class: 'muted small' }, `Empty: ${blanks.join(', ')}.`)));
     // A save redraws the page: what is half typed in a box (and which box has the cursor) must survive it.
     const typed = [...root.querySelectorAll('input')].map(i => [i.closest('[data-section]')?.dataset.section || i.id, i.value, i === document.activeElement]).filter(([k, v, f]) => v || f);
     root.replaceChildren(...[ask, d.summary ? h('div', { class: 'muted', id: 'outlineGaps' }, d.summary) : null, header, ...d.sections.map(card)].filter(Boolean));

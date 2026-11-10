@@ -591,7 +591,7 @@ def state(work: str, name: str) -> dict:
     except (OSError, ValueError):
         pass
     sj = WORK / work / f"{name}.stitch.json"
-    out = {"ready": sj.exists(), "why": "" if sj.exists() else "Stitch the sections together first (Build tab): the export is made from the stitched video.",
+    out = {"ready": sj.exists(), "why": "" if sj.exists() else "Make a preview first: the export is made from it.",
            "last": last, "folder": zpath(d), "not_carried": NOT_CARRIED, "stale": None}
     if last and sj.exists():
         try:

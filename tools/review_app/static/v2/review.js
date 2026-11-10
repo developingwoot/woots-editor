@@ -1,5 +1,6 @@
 import { h, api } from './util.js';
 import { marksCard } from './marks.js';
+import { factCheckCard, musicCard } from './extras.js';
 
 // The review screen, shared by the rough cut and the preview: player, clips as a strip, notes pinned to the time, versions, one main button.
 // In the rough cut a click on a clip also opens Keep / Replace / Trim / Remove / Note for that clip, and teaching moments sit below the strip.
@@ -169,7 +170,7 @@ export async function render(root, key, stage, setBusy) {
       h('div', { class: 'left' }, video, strip, marks && marks.overlay, panel,
         h('div', { class: 'muted small' }, stage === 'cut'
           ? 'Click a clip to keep, replace, trim or remove it. Space plays, arrows jump 5 seconds, N adds a note.'
-          : 'Space plays, arrows jump 5 seconds, N adds a note. Shift and drag over the clips to note a range.'), marks && marks.card, teach),
+          : 'Space plays, arrows jump 5 seconds, N adds a note. Shift and drag over the clips to note a range.'), marks && marks.card, teach, stage === 'preview' ? musicCard(key) : null, stage === 'preview' ? factCheckCard(key) : null),
       h('aside', { class: 'right card' },
         h('div', { class: 'rhead' }, h('b', {}, 'Notes'), verMenu),
         v.changes.length ? h('details', { class: 'changes' }, h('summary', {}, `What changed in ${v.label}`), h('ul', {}, ...v.changes.map(c => h('li', {}, c)))) : null,
