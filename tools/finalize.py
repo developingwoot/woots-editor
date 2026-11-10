@@ -4,7 +4,7 @@ Usage:
     python finalize.py <work_dir> --title "<YouTube title>" [--final "<file.mp4>"] [--project "<footage folder>"] [--yes]
 
 Default is a DRY RUN: it prints what would be moved and deleted, with sizes. Add --yes to do it.
-Run only after the host has approved the full-quality render and the title is locked.
+Run only when the full-quality render is the one to keep and the title is locked.
 
 What it does
   1. Picks the final render (--final, else the newest "* vN (1080p).mp4" in the work dir).

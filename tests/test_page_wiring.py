@@ -1,28 +1,29 @@
-"""The shared scripts look up page elements by id at load time; a missing one throws and breaks every tab."""
+"""The screens are ES modules: a missing file or a misspelled import breaks the whole app, so check the wiring without a browser."""
 import re
 from pathlib import Path
 
 import pytest
 
 STATIC = Path(__file__).resolve().parent.parent / "tools" / "review_app" / "static"
-HTML = (STATIC / "index.html").read_text(encoding="utf-8")
+V2 = STATIC / "v2"
+MODULES = sorted(V2.glob("*.js"))
 
 
-@pytest.mark.parametrize("script", ["core.js", "folderpicker.js"])
-def test_ids_used_by_shared_scripts_exist_in_the_page(script):
-    ids = set(re.findall(r'\$\("#([A-Za-z][\w-]*)"\)', (STATIC / script).read_text(encoding="utf-8")))
-    assert ids, "expected to find id lookups"
-    missing = sorted(i for i in ids if f'id="{i}"' not in HTML)
-    assert not missing, f"{script} looks up ids that index.html no longer has: {missing}"
+def test_the_page_loads_the_app_module_and_its_style():
+    html = (V2 / "index.html").read_text(encoding="utf-8")
+    assert '<script type="module" src="/static/v2/app.js">' in html
+    for href in re.findall(r'<link rel="stylesheet" href="/static/([^"]+)"', html):
+        assert (STATIC / href).is_file(), href
 
 
-def test_every_tab_button_has_a_pane():
-    views = re.findall(r'<button data-view="(\w+)"', HTML)
-    assert len(views) == 10
-    for v in views:
-        assert f'data-for="{v}"' in HTML, f"tab {v} has no pane"
-
-
-def test_every_script_tag_points_at_a_file():
-    for src in re.findall(r'<script src="/static/([^"]+)"', HTML):
-        assert (STATIC / src).is_file(), src
+@pytest.mark.parametrize("module", MODULES, ids=lambda p: p.name)
+def test_every_import_points_at_a_file_and_a_name_it_exports(module):
+    text = module.read_text(encoding="utf-8")
+    for names, src in re.findall(r"import\s+(.+?)\s+from\s+'(\./[^']+)'", text):
+        target = V2 / src[2:]
+        assert target.is_file(), f"{module.name} imports {src}"
+        code = target.read_text(encoding="utf-8")
+        if "{" in names:
+            for n in (x.split(" as ")[0].strip() for x in names.strip("{} ").split(",") if x.strip()):
+                e = re.escape(n)
+                assert re.search(r"export\s+(async\s+)?(function|const|let|class)\s+%s(?![\w$])|export\s*\{[^}]*(?<![\w$])%s(?![\w$])" % (e, e), code), f"{module.name}: {src} does not export {n}"

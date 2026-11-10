@@ -56,19 +56,13 @@ def get(url):
         return r.status, r.read()
 
 
-def test_index_and_every_script_it_loads(base):
-    status, body = get(base + "/")
-    assert status == 200
-    scripts = re.findall(r'<script src="(/static/[^"]+)"', body.decode("utf-8"))
-    assert len(scripts) >= 10
-    for s in scripts:
-        assert get(base + s)[0] == 200, s
-
-
-def test_works_api_serves_json(base):
-    status, body = get(base + "/api/works")
-    assert status == 200
-    assert isinstance(json.loads(body), list)
+def test_the_old_address_goes_to_the_app(base):
+    status, body = get(base + "/")                          # urllib follows the redirect
+    assert status == 200 and b"/static/v2/app.js" in body
+    for gone in ("/api/works", "/api/wf/videos", "/api/clips?work=a&name=b", "/api/beatmap?work=a&name=b"):
+        with pytest.raises(urllib.error.HTTPError) as e:
+            get(base + gone)
+        assert e.value.code == 404, gone
 
 
 def test_history_endpoints_list_diff_and_restore(base):
@@ -91,18 +85,12 @@ def test_history_endpoints_list_diff_and_restore(base):
     assert p.read_text(encoding="utf-8") == "S01 first"
 
 
-def test_shorts_recommendation_and_make_need_a_final(base):
+def test_shorts_make_needs_a_final(base):
     import json as _json
-    import beatmap
+    import views
     import workflow
     r = workflow.create("Shorts Endpoint")
-    wd = workflow.WORK / r["work"]
-    beatmap.write_json(wd / f"{r['name']}.beatmap.json", {"version": 1, "beats": [
-        {"id": "B01", "section": "A", "dur": 400.0, "start": 0.0, "end": 400.0, "graphic": None, "on_screen": {"broll": []}},
-        {"id": "B02", "section": "A", "dur": 10.0, "start": 400.0, "end": 410.0, "graphic": {"kind": "gears", "strength": 4}, "on_screen": {"broll": []}}]})
-    rec = _json.loads(get(f"{base}/api/shorts/recommend?work={r['work']}&name={r['name']}")[1])
-    assert rec["recommended"] == 1 and rec["strong"] == 1 and rec["final"] is None and rec["has_project"] is False
-    req = urllib.request.Request(f"{base}/api/shorts/make", data=_json.dumps({"work": r["work"], "name": r["name"], "count": 2}).encode(),
+    req = urllib.request.Request(f"{base}/api/v2/shorts/make", data=_json.dumps({"key": views.key_of(r["work"], r["name"]), "count": 2}).encode(),
                                  headers={"Content-Type": "application/json"}, method="POST")
     with pytest.raises(urllib.error.HTTPError) as e:
         urllib.request.urlopen(req, timeout=10)
@@ -117,9 +105,10 @@ def test_path_traversal_is_refused(base):
 
 def test_shorts_make_refuses_a_silly_count(base):
     import json as _json
+    import views
     import workflow
     r = workflow.create("Shorts Count")
-    req = urllib.request.Request(f"{base}/api/shorts/make", data=_json.dumps({"work": r["work"], "name": r["name"], "count": 99}).encode(),
+    req = urllib.request.Request(f"{base}/api/v2/shorts/make", data=_json.dumps({"key": views.key_of(r["work"], r["name"]), "count": 99}).encode(),
                                  headers={"Content-Type": "application/json"}, method="POST")
     with pytest.raises(urllib.error.HTTPError) as e:
         urllib.request.urlopen(req, timeout=10)

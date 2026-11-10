@@ -3,7 +3,7 @@
     from mpfaces import faces, available
     faces(bgr_frame)   # [(cx, cy, width, score), ...] as fractions of the frame, best first; [] when none or the model is missing
 
-The model file lives in _editor/models/blaze_face_short_range.tflite (229 KB, from Google's MediaPipe model storage; the host approved the download 2026-10-23).
+The model file lives in _editor/models/blaze_face_short_range.tflite (229 KB, from Google's MediaPipe model storage).
 A wide 1920x1080 shot has faces only ~3.5 to 4.5 % of the frame wide, too small for one pass, so the frame is searched in three overlapping 1080-wide squares
 and duplicates are merged. Beards lower the score (the host ~0.5 to 0.7, the co-host ~0.9): the threshold is 0.4.
 """

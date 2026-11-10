@@ -1,6 +1,6 @@
-"""Graphics plan for an approved short (ADR 0006, phase 2): where each graphic goes, what it will be, and draft stills of it.
+"""Graphics plan for a short (ADR 0006, phase 2): where each graphic goes, what it will be, and draft stills of it.
 
-When the host approves a short, one small Claude run proposes a handful of graphics for it. Nothing is built yet: the host sees a strip (the short's
+For each short the host keeps, one small Claude run proposes a handful of graphics for it. Nothing is built yet: the host sees a strip (the short's
 cuts and words with each graphic as a bar over the words it lands on), a card per graphic (what it shows, how it moves, its look) and 3 to 5
 DRAFT stills placed on the real vertical frame. He marks each graphic OK, change (with a note) or cut. Only OK'd graphics get built (next step).
 
@@ -24,7 +24,7 @@ ONE_PER_S = 6.0                       # about one graphic per 6 s of short, plus
 MAX_STILLS = 5
 REGIONS = {"top": (48, 150, 1032, 720), "full": (48, 330, 1032, 1500), "bottom": (48, 1380, 1032, 1840)}   # on the 1080x1920 frame
 
-GFX_RULES = """You are planning the GRAPHICS for one approved YouTube Short from the channel. The short is vertical (1080x1920), fast paced, made of clips of the main video. Nothing is built from your plan yet: the host will look at it first and approve each graphic, so make it clear WHERE each graphic goes and WHAT it will be.
+GFX_RULES = """You are planning the GRAPHICS for one YouTube Short from the channel. The short is vertical (1080x1920), fast paced, made of clips of the main video. Nothing is built from your plan yet: the host will look at it first and keep or cut each graphic, so make it clear WHERE each graphic goes and WHAT it will be.
 
 Rules:
 - Plan about one graphic per {per} seconds of the short (never more than {maxn} for this one, fewer is fine, one is fine). Each lasts {min_s} to {max_s} seconds.

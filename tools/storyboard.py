@@ -1,11 +1,11 @@
-"""Storyboard: one frame per beat for the whole video, approved before anything is built (stage 4, gate D).
+"""Storyboard: one frame per beat for the whole video.
 
 Usage (needs ffmpeg, Pillow and OpenCV: run it with the editor venv, the app does):
     python storyboard.py build <work> <name> [--all]    # new/changed beats only, or everything with --all
     python storyboard.py check <work> <name>            # print the state
 
-Reads   <name>.beatmap.json (the approved plan) and <name>.footage.json (where the footage lives).
-Writes  _editor\\work\\<work>\\storyboard\\<beat>.jpg  frames.json  index.html     (this folder is what gate D fingerprints)
+Reads   <name>.beatmap.json (the plan) and <name>.footage.json (where the footage lives).
+Writes  _editor\\work\\<work>\\storyboard\\<beat>.jpg  frames.json  index.html
         <name>.storyboard.marks.json                                              (the host's OK / change marks, outside that folder)
 
 A frame is 960x540:

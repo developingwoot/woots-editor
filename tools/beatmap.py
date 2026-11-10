@@ -346,7 +346,7 @@ def repeated_phrases(data: dict, min_shared: int = 2) -> list[tuple]:
 
 
 def check(data: dict, settings: dict, script_ids: list[str] | None = None) -> list[dict]:
-    """Risks to look at before approval: [{beat, level: fix|look, text}]. These are the checks the workflow asks
+    """Risks to look at before building: [{beat, level: fix|look, text}]. These are the checks the workflow asks
     Claude to run on the plan; the self-review repeats the timing ones on the rendered video."""
     out = []
     add = lambda beat, level, text: out.append({"beat": beat, "level": level, "text": text})
@@ -491,7 +491,7 @@ def apply_edit(work: str, name: str, b: dict) -> dict:
 
 def apply_trim(work: str, name: str, b: dict) -> dict:
     """b = {beat, kept: [positions in aroll.words] | reset: true, confirm?, why?}. Stores the choice in trims.json (so it survives
-    'Update from clips') and narrows the beat; on an approved beat map this is a new version like any other edit."""
+    'Update from clips') and narrows the beat; like any other edit it is recorded and can be undone."""
     p = path_of(work, name)
     data = read_json(p)
     if not data:

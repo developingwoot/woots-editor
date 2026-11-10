@@ -6,7 +6,7 @@
   note    = {"id": 1, "t": 42.0, "t_end": null, "text": "...", "clip": null, "kind": "note", "status": "open|done", "applied_in": null | version number}
   version = {"n": 2, "file": "<name>.preview-v2.mp4", "made": "2026-10-28T09:12:00", "changes": ["plain sentence", ...],
              "clips": [{"start": 0.0, "dur": 3.0}], "marker": "preview2"}
-A version is a history marker (projectstore.mark), not an approval (ADR 0003, 0007). Old `<name>.watchnotes.json` notes are read once.
+A version is a history marker (projectstore.mark), nothing more. Old `<name>.watchnotes.json` notes are read once.
 """
 import json
 import os

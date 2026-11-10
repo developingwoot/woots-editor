@@ -275,7 +275,7 @@ Your working folder is the current directory ({posix(sb)}). You can write ONLY h
 Section {psec['id']} "{psec['title']}": beats {', '.join(psec['beats'])} ({psec['dur']:.0f} s of talking).
 
 READ FIRST (all in this folder):
-- inputs/beats.json: the approved plan for these beats (the words said, the take, what is on screen, the graphic, why). The plan is FROZEN: build what it asks, change nothing in it.
+- inputs/beats.json: the plan for these beats (the words said, the take, what is on screen, the graphic, why). Build what it asks and change nothing in it: it is an input, not yours to edit.
 - inputs/words.json: word timings in SOURCE seconds for each beat's take, to time a graphic to the exact words.
 - inputs/style/*.md: the host's style rules and notes: brand tokens, how graphics move, how HyperFrames compositions are written, what he likes and dislikes.
 - section.edit.json: the cut list, already built. Finished graphics are already overlays in it.
@@ -666,7 +666,7 @@ def _pump():
 
 
 def can_build(work: str, name: str):
-    """Building needs a beat map and nothing else (no approval gate, ADR 0003)."""
+    """Building needs a beat map and nothing else."""
     if not (WORK / work / f"{name}.beatmap.json").exists():
         return False, "no beat map yet: build one in the Beat map tab"
     return True, ""

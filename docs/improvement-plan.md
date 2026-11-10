@@ -25,7 +25,11 @@ It sits next to `quality-plan.md` (footage, rhythm, templates) and does not repe
 ---
 
 ## Status
-- A1, A2, A3 done 2026-11-10 (see the notes under each). Left from A3: the 14 private copies of `_replace` in `tools/` are identical and correct; replacing them with `config.replace_retry` is housekeeping, not security.
+- Done 2026-11-10: A1, A2, A3, V1, V2, V3.
+- V1/V2 as built: the 16 older screen files and every route only they used are gone (`/` redirects to `/v2/`); kept routes: everything under `/api/v2/`, `/api/code`, `/api/fs`, `/media/`, `/shortmedia/`, `/api/shorts/frame`, and `/api/history*`, `/api/accuracy`, `/api/music`, `/api/resolve`, `/api/usage`, `/api/dash*` for D4 and D7 to D9. Ten orphan command-line scripts were deleted (catalog_music, contact, doublecuts, intro_previews, pacing, remix_audio, whatsat, splice, speakers, track).
+  Not done: `storyboard`, `watchnotes`, `shootplan`, `gfxplan`, `selfreview` and `scriptedit` are still imported by live modules (views, workflow, builder, finalrender, ...), so deleting them means untangling those first; `storyboard` and `watchnotes` have no screen now.
+- V3 as built: the state code had no gates left; the words are gone from code, prompts and comments, and `tests/test_no_gates.py` keeps them out.
+- Left from A3: the 14 private copies of `_replace` in `tools/` are identical and correct; replacing them with `config.replace_retry` is housekeeping, not security.
 
 ## Phase A: security (confirmed on the test server unless marked "by reading")
 

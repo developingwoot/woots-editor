@@ -56,13 +56,13 @@ def _status(port, method, path, body=None):
 def test_server_refuses_bad_names_on_every_kind_of_route(base):
     q = urllib.parse.quote
     assert _status(base, "GET", "/api/v2/tags?key=" + q("..\\..~x")) == 400
-    assert _status(base, "GET", "/api/clips?work=..&name=x") == 400
+    assert _status(base, "GET", "/api/history?work=..&file=x") == 400
     assert _status(base, "GET", "/api/v2/outline?key=" + q("a~b/c")) == 400
     assert _status(base, "GET", "/media/..%5C..%5Cx/f.mp4") == 400
-    assert _status(base, "GET", "/bmedia/ok/..%2Fx/S01") == 400
+    assert _status(base, "GET", "/shortmedia/..%5Cx/a.mp4") == 400
     assert _status(base, "POST", "/api/v2/notes", {"key": "..~x", "stage": "cut", "op": "add", "text": "t"}) == 400
-    assert _status(base, "POST", "/api/wf/settings", {"work": "..", "name": "x", "settings": {}}) == 400
-    assert _status(base, "POST", "/api/beatmap/build", {"work": "a", "name": "C:x"}) == 400
+    assert _status(base, "POST", "/api/history/restore", {"work": "..", "id": "x"}) == 400
+    assert _status(base, "POST", "/api/resolve/export", {"work": "a", "name": "C:x"}) == 400
 
 
 def test_a_clip_outside_the_footage_folder_is_refused(base, tmp_path):
@@ -75,6 +75,7 @@ def test_a_clip_outside_the_footage_folder_is_refused(base, tmp_path):
     (folder / "ok.mp4").write_bytes(b"x")
     key = views.key_of(r["work"], r["name"])
     assert _status(base, "POST", "/api/v2/footage/folder", {"key": key, "folder": str(folder)}) == 200
-    assert _status(base, "GET", f"/fmedia/{r['work']}/{r['name']}/ok.mp4") == 200
-    assert _status(base, "GET", f"/fmedia/{r['work']}/{r['name']}/..%2Fsecret.mp4") == 400
-    assert _status(base, "GET", f"/fmedia/{r['work']}/{r['name']}/..%5Csecret.mp4") == 400
+    src = f"/api/v2/source?key={urllib.parse.quote(key)}&rel="
+    assert _status(base, "GET", src + "ok.mp4") == 200
+    assert _status(base, "GET", src + urllib.parse.quote("../secret.mp4")) == 400
+    assert _status(base, "GET", src + urllib.parse.quote("..\secret.mp4")) == 400

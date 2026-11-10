@@ -1,4 +1,4 @@
-"""Final render (stage 8): the full-quality video, built from the stitched half-size preview (no approval gate; unfinished work only warns).
+"""Final render (stage 8): the full-quality video, built from the stitched half-size preview (unfinished work only warns).
 
 Usage (editor venv; the app runs it as a job):
     python finalrender.py plan <work> <name>     # what would be mixed (music, SFX), what cannot be found, chapters: no rendering
@@ -41,7 +41,7 @@ SFX_DIR = config.SFX_DIR
 FPS = 30
 SIZE = [1920, 1080]
 FADE = 0.008
-# The creator-approved "V2: warmer, less bright" (SKILL.md, Voice processing)
+# The host's chosen "V2: warmer, less bright" (SKILL.md, Voice processing)
 VOICE_CHAIN = ("highpass=f=70:poles=2,afftdn=nr=6:nf=-55:tn=1,equalizer=f=100:t=q:w=6:g=-4,lowshelf=f=220:g=1.5,"
                "equalizer=f=160:t=q:w=1.0:g=2.5,equalizer=f=450:t=q:w=1.4:g=-2.5,equalizer=f=3200:t=q:w=1.2:g=1.5,"
                "highshelf=f=7500:g=-1.5,deesser=i=0.4,acompressor=threshold=-26dB:ratio=3:attack=10:release=180:makeup=3dB:knee=5")
@@ -427,7 +427,7 @@ def final_check(out: Path, total_frames: int, joins: list[float], dur_expected: 
     add("frames", abs(nb - total_frames) <= 1, f"{nb} frames, expected {total_frames}")
     dv, da = float(probe_one(out, "stream=duration", "v:0") or 0), float(probe_one(out, "stream=duration", "a:0") or 0)
     add("av_length", abs(dv - da) <= 0.05, f"picture {dv:.3f} s, sound {da:.3f} s")
-    add("duration", abs(dv - dur_expected) <= 0.1, f"{dv:.2f} s, the approved preview is {dur_expected:.2f} s")
+    add("duration", abs(dv - dur_expected) <= 0.1, f"{dv:.2f} s, the preview is {dur_expected:.2f} s")
     L = measure_loudness(out)
     add("loudness", L["I"] is not None and abs(L["I"] + 14) <= 0.8, f"{L['I']} LUFS (target -14)")
     add("true_peak", L["TP"] is not None and L["TP"] <= -1.0, f"{L['TP']} dBFS (ceiling -1.5)")
@@ -459,7 +459,7 @@ def final_check(out: Path, total_frames: int, joins: list[float], dur_expected: 
 
 # ----------------------------------------------------------------------------- run
 def run(work: str, name: str) -> dict:
-    s = state(work, name)                                   # the gate is checked BEFORE anything heavy is loaded
+    s = state(work, name)                                   # whether it can render is checked BEFORE anything heavy is loaded
     if not s["can_render"]:
         raise ValueError(s["why_not"])
     if s["plan"] is None:

@@ -1,4 +1,4 @@
-"""Watch & note: the host watches the whole half-size video (stage 7, gate E) and pins notes to the exact moment.
+"""Watch & note: the host watches the whole half-size video and pins notes to the exact moment.
 
 Replaces the old Review tab for videos made with the new workflow (the old tab only lists videos with an edit.json).
 Notes live in `<name>.watchnotes.json`:

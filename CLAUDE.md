@@ -1,7 +1,7 @@
 # Woots Editor
 
 Local web app + Python tools that run a talking-head YouTube workflow: Outline, Footage, Rough cut, Preview, Final, Shorts. Stdlib `ThreadingHTTPServer` in `tools/review_app/server.py`,
-the current screens are one JS module per screen in `tools/review_app/static/v2/` (the older tab-based UI is in `tools/review_app/static/`), one Python tool per job in `tools/`.
+the screens are one JS module per screen in `tools/review_app/static/v2/`, one Python tool per job in `tools/`.
 See `docs/how-it-works.md` for the map of the code.
 
 ## Code vs data (read this first)

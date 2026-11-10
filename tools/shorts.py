@@ -745,7 +745,7 @@ def filter_graph(pieces, base, speed=1.0, f=1.0, inputs=None):
 
 
 ENCODE = {
-    # preview: quick look while editing, half size; final: for approved shorts, full 1080x1920, the slowest NVENC preset and a high quality target
+    # preview: quick look while editing, half size; final: for the shorts kept, full 1080x1920, the slowest NVENC preset and a high quality target
     "preview": {"f": 0.5, "v": ["-preset", "p4", "-cq", "26", "-b:v", "0"], "audio": "160k"},
     "final": {"f": 1.0, "v": ["-preset", "p7", "-tune", "hq", "-rc", "vbr", "-cq", "15", "-b:v", "0", "-maxrate", "16M", "-bufsize", "32M",
                               "-spatial-aq", "1", "-temporal-aq", "1", "-rc-lookahead", "24", "-profile:v", "high"], "audio": "256k"},

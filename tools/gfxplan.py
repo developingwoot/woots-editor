@@ -1,6 +1,6 @@
-"""Graphics plan (gate G1) and graphics review (gate G2): the host decides the LOOK of each graphic before it is built, then checks each built graphic in context.
+"""Graphics plan and graphics review: the host can choose the LOOK of each graphic before it is built, then check each built graphic in context.
 
-The beat map says which graphics exist and why (it is frozen once approved). This module keeps the host's design decisions on top of it, so the beat map never changes:
+The beat map says which graphics exist and why. This module keeps the host's design decisions on top of it, so the beat map never changes:
   <name>.graphicsplan.json    {"version":1, "created", "gfx_sig", "decisions": {beat_id: {"style": "depth", "note": "...", "status": "ok|change|cut"}}}
   <name>.graphicsreview.json  {"version":1, "created", "marks": {beat_id: {"status": "ok|change", "note": "...", "built_sig": "...", "t": "..."}}}
 `apply()` lays those decisions onto the beat map IN MEMORY (style, a design note, the host's change request after he saw the built graphic, and "cut" = struck), so the build plan, the brief

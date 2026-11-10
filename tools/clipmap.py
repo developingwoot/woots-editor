@@ -1,4 +1,4 @@
-"""Map transcribed clips to the approved script: takes, topic spans, best take per script line.
+"""Map transcribed clips to the script: takes, topic spans, best take per script line.
 
 Usage:
     python clipmap.py <work> <name> [--roles aroll,unassigned]     # writes <name>.clips.json (old one kept as .bak)
@@ -6,7 +6,7 @@ Usage:
 Inputs (all under _editor\\work\\<work>\\):
     <name>.script.md       lines that start with an id: "S01 Hook ...". "# Heading" lines name the section.
     <name>.footage.json    the footage folder + per-clip "analysis" (word list, restarts) from analyze_takes.py
-Output <name>.clips.json (the Clips tab edits it; gate B approves it):
+Output <name>.clips.json (the rough cut screen edits it):
     {"script_fp", "folder", "clips": [{"rel", "name", "dur", "role", "spans": [span]}],
      "by_line": {"S01": {"candidates": [span ids, best first], "picked": id|None, "picked_by": "auto"|"user",
                          "score": {id: x}, "reason": "..."}},

@@ -1,7 +1,7 @@
-"""Workflow state for a video: stages, settings, history (see docs/workflow.md; no approval gates, ADR 0003).
+"""Workflow state for a video: stages, settings, history (see docs/workflow.md; every stage is a draft).
 
 State lives in  _editor\\work\\<work>\\<name>.workflow.json:
-  {"settings": {...}, "history": [...]}   (a "gates" key from the old approval system may still be in old files; it is ignored)
+  {"settings": {...}, "history": [...]}   (a "gates" key from an older version may still be in old files; it is ignored)
 A stage is done when the file behind it exists.
 
 Python stdlib only. Used by review_app/server.py; also runnable:  python workflow.py <work> <name>
@@ -46,7 +46,7 @@ DEFAULT_SETTINGS = {
 CHOICES = {"build_model": ("sonnet", "opus", "haiku", "fable"), "build_effort": ("low", "medium", "high", "xhigh", "max"),
            "critic_model": ("off", "opus", "sonnet", "fable"), "critic_effort": ("low", "medium", "high", "xhigh", "max")}
 
-# Stages in order. A stage is done when the file behind it exists. No approvals (ADR 0003).
+# Stages in order. A stage is done when the file behind it exists. Nothing waits for a sign-off.
 STAGES = [
     {"id": "script", "title": "Script", "file": "{name}.script.md",
      "what": "The script, with a line id (S01, S02...) on every line.",
@@ -298,7 +298,7 @@ def effective(saved: dict) -> dict:
 
 
 def state(work: str, name: str) -> dict:
-    """Where the video is: one row per stage (done / waiting), warnings, and the next thing to do. There are no approvals (ADR 0003)."""
+    """Where the video is: one row per stage (done / waiting), warnings, and the next thing to do. Nothing waits for a sign-off."""
     wd = work_dir(work)
     s = load(work, name)
     settings = effective(s["settings"])

@@ -350,7 +350,7 @@ def frame_jpeg(work, name, t: float, width: int = 960, src: str = "") -> bytes:
     return buf.tobytes()
 
 
-# ----------------------------------------------------------------------------- graphics plan of an approved short (shortsgfx.py)
+# ----------------------------------------------------------------------------- graphics plan of a short (shortsgfx.py)
 def _gfx_ctx(work, name, sid):
     cfg = sh.load(cfg_file(work, name))
     short = _short(cfg, sid)

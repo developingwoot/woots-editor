@@ -1,4 +1,4 @@
-"""Build plan: split the approved beat map into sections and write each section's baseline cut list (stage 5).
+"""Build plan: split the beat map into sections and write each section's baseline cut list (stage 5).
 
 Usage:
     python sections.py plan <work> <name>        # writes <name>.buildplan.json (NOT <name>.sections.json: the old pipeline owns that name)
@@ -72,7 +72,7 @@ def live_graphic(b: dict):
 
 def built_path(work: str, name: str) -> Path:
     """<name>.graphics.built.json: {beat id: {"file": rendered .mov, "sig": design signature, "built": time}}.
-    Kept OUT of the beat map so building a graphic never touches the frozen, approved plan."""
+    Kept OUT of the beat map so building a graphic never touches the plan."""
     return WORK / work / f"{name}.graphics.built.json"
 
 
@@ -155,7 +155,7 @@ def plan(work: str, name: str, write: bool = True) -> dict:
     if not bm:
         raise ValueError("no beat map yet")
     import gfxplan
-    gfxplan.apply(work, name, bm)                     # The creator's look, notes and cuts from the Graphics tab, laid on the frozen beat map in memory only
+    gfxplan.apply(work, name, bm)                     # The creator's look, notes and cuts from the Graphics tab, laid on the beat map in memory only
     secs = []
     built = load_built(work, name)
     notes = [n for n in read_notes(work, name) if n.get("kind") == "graphic"]

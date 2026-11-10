@@ -1,10 +1,8 @@
 """the channel review app: a local web UI on top of the editing pipeline.
 
-Growing from a review tool into the video workflow's control room (Workflow tab: stages and approval
-gates from tools/workflow.py; next: clips, beat map, storyboard, background Claude builds).
-Review-and-decisions layer, not an editor: watch a render and pin notes to exact frames,
-toggle cuts in a paper edit, see every layer on a timeline, and retime / re-word HyperFrames
-graphics with a live preview. Rendering stays in Claude Code (the app shows the commands).
+The video workflow's control room: Outline, Footage, Rough cut, Preview, Final and Shorts (screens in static/v2/, stages from tools/workflow.py).
+Review-and-decisions layer, not an editor: watch a cut, leave notes, and Claude applies them in background runs; ffmpeg and HyperFrames do the rendering.
+Every stage is a draft: nothing waits for a sign-off.
 
 Usage:
     python server.py [--port 8765]   (listens on this computer only)
@@ -42,7 +40,7 @@ _STARTED = time.time()
 
 
 def _static_newest() -> float:
-    return max([f.stat().st_mtime for f in (Path(__file__).parent / "static").glob("*") if f.is_file()] or [0.0])
+    return max([f.stat().st_mtime for f in (Path(__file__).parent / "static").rglob("*") if f.is_file()] or [0.0])
 
 
 def _busy() -> bool:
@@ -83,17 +81,10 @@ import publish                                    # noqa: E402  (v2 publishing d
 import teaching                                   # noqa: E402  (v2 teaching moments)
 import clipmap                                    # noqa: E402  (takes -> script lines, the creator's corrections)
 import beatmap                                    # noqa: E402  (the plan: what is said / on screen, graphics, checks)
-import storyboard                                 # noqa: E402  (one frame per beat; the creator's OK / change marks)
 import builder                                    # noqa: E402  (stage 5: sections, 3-slot scheduler, headless Claude runs)
-import sections as build_sections                 # noqa: E402  (the build plan)
-import selfreview                                 # noqa: E402  (stage 6: Claude's checks on its own work)
-import shootplan                                  # noqa: E402  (the shot list that comes before filming)
-import scriptedit                                 # noqa: E402  (Script tab: read and edit the script, versions, [FILL] answers)
 import usage                                      # noqa: E402  (Dashboard: Claude cost, free local work, time saved)
 import musicaudition                              # noqa: E402  (Build tab: hear another music track in place of a bed)
 import resolve_export                             # noqa: E402  (Dashboard: the stitched video as a rough-cut timeline for DaVinci Resolve)
-import watchnotes                                 # noqa: E402  (Build & review tab: watch the half-size video, pin notes)
-import gfxplan                                    # noqa: E402  (Graphics tab: the look of each graphic before the build, the review after)
 import finalrender                                # noqa: E402  (stage 8: the full-quality render)
 import accuracy                                   # noqa: E402  (Beat map tab: Opus checks what is taught for accuracy)
 import shortsapp                                  # noqa: E402  (Shorts tab: vertical shorts from a finished video)
@@ -204,14 +195,6 @@ def write_config(html: str, cfg: dict) -> str:
 
 
 # ----------------------------------------------------------------------------- project bundle
-def list_works():
-    out = []
-    for d in sorted(WORK.iterdir()) if WORK.is_dir() else []:
-        if d.is_dir():
-            names = sorted(p.name[:-len(".edit.json")] for p in d.glob("*.edit.json"))
-            if names:
-                out.append({"work": d.name, "names": names})
-    return out
 
 
 def tool_env():
@@ -225,7 +208,6 @@ def tool_env():
 
 # ----------------------------------------------------------------------------- footage library
 SKIP_DIRS = {"_editor", "$recycle.bin", "system volume information", "node_modules"}
-SCAN_MAX = 600
 
 
 def footage_file(work, name) -> Path:
@@ -291,62 +273,6 @@ def probe_clip(path: Path) -> dict:
     return info
 
 
-def scan_folder(folder: Path) -> list[Path]:
-    found = []
-    base_depth = len(folder.parts)
-    for root, dirs, files in os.walk(folder):
-        rp = Path(root)
-        dirs[:] = [d for d in dirs if not d.startswith((".", "$")) and d.lower() not in SKIP_DIRS]
-        if len(rp.parts) - base_depth >= 4:
-            dirs[:] = []
-        for f in files:
-            if Path(f).suffix.lower() in footage_cfg.VIDEO_EXT and not f.lower().endswith(".proxy.mp4"):
-                found.append(rp / f)
-        if len(found) >= SCAN_MAX:
-            break
-    return sorted(found, key=lambda p: str(p).lower())[:SCAN_MAX]
-
-
-def norm(p) -> str:
-    return os.path.normcase(os.path.abspath(str(p)))
-
-
-def footage_state(work, name) -> dict:
-    """footage.json + the scanned clips (roles, probe info, what the plan already uses)."""
-    wd = work_dir(work)
-    cfg = read_json(footage_file(work, name), {}) or {}
-    edit = read_json(wd / f"{name}.edit.json", {}) or {}
-    src = Path(edit["source"]) if edit.get("source") else None
-    out = {"cfg": cfg, "folder": cfg.get("folder"), "clips": [], "suggest": [], "scan_error": None}
-    if src and src.parent.is_dir():
-        out["suggest"] = [str(src.parent)]
-    folder = Path(cfg["folder"]) if cfg.get("folder") else None
-    if not folder:
-        return out
-    if not folder.is_dir():
-        out["scan_error"] = f"folder not found: {folder}"
-        return out
-    files = scan_folder(folder)
-    from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(8) as ex:
-        infos = list(ex.map(probe_clip, files))
-    main_src = norm(src) if src else None
-    broll_used = set()
-    for b in read_json(wd / f"{name}.broll.json", []) or []:
-        if src:
-            broll_used.add(norm(src.parent / b["file"]))
-    chosen = {w: ((cfg.get("bookends") or {}).get(w) or {}).get("file") for w in ("intro", "outro")}
-    for p, info in zip(files, infos):
-        rel = p.relative_to(folder).as_posix()
-        role, override = footage_cfg.role_of(cfg, rel)
-        st = p.stat()
-        used = "main" if norm(p) == main_src else "broll" if norm(p) in broll_used else None
-        out["clips"].append({"rel": rel, "name": p.name, "size": st.st_size, "mtime": st.st_mtime, **info,
-                             "role": role, "override": override, "auto": footage_cfg.auto_role(rel), "used": used,
-                             "chosen": next((w for w, f in chosen.items() if f == rel), None),
-                             "analysis": (cfg.get("analysis") or {}).get(rel)})
-    return out
-
 
 def footage_path_ok(work, name, rel) -> Path:
     cfg = read_json(footage_file(work, name), {}) or {}
@@ -358,78 +284,6 @@ def footage_path_ok(work, name, rel) -> Path:
         raise ValueError("not a clip in the footage folder")
     return p
 
-
-def thumb_for(work, name, rel, t) -> Path:
-    import hashlib
-    p = footage_path_ok(work, name, rel)
-    st = p.stat()
-    tdir = work_dir(work) / "footage" / "thumbs"
-    tdir.mkdir(parents=True, exist_ok=True)
-    out = tdir / (hashlib.sha1(f"{rel}|{st.st_size}|{int(st.st_mtime)}|{t:.1f}".encode()).hexdigest()[:16] + ".jpg")
-    if not out.exists():
-        ffmpeg = find_exe("ffmpeg") or "ffmpeg"
-        tmp = out.with_suffix(".part.jpg")
-        r = subprocess.run([ffmpeg, "-nostdin", "-y", "-v", "error", "-ss", f"{t:.2f}", "-i", str(p), "-frames:v", "1",
-                            "-vf", "scale=320:-2", "-q:v", "5", str(tmp)], capture_output=True)
-        if r.returncode != 0 or not tmp.exists():
-            raise ValueError("could not make a thumbnail")
-        tmp.replace(out)
-    return out
-
-
-def footage_op(work, name, op, b):
-    path = footage_file(work, name)
-    with _lock:
-        cfg = read_json(path, {}) or {}
-        if op == "folder":
-            f = Path(b["folder"])
-            if not f.is_dir():
-                raise ValueError(f"not a folder: {f}")
-            cfg["folder"] = str(f)
-        elif op == "role":
-            rel, role = b["file"], b.get("role")
-            roles = cfg.setdefault("roles", {})
-            if role in (None, "", "auto"):
-                roles.pop(rel, None)
-            elif role in footage_cfg.ROLES:
-                roles[rel] = role
-            else:
-                raise ValueError("unknown role")
-            for w in ("intro", "outro"):          # a clip that stops being intro/outro can't stay chosen as one
-                ch = (cfg.get("bookends") or {}).get(w)
-                if ch and ch.get("file") == rel and footage_cfg.role_of(cfg, rel)[0] != w:
-                    cfg["bookends"].pop(w)
-        elif op == "take":
-            which = b["which"]
-            if which not in ("intro", "outro"):
-                raise ValueError("which must be intro or outro")
-            bk = cfg.setdefault("bookends", {})
-            if not b.get("file"):
-                bk.pop(which, None)
-            else:
-                p = footage_path_ok(work, name, b["file"])
-                dur = probe_clip(p)["dur"] or 0
-                if "in" in b and "out" in b:
-                    a, z = float(b["in"]), float(b["out"])
-                else:                              # picking a take: trim to its speech if analysed, else the whole clip
-                    an = (cfg.get("analysis") or {}).get(b["file"])
-                    a, z = (an["trim"] if an and an.get("trim") else [0.0, dur])
-                z = min(z, dur) if dur else z
-                if not (z > a >= 0):
-                    raise ValueError("trim out must be after in")
-                bk[which] = {"file": b["file"], "in": round(a, 3), "out": round(z, 3)}
-            if not bk:
-                cfg.pop("bookends", None)
-        elif op == "bridge":
-            allowed = {"fade": float, "whoosh": bool, "whoosh_db": float, "voice_chain": bool}
-            cur = cfg.setdefault("bridge", {})
-            for k, v in (b.get("bridge") or {}).items():
-                if k in allowed:
-                    cur[k] = allowed[k](v)
-        else:
-            raise ValueError(op)
-        write_json(path, cfg)
-    return footage_state(work, name)
 
 
 def summarize_take(tr: dict, dur) -> dict:
@@ -477,149 +331,9 @@ def _look_at_footage(job, work, name) -> bool:
     return v.wait() == 0
 
 
-def start_analyze(work, name, files):
-    if any(j.get("pipeline") and not j["done"] for j in _jobs.values()):
-        raise ValueError("a render or analysis is already running: wait for it to finish")
-    import hashlib
-    wd = work_dir(work)
-    paths = [(rel, footage_path_ok(work, name, rel)) for rel in files]
-    if not paths:
-        raise ValueError("no clips to analyse")
-    tdir = wd / "footage"
-    tdir.mkdir(exist_ok=True)
-    items = [{"src": str(p), "out": str(tdir / (hashlib.sha1(rel.encode()).hexdigest()[:10] + ".transcript.json"))}
-             for rel, p in paths]
-    man = tdir / "analyze.manifest.json"
-    man.write_text(json.dumps(items), encoding="utf-8")
-    job = {"id": uuid.uuid4().hex[:8], "pipeline": "analyze", "log": "", "done": False, "ok": None, "step": 0,
-           "steps": [f"transcribe {len(paths)} take{'s' if len(paths) > 1 else ''} (Parakeet, loads the model once)",
-                     "look at all the footage (vision model; clips already looked at are skipped)"],
-           "out": None, "started": time.time(), "work": work, "name": name}
-    _jobs[job["id"]] = job
-
-    def run():
-        try:
-            job["ok"] = _transcribe(job, work, name, paths, items, man)
-            if job["ok"]:
-                job["step"] = 1                        # then look at ALL the footage: a clip with no speech can only be found by what it shows
-                job["ok"] = _look_at_footage(job, work, name)
-                if not job["ok"]:
-                    job["log"] += "\n✗ looking at the footage failed (the transcripts were saved)\n"
-            else:
-                job["log"] += "\n✗ transcription failed\n"
-        except Exception as e:                     # noqa: BLE001 - report anything to the UI
-            job["log"] += f"\n{e}"
-            job["ok"] = False
-        job["done"] = True
-        job["elapsed"] = round(time.time() - job["started"], 1)
-
-    threading.Thread(target=run, daemon=True).start()
-    return job
-
 
 # ----------------------------------------------------------------------------- clips (script <-> takes)
-def clips_state(work, name) -> dict:
-    """The script lines, clips.json, and whether the script changed since the clips were mapped."""
-    wd = work_dir(work)
-    sp = clipmap.script_path(work, name)
-    out = {"script": {"exists": sp.exists(), "lines": [], "fp": None}, "clips": None, "stale": False}
-    if sp.exists():
-        try:
-            lines = clipmap.parse_script(sp.read_text(encoding="utf-8-sig"))
-        except OSError as e:
-            raise ValueError(str(e))
-        out["script"] = {"exists": True, "fp": clipmap.script_fp(work, name),
-                         "lines": [{k: ln[k] for k in ("id", "said", "heading")} for ln in lines]}
-    data = read_json(wd / f"{name}.clips.json")
-    if data:
-        out["clips"] = data
-        out["stale"] = bool(out["script"]["fp"] and data.get("script_fp") != out["script"]["fp"])
-    out["has_footage"] = bool((read_json(wd / f"{name}.footage.json", {}) or {}).get("analysis"))
-    return out
 
-
-def start_clipmap(work, name):
-    if any(j.get("pipeline") and not j["done"] for j in _jobs.values()):
-        raise ValueError("another job is running: wait for it to finish")
-    work_dir(work)
-    clipmap.load_script(work, name)                  # fail fast with a readable message
-    job = {"id": uuid.uuid4().hex[:8], "pipeline": "clipmap", "log": "", "done": False, "ok": None, "step": 0,
-           "steps": ["match the takes to the script"], "out": None, "started": time.time()}
-    _jobs[job["id"]] = job
-
-    def run():
-        try:
-            p = subprocess.Popen([str(PY), str(TOOLS / "clipmap.py"), work, name], cwd=TOOLS, env=tool_env(),
-                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
-            for line in p.stdout:
-                job["log"] = (job["log"] + line)[-30000:]
-            job["ok"] = p.wait() == 0
-        except Exception as e:                     # noqa: BLE001 - report anything to the UI
-            job["log"] += f"\n{e}"
-            job["ok"] = False
-        job["done"] = True
-        job["elapsed"] = round(time.time() - job["started"], 1)
-
-    threading.Thread(target=run, daemon=True).start()
-    return job
-
-
-def start_storyboard(work, name, full=False):
-    if any(j.get("pipeline") and not j["done"] for j in _jobs.values()):
-        raise ValueError("another job is running: wait for it to finish")
-    work_dir(work)
-    if not (WORK / work / f"{name}.beatmap.json").exists():
-        raise ValueError("no beat map yet: build one first")
-    job = {"id": uuid.uuid4().hex[:8], "pipeline": "storyboard", "log": "", "done": False, "ok": None, "step": 0,
-           "steps": ["draw one frame per beat" + (" (all of them)" if full else " (new and changed beats)")],
-           "out": None, "started": time.time()}
-    _jobs[job["id"]] = job
-
-    def run():
-        try:
-            args = [str(PY), str(TOOLS / "storyboard.py"), "build", work, name] + (["--all"] if full else [])
-            p = subprocess.Popen(args, cwd=TOOLS, env=tool_env(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                 text=True, encoding="utf-8", errors="replace")
-            for line in p.stdout:
-                job["log"] = (job["log"] + line)[-30000:]
-            job["ok"] = p.wait() == 0
-        except Exception as e:                     # noqa: BLE001 - report anything to the UI
-            job["log"] += f"\n{e}"
-            job["ok"] = False
-        job["done"] = True
-        job["elapsed"] = round(time.time() - job["started"], 1)
-
-    threading.Thread(target=run, daemon=True).start()
-    return job
-
-
-def start_selfreview(work, name, only=None):
-    if any(j.get("pipeline") and not j["done"] for j in _jobs.values()):
-        raise ValueError("another job is running: wait for it to finish")
-    work_dir(work)
-    if not selfreview.preview_path(work, name).exists():
-        raise ValueError("no stitched preview yet: build every section and press Stitch in the Build tab first")
-    job = {"id": uuid.uuid4().hex[:8], "pipeline": "selfreview", "log": "", "done": False, "ok": None, "step": 0,
-           "steps": ["check the stitched preview: graphics, text, face, repeated words, lips, silence, sync"], "out": None, "started": time.time()}
-    _jobs[job["id"]] = job
-
-    def run():
-        try:
-            args = [str(PY), str(TOOLS / "selfreview.py"), "run", work, name] + (["--only", ",".join(only)] if only else [])
-            p = subprocess.Popen(args, cwd=TOOLS, env=tool_env(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                 stdin=subprocess.DEVNULL, text=True, encoding="utf-8", errors="replace")
-            for line in p.stdout:
-                if not line.lstrip().startswith(("[NeMo", "[W", "[I")) and line.strip():
-                    job["log"] = (job["log"] + line)[-30000:]
-            job["ok"] = p.wait() == 0
-        except Exception as e:                     # noqa: BLE001 - report anything to the UI
-            job["log"] += f"\n{e}"
-            job["ok"] = False
-        job["done"] = True
-        job["elapsed"] = round(time.time() - job["started"], 1)
-
-    threading.Thread(target=run, daemon=True).start()
-    return job
 
 
 def start_final(work, name):
@@ -791,32 +505,6 @@ def start_shorts_render(work, name, sid):
     job = _job("shorts", ["render the vertical preview (auto crops are worked out first the first time)"])
     return _job_run(job, [([str(PY), str(TOOLS / "shorts.py"), "render", str(shortsapp.cfg_file(work, name)), sid], TOOLS)])
 
-
-def start_shorts_new(work, name, source, people, ref_start, ref_len):
-    """A new shorts project from a finished video: transcribe, tell the voices apart, write <name>.shorts.json."""
-    src = Path(source)
-    if not src.is_file() or src.suffix.lower() not in (".mp4", ".mkv", ".mov"):
-        raise ValueError("pick a video file (mp4, mkv or mov)")
-    if re.search(r"[^A-Za-z0-9._-]", work) or re.search(r"[^A-Za-z0-9._ -]", name):
-        raise ValueError("use letters, numbers, dashes in the project names")
-    wd = WORK / work
-    wd.mkdir(exist_ok=True)
-    if shortsapp.cfg_file(work, name).exists():
-        raise ValueError("that shorts project already exists")
-    names = [n.strip() for n in (people or ",".join(channel.people())).split(",") if n.strip()] or [channel.host()]
-    ref = wd / f"{src.stem}.voice-ref.wav"
-    tr = wd / f"{src.stem}.transcript.json"
-    spk = wd / f"{src.stem}.speakers.json"
-    job = _job("shorts", ["transcribe the video (Parakeet)", "cut the reference voice", "tell the voices apart (TitaNet)", "write the project"])
-    cmds = [([str(PY), str(TOOLS / "transcribe.py"), str(src), "--out", str(wd)], TOOLS),
-            (["ffmpeg", "-y", "-v", "error", "-ss", str(ref_start), "-t", str(ref_len), "-i", str(src), "-vn", "-ac", "1", "-ar", "16000", str(ref)], TOOLS),
-            ([str(PY), str(TOOLS / "speakers.py"), str(tr), "--ref", f"{names[0]}={ref}", "--names", ",".join(names)], TOOLS)]
-
-    def after():                                    # write the project once the commands are done, before the job counts as done
-        job["step"] = 3
-        with _lock:
-            shortsapp.new_project(work, name, str(src).replace("\\", "/"), str(tr).replace("\\", "/"), str(spk).replace("\\", "/") if spk.exists() else None)
-    return _job_run(job, cmds, after)
 
 
 def _claude_run(job, fd, prompt, out_name, apply, budget="1.5", kind="edit"):
@@ -1467,11 +1155,11 @@ def start_shorts_finish(work, name):
     generated names into the finished video's own Shorts folder (never overwriting)."""
     raw = shortsapp.read_raw(work, name)
     wd = WORK / work
-    approved = shortsapp.live(raw.get("shorts", []))
-    if not approved:
+    kept = shortsapp.live(raw.get("shorts", []))
+    if not kept:
         raise ValueError("no shorts to finish: every short is dropped")
     todo = []
-    for s in approved:
+    for s in kept:
         info = shortsapp._render_one(wd, s, ".final")
         if not info.get("exists") or info.get("stale"):
             todo.append(s["id"])
@@ -1488,21 +1176,6 @@ def start_shorts_finish(work, name):
         job["log"] = (job["log"] + "\n" if job["log"] else "") + "\n".join(lines)
     return _job_run(job, cmds, after)
 
-
-def shorts_videos():
-    """Finished-looking videos a shorts project can start from: big mp4/mkv files one level inside the project folders on Z:."""
-    root = config.DATA_ROOT
-    out = []
-    for d in root.iterdir():
-        if not d.is_dir() or d.name.startswith("_") or d.name in ("Music", "Archive"):
-            continue
-        for f in d.iterdir():
-            if f.is_file() and f.suffix.lower() in (".mp4", ".mkv") and f.stat().st_size > 100e6:
-                out.append({"path": str(f), "folder": d.name, "file": f.name, "mb": round(f.stat().st_size / 1e6), "mtime": int(f.stat().st_mtime)})
-    return sorted(out, key=lambda v: -v["mtime"])[:60]
-
-
-SB_IMG_RE = re.compile(r"^[A-Za-z0-9_-]+\.jpg$")
 
 
 # ----------------------------------------------------------------------------- HTTP
@@ -1523,7 +1196,7 @@ def check_names(d):
         config.safe_part(name)
 
 
-MEDIA_PREFIXES = {"/finalimg/": 1, "/srimg/": 1, "/sbimg/": 1, "/shortmedia/": 1, "/media/": 1, "/bmedia/": 2, "/fmedia/": 2}      # how many leading path parts are video names
+MEDIA_PREFIXES = {"/shortmedia/": 1, "/media/": 1}      # how many leading path parts are video names
 
 
 def check_path_names(path: str):
@@ -1611,9 +1284,12 @@ class Handler(BaseHTTPRequestHandler):
         try:
             check_names(q)
             check_path_names(u.path)
-            if u.path in ("/", "/index.html"):
-                return self.send_file(STATIC / "index.html")
-            if u.path in ("/v2", "/v2/"):
+            if u.path in ("/", "/index.html", "/v2"):
+                self.send_response(302)
+                self.send_header("Location", "/v2/")
+                self.send_header("Content-Length", "0")
+                return self.end_headers()
+            if u.path == "/v2/":
                 return self.send_file(STATIC / "v2" / "index.html")
             if u.path == "/api/v2/home":
                 return self.send_json(views.home(list(_jobs.values())))
@@ -1713,103 +1389,25 @@ class Handler(BaseHTTPRequestHandler):
                 if not config.inside(STATIC, p):
                     return self.send_error(404)
                 return self.send_file(p)
-            if u.path == "/api/works":
-                return self.send_json(list_works())
-            if u.path == "/api/wf/videos":
-                return self.send_json(workflow.list_videos())
-            if u.path == "/api/wf/state":
-                return self.send_json(workflow.state(q["work"], q["name"]))
-            if u.path == "/api/clips":
-                return self.send_json(clips_state(q["work"], q["name"]))
             if u.path == "/api/code":
                 return self.send_json({"stale": _code_newest() > _STARTED + 1, "boot": _STARTED, "static": _static_newest(), "busy": _busy(),
                                        "supervised": bool(os.environ.get("WOOTS_SUPERVISED"))})
             if u.path == "/api/accuracy":
                 return self.send_json(accuracy.state(q["work"], q["name"]))
-            if u.path == "/api/beatmap":
-                return self.send_json(beatmap.state(q["work"], q["name"]))
-            if u.path == "/api/storyboard":
-                return self.send_json(storyboard.state(q["work"], q["name"]))
-            if u.path == "/api/build":
-                return self.send_json(builder.state(q["work"], q["name"]))
-            if u.path == "/api/script":
-                return self.send_json(scriptedit.state(q["work"], q["name"]))
-            if u.path == "/api/watch":
-                return self.send_json(watchnotes.state(q["work"], q["name"]))
             if u.path == "/api/music":
                 return self.send_json(musicaudition.state(q["work"], q["name"]))
             if u.path == "/api/resolve":
                 return self.send_json(resolve_export.state(q["work"], q["name"]))
             if u.path == "/api/usage":
                 return self.send_json({"video": usage.video(q["work"], q["name"]), "all": usage.all_videos()})
-            if u.path == "/api/gfxplan":
-                return self.send_json(gfxplan.state(q["work"], q["name"]))
-            if u.path == "/api/gfxreview":
-                return self.send_json(gfxplan.review_state(q["work"], q["name"]))
             if u.path == "/api/history":
                 return self.send_json({"entries": projectstore.history(work_dir(q["work"]), q.get("file"), int(q.get("limit", 60)))})
             if u.path == "/api/history/diff":
                 return self.send_json(projectstore.diff(work_dir(q["work"]), q["id"], q.get("other")))
             if u.path == "/api/dash":
                 return self.send_json(usage.cards())
-            if u.path == "/api/dash/thumb":
-                tp = usage.thumb_path(q["work"], q["name"])
-                return self.send_file(tp) if tp else self.send_error(404)
-            if u.path == "/api/shootplan":
-                return self.send_json({**shootplan.state(q["work"], q["name"]), "checklist": shootplan.checklist(q["work"], q["name"])})
-            if u.path == "/api/selfreview":
-                return self.send_json(selfreview.state(q["work"], q["name"]))
-            if u.path == "/api/final":
-                return self.send_json(finalrender.state(q["work"], q["name"]))
-            if u.path.startswith("/finalimg/"):       # the contact sheet of every cut in the newest final
-                work = unquote(u.path[len("/finalimg/"):]).split("/", 1)[0]
-                return self.send_file(work_dir(work) / "final" / "joins.jpg")
-            if u.path.startswith("/srimg/"):          # a self-review still: /srimg/<work>/<F001>.jpg
-                work, file = unquote(u.path[len("/srimg/"):]).split("/", 1)
-                if not SB_IMG_RE.match(file):
-                    return self.send_error(404)
-                return self.send_file(work_dir(work) / "selfreview" / file)
-            if u.path.startswith("/bmedia/"):         # a section's half-size preview: /bmedia/<work>/<name>/<S01>
-                work, name, sid = unquote(u.path[len("/bmedia/"):]).split("/", 2)
-                return self.send_file(builder.sandbox_dir(work_dir(work).name, name, sid) / "out" / "preview-half.mp4", ranged=True)
-            if u.path.startswith("/sbimg/"):          # a storyboard frame: /sbimg/<work>/<beat>.jpg?v=<sig>
-                work, file = unquote(u.path[len("/sbimg/"):]).split("/", 1)
-                if not SB_IMG_RE.match(file):
-                    return self.send_error(404)
-                return self.send_file(work_dir(work) / "storyboard" / file)
             if u.path == "/api/fs":
                 return self.send_json(list_dir(q.get("path", ""), files=q.get("files") == "1"))
-            if u.path == "/api/footage":
-                return self.send_json(footage_state(q["work"], q["name"]))
-            if u.path == "/thumb":
-                return self.send_file(thumb_for(q["work"], q["name"], q["file"], float(q.get("t", 1))))
-            if u.path.startswith("/fmedia/"):
-                work, name, rel = unquote(u.path[len("/fmedia/"):]).split("/", 2)
-                return self.send_file(footage_path_ok(work, name, rel), ranged=True)
-            if u.path == "/api/shorts/list":
-                return self.send_json(shortsapp.projects())
-            if u.path == "/api/shorts/recommend":             # no Claude, no tokens: reads the beat map
-                rec = shortsplan.for_video(q["work"], q["name"])
-                finals = finalrender.finals(q["work"], q["name"])
-                rec.update(final=finals[0]["file"] if finals else None, has_project=shortsapp.cfg_file(q["work"], q["name"]).exists())
-                return self.send_json(rec)
-            if u.path == "/api/shorts/videos":
-                return self.send_json(shorts_videos())
-            if u.path == "/api/shorts":
-                return self.send_json(shortsapp.state(q["work"], q["name"]))
-            if u.path == "/api/shorts/plan":        # first time per short: a few seconds (reads frames to guess the crops)
-                return self.send_json(shortsapp.plan(q["work"], q["name"], q["id"]))
-            if u.path == "/api/shorts/gfx":                    # the strip: cuts, words and each planned graphic in short time
-                return self.send_json(shortsapp.gfx_view(q["work"], q["name"], q["id"]))
-            if u.path == "/api/shorts/gfxstill":               # a draft still of a planned graphic on the real vertical frame
-                body = shortsapp.gfx_still(q["work"], q["name"], q["id"], q["g"], int(q["k"]), int(q.get("w", 360)))
-                self.send_response(200)
-                self.send_header("Content-Type", "image/jpeg")
-                self.send_header("Content-Length", str(len(body)))
-                self.send_header("Cache-Control", "max-age=300")
-                self.end_headers()
-                self.wfile.write(body)
-                return
             if u.path == "/api/shorts/frame":
                 body = shortsapp.frame_jpeg(q["work"], q["name"], float(q["t"]), int(q.get("w", 960)), q.get("src", ""))
                 self.send_response(200)
@@ -1822,11 +1420,6 @@ class Handler(BaseHTTPRequestHandler):
             if u.path.startswith("/shortmedia/"):
                 work, file = unquote(u.path[len("/shortmedia/"):]).split("/", 1)
                 return self.send_file(shortsapp.wd_of(work) / "shorts" / Path(file).name, ranged=True)
-            if u.path == "/api/jobs":                # a running pipeline survives a page reload
-                return self.send_json([j for j in _jobs.values() if j.get("pipeline")][-3:])
-            if u.path.startswith("/api/jobs/"):
-                job = _jobs.get(u.path.rsplit("/", 1)[1])
-                return self.send_json(job) if job else self.send_error(404)
             if u.path.startswith("/media/"):
                 work, file = unquote(u.path[len("/media/"):]).split("/", 1)
                 p = work_dir(work) / Path(file).name
@@ -2036,39 +1629,6 @@ class Handler(BaseHTTPRequestHandler):
                 with _lock:
                     r = workflow.create(b.get("title", ""))
                 return self.send_json({"key": views.key_of(r["work"], r["name"])})
-            if u.path.startswith("/api/shorts/"):
-                op = u.path.rsplit("/", 1)[1]
-                if op == "render":
-                    return self.send_json(start_shorts_render(b["work"], b["name"], b["id"]))
-                if op == "find":
-                    return self.send_json(start_shorts_find(b["work"], b["name"], int(b["count"]) if b.get("count") else None))
-                if op == "gfxplan":
-                    return self.send_json(start_shorts_gfxplan(b["work"], b["name"], b["id"]))
-                if op == "gfxmark":
-                    with _lock:
-                        return self.send_json(shortsapp.gfx_mark(b["work"], b["name"], b["id"], b["g"], b.get("status", ""), b.get("note", "")))
-                if op == "make":
-                    return self.send_json(start_shorts_make(b["work"], b["name"], int(b.get("count") or 0)))
-                if op == "titles":
-                    return self.send_json(start_shorts_titles(b["work"], b["name"], b.get("ids") or [b["id"]]))
-                if op == "finish":
-                    return self.send_json(start_shorts_finish(b["work"], b["name"]))
-                if op == "tighten":
-                    return self.send_json(start_shorts_tighten(b["work"], b["name"], b.get("ids") or [b["id"]]))
-                if op == "new":
-                    return self.send_json(start_shorts_new(b["work"], b["name"], b["source"], b.get("people", ""), b.get("ref_start", 1), b.get("ref_len", 12)))
-                with _lock:
-                    return self.send_json(shortsapp.apply_op(b["work"], b["name"], op, b))
-            if u.path.startswith("/api/final/"):
-                if u.path.rsplit("/", 1)[1] == "run":
-                    return self.send_json(start_final(b["work"], b["name"]))
-                return self.send_error(404)
-            if u.path.startswith("/api/gfxplan/"):
-                with _lock:
-                    return self.send_json(gfxplan.plan_op(b["work"], b["name"], u.path.rsplit("/", 1)[1], b))
-            if u.path.startswith("/api/gfxreview/"):
-                with _lock:
-                    return self.send_json(gfxplan.review_op(b["work"], b["name"], u.path.rsplit("/", 1)[1], b))
             if u.path == "/api/dash/plan/refresh":              # one tiny Claude call (no tools) that reports the plan's limits; not under the global lock
                 usage.refresh_plan()
                 return self.send_json(usage.week_summary())
@@ -2102,63 +1662,6 @@ class Handler(BaseHTTPRequestHandler):
                     with _lock:
                         return self.send_json(musicaudition.use(b["work"], b["name"], int(b["bed"]), b["track"]))
                 return self.send_error(404)
-            if u.path.startswith("/api/watch/"):
-                op = u.path.rsplit("/", 1)[1]
-                with _lock:
-                    return self.send_json(watchnotes.apply_op(b["work"], b["name"], op, b))
-            if u.path.startswith("/api/script/"):
-                op = u.path.rsplit("/", 1)[1]
-                with _lock:
-                    return self.send_json(scriptedit.apply_op(b["work"], b["name"], op, b))
-            if u.path.startswith("/api/shootplan/"):
-                op = u.path.rsplit("/", 1)[1]
-                with _lock:
-                    shootplan.apply_op(b["work"], b["name"], op, b)
-                return self.send_json({**shootplan.state(b["work"], b["name"]), "checklist": shootplan.checklist(b["work"], b["name"])})
-            if u.path.startswith("/api/selfreview/"):
-                op = u.path.rsplit("/", 1)[1]
-                if op == "run":
-                    return self.send_json(start_selfreview(b["work"], b["name"], b.get("only")))
-                with _lock:
-                    if op == "dismiss":
-                        return self.send_json(selfreview.dismiss(b["work"], b["name"], b["key"], b.get("why", "")))
-                    if op == "undismiss":
-                        return self.send_json(selfreview.undismiss(b["work"], b["name"], b["key"]))
-                return self.send_error(404)
-            if u.path.startswith("/api/build/"):
-                op = u.path.rsplit("/", 1)[1]
-                if op == "start":
-                    return self.send_json(builder.start(b["work"], b["name"], b.get("ids")))
-                if op == "cancel":
-                    return self.send_json(builder.cancel(b["work"], b["name"], b["sid"]))
-                if op == "stitch":
-                    out = builder.stitch(b["work"], b["name"])
-                    if builder.settings_of(b["work"], b["name"]).get("selfreview_after_stitch", True):          # the self-review is part of stitching: the checks run on the new preview straight away
-                        try:
-                            start_selfreview(b["work"], b["name"])
-                            out["selfreview_started"] = True
-                        except ValueError as e:
-                            out["selfreview_started"] = False
-                            out["selfreview_note"] = str(e)
-                    return self.send_json(out)
-                if op == "note":
-                    return self.send_json(builder.add_note(b["work"], b["name"], b["sid"], b.get("text", ""), b.get("kind", "graphic"), b.get("t")))
-                if op == "note_status":
-                    return self.send_json(builder.note_status(b["work"], b["name"], int(b["id"]), b["status"]))
-                if op == "replan":
-                    if builder.state(b["work"], b["name"])["running"] or builder.state(b["work"], b["name"])["queued"]:
-                        raise ValueError("sections are running: wait or cancel them first")
-                    build_sections.plan(b["work"], b["name"])
-                    return self.send_json(builder.state(b["work"], b["name"]))
-                return self.send_error(404)
-            if u.path.startswith("/api/storyboard/"):
-                op = u.path.rsplit("/", 1)[1]
-                if op == "build":
-                    return self.send_json(start_storyboard(b["work"], b["name"], bool(b.get("full"))))
-                if op == "mark":
-                    with _lock:
-                        return self.send_json(storyboard.mark(b["work"], b["name"], b["beat"], b.get("status", ""), b.get("note", "")))
-                return self.send_error(404)
             if u.path.startswith("/api/accuracy/"):
                 op = u.path.rsplit("/", 1)[1]
                 if op == "run":
@@ -2166,42 +1669,6 @@ class Handler(BaseHTTPRequestHandler):
                 if op == "dismiss":
                     return self.send_json(accuracy.dismiss(b["work"], b["name"], b["id"], bool(b.get("undo"))))
                 return self.send_error(404)
-            if u.path.startswith("/api/beatmap/"):
-                op = u.path.rsplit("/", 1)[1]
-                with _lock:
-                    if op == "build":
-                        beatmap.build(b["work"], b["name"])
-                    elif op == "resync":
-                        beatmap.resync(b["work"], b["name"], bool(b.get("confirm")))
-                    elif op == "edit":
-                        beatmap.apply_edit(b["work"], b["name"], b)
-                    elif op == "strike":
-                        beatmap.strike(b["work"], b["name"], b["beats"], bool(b["struck"]), b.get("why", ""), bool(b.get("confirm")))
-                    elif op == "trim":
-                        beatmap.apply_trim(b["work"], b["name"], b)
-                    else:
-                        return self.send_error(404)
-                return self.send_json(beatmap.state(b["work"], b["name"]))
-            if u.path.startswith("/api/clips/"):
-                op = u.path.rsplit("/", 1)[1]
-                if op == "map":
-                    return self.send_json(start_clipmap(b["work"], b["name"]))
-                with _lock:
-                    clipmap.apply_op(b["work"], b["name"], op, b)
-                return self.send_json(clips_state(b["work"], b["name"]))
-            if u.path.startswith("/api/wf/"):
-                op = u.path.rsplit("/", 1)[1]
-                with _lock:                        # one writer at a time
-                    if op == "create":
-                        return self.send_json(workflow.create(b.get("title", "")))
-                    if op == "settings":
-                        return self.send_json(workflow.set_settings(b["work"], b["name"], b["settings"]))
-                return self.send_error(404)
-            if u.path.startswith("/api/footage/"):
-                op = u.path.rsplit("/", 1)[1]
-                if op == "analyze":
-                    return self.send_json(start_analyze(b["work"], b["name"], b["files"]))
-                return self.send_json(footage_op(b["work"], b["name"], op, b))
             return self.send_error(404)
         except (ValueError, KeyError, FileNotFoundError, json.JSONDecodeError) as e:
             return self.send_json({"error": str(e)}, 400)

@@ -1,4 +1,4 @@
-"""Shoot plan: the stage between the approved script and the filming (industry name: shot list + B-roll list + pickups).
+"""Shoot plan: the stage between the script and the filming (industry name: shot list + B-roll list + pickups).
 
 Claude writes `<name>.shootplan.json` from the script. The host ticks shots off while filming; his ticks live in a separate file so
 Claude can rewrite the plan without losing them.
@@ -146,7 +146,7 @@ def state(work: str, name: str) -> dict:
            "shots": [], "pickups": marks.get("pickups", []), "notes": (plan or {}).get("notes", ""),
            "warnings": [], "counts": {}, "uncovered": [], "stale": False}
     if not lines:
-        out["warnings"].append("there is no script yet (the shoot plan is written from the approved script)")
+        out["warnings"].append("there is no script yet (the shoot plan is written from the script)")
     if plan is None:
         return out
     ids = {l["id"] for l in lines}

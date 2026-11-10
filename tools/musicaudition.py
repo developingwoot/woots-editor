@@ -2,7 +2,7 @@
 
 A "bed" is a run of consecutive beats that share the same audio.music name (builder.music_beds). For each bed the app offers the music library, and
 "Hear it" renders a short clip of the stitched preview (the bed's own stretch, about 35 s) with the chosen track mixed under the speech exactly as the
-stitch and the final render do (finalrender.mix). "Use it" writes the track's name into audio.music of every beat in the bed (an amendment on the approved beat map);
+stitch and the final render do (finalrender.mix). "Use it" writes the track's name into audio.music of every beat in the bed (a change to the beat map, recorded and undoable);
 the next stitch then carries it. Needs a stitch made with this version (it keeps the sound without music in sections/<name>/musiccache/speech.wav).
 
 Usage:  python musicaudition.py <work> <name>      # prints the beds and the tracks
