@@ -66,8 +66,8 @@ def test_it_refuses_without_a_folder_or_an_outline(server):
         server.start_rough_cut(r["work"], r["name"])
     r2 = make_project.build_footage("rc no outline")
     scriptedit.script_path(r2["work"], r2["name"]).write_text("x", encoding="utf-8")
-    with pytest.raises(ValueError, match="write the outline first"):
-        server.start_rough_cut(r2["work"], r2["name"])
+    job = wait(server.start_rough_cut(r2["work"], r2["name"]))                  # recordings exist: Claude is asked to write the outline, and the fake has none to give
+    assert job["ok"] is False and "write the outline first" in job["log"]
 
 
 def test_a_cold_open_chosen_by_claude_is_put_before_the_intro_and_kept_when_made_again(server, tmp_path, monkeypatch):
@@ -137,3 +137,18 @@ def test_the_story_step_runs_once_and_is_named_when_it_fails(server, tmp_path):
     assert story.load(w, n)["question"] == "Does it work?"
     changes = reviewnotes.versions(w, n, "cut")[-1]["changes"]
     assert not any(c.startswith("Not done: finding the story") for c in changes)
+
+
+def test_with_no_outline_claude_writes_one_from_the_recordings_and_the_cut_goes_on(server, tmp_path):
+    import outline
+    import scriptedit
+    (tmp_path / "outline.md").write_text(make_project.FOOTAGE_OUTLINE, encoding="utf-8")
+    r = make_project.build_footage("rc from footage")
+    w, n = r["work"], r["name"]
+    scriptedit.script_path(w, n).unlink()
+    assert not outline.load(w, n)["sections"]
+    brief = __import__("story").outline_from_recordings(w, n, tmp_path / "fd")
+    rows = json.loads((tmp_path / "fd" / "recordings.json").read_text(encoding="utf-8"))
+    assert len(rows) == 3 and "tape shirt" in rows[0]["text"] and "There is no outline yet" in brief
+    job = wait(server.start_rough_cut(w, n))
+    assert job["ok"] is True and outline.load(w, n)["sections"] and "Kept as Cut 1." in job["log"], job["log"]

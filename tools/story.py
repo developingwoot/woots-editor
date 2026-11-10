@@ -108,3 +108,22 @@ def opening_hint(work: str, name: str) -> str:
     """For the cold open run: the story's best opening, in words."""
     o = load(work, name).get("opening") or []
     return " | ".join(f"\"{x['said'][:200]}\" ({x['why']})" for x in o)
+
+
+def outline_from_recordings(work: str, name: str, fd: Path) -> str:
+    """The brief for an outline written from what was recorded, when the host has not written one: recordings.json holds the words of each recording."""
+    import footage_cfg
+    import outline
+    cfg = clipmap.read_json(WORK / work / f"{name}.footage.json", {}) or {}
+    rows = []
+    for rel, an in sorted((cfg.get("analysis") or {}).items()):
+        if footage_cfg.is_ignored(cfg, rel):
+            continue
+        text = " ".join(w[0] for w in an.get("list", []))
+        if len(text.split()) >= 8:
+            rows.append({"recording": rel, "words": len(text.split()), "text": text[:6000]})
+    fd.mkdir(parents=True, exist_ok=True)
+    (fd / "recordings.json").write_text(json.dumps(rows, indent=1, ensure_ascii=False), encoding="utf-8")
+    note = ("There is no outline yet. recordings.json holds the words the host said in each recording. Write the outline of the video the host actually recorded: one section per recording "
+            "or per natural part of one, in the order that tells the story best, each with its shot ideas and the host's own words as the suggested wording. Do not invent anything the host did not say.")
+    return outline.brief(work, name, fd, note)

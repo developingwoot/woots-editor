@@ -458,10 +458,8 @@ def footage_view(work: str, name: str, running: bool = False, reading: bool = Fa
                 it["chosen"]["frame"] = f"/api/v2/clipframe?key={quote(key)}&rel={quote(it['chosen']['rel'])}&t={it['chosen']['t']:.1f}"
     if not rec["folder"]:
         why = "Choose the folder you recorded into first."
-    elif not has_outline:
-        why = "Write the outline first."
     elif not rec["total"]:
-        why = "There are no recordings in that folder yet."
+        why = "Write the outline first." if not has_outline else "There are no recordings in that folder yet."
     else:
         why = ""
     steps = []
@@ -469,12 +467,14 @@ def footage_view(work: str, name: str, running: bool = False, reading: bool = Fa
         steps.append(f"reads {rec['unread']} recording{'s' if rec['unread'] != 1 else ''}")
     if rec["total"] > rec["looked"]:
         steps.append("looks at what is in the footage")
+    if not has_outline:
+        steps.append("writes an outline from what you said")
     steps += ["matches your clips to the outline", "cuts them together"]
     return {"key": key, "folder": {"path": rec["folder"], "short": " › ".join(__import__("pathlib").Path(rec["folder"]).parts[-2:]) if rec["folder"] else "",
                                    "guessed": rec["how"] == "guessed", "set": bool(rec["folder"])},
             "recordings": {k: rec[k] for k in ("total", "read", "unread", "looked", "ignored", "thin", "rows")}, "has_outline": has_outline, "sections": sections,
             "missing": miss,
-            "button": {"label": "Make the rough cut again" if cut_made else "Make the rough cut", "enabled": not why and not running, "why": why,
+            "button": {"label": "Make the rough cut again" if cut_made else "Write the outline and make the rough cut" if not has_outline else "Make the rough cut", "enabled": not why and not running, "why": why,
                        "detail": ("First it " + ", ".join(steps[:-1]) + " and " + steps[-1] + ".") if not why and len(steps) > 1 else "",
                        "estimate": minutes_text(_PIPELINES["cut"][2] + (8 if rec["unread"] else 0))},
             "summary": (f"{rec['total']} recording{'s' if rec['total'] != 1 else ''}"

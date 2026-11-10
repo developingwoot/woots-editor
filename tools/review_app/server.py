@@ -664,8 +664,9 @@ def start_rough_cut(work, name):
     rec = footageview.recordings(work, name)
     if not rec["folder"]:
         raise ValueError("choose the folder you recorded into first")
-    if not outline.load(work, name)["sections"]:
-        raise ValueError("write the outline first")
+    has_outline = bool(outline.load(work, name)["sections"])
+    if not has_outline and not rec["total"]:
+        raise ValueError("write the outline first")                     # nothing recorded to write one from
     recut.reload_rules()                            # the numbers come from the youtube-edit skill: a change there shows in the next cut
     coldopen.reload_rules()
     framing.reload_rules()
@@ -700,6 +701,13 @@ def start_rough_cut(work, name):
                     return fail("\nreading the recordings failed")
             if job.get("stop"):
                 return fail(" Stopped.")
+            if not has_outline:                                                   # no outline: Claude writes one from what was recorded (C2)
+                import story
+                fd = WORK / work / "v2-run" / "outline"
+                _claude_run(job, fd, story.outline_from_recordings(work, name, fd), "outline.md", lambda p, r: outline.apply_answer(work, name, p), budget="1.2", kind="story")
+                if not outline.load(work, name)["sections"]:
+                    return fail(" write the outline first: Claude could not write one from your recordings")
+                job["ok"] = True
             job["step"] = 1
             if not brolllib.state(work, name)["ready"] and not _look_at_footage(job, work, name):
                 return fail("\nlooking at the footage failed")
