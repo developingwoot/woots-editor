@@ -135,6 +135,28 @@ def test_the_brief_offers_the_edits_and_a_refusal_says_why(tmp_path):
     assert ok and res["actions"] == [{"note": a["id"], "do": "web", "time": "0:01", "url": "https://a.example/"}]
 
 
+def test_the_make_job_does_the_edits_without_waiting_on_itself(tmp_path, monkeypatch):
+    """The answer is applied under the server's lock; the edits must not take it again (that hung the job on 'Doing 3 edits')."""
+    import time
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools" / "review_app"))
+    import server
+    r = make_project.build(cut=True, title="na job")
+    t = beat(r, "B02")["start"] + 0.5
+    n = reviewnotes.add(r["work"], r["name"], "cut", "a negative sound here", t)
+    canned = tmp_path / "canned"
+    canned.mkdir()
+    (canned / "answer.json").write_text(json.dumps({"applied": [{"id": n["id"], "summary": "Added a sound"}],
+                                                    "edits": [{"note": n["id"], "do": "sfx", "time": t, "sound": "applause"}]}), encoding="utf-8")
+    monkeypatch.setenv("WOOTS_FAKE_CLAUDE", str(canned))
+    job = server.start_make_version(r["work"], r["name"], "cut")
+    end = time.time() + 20
+    while not job.get("done") and time.time() < end:
+        time.sleep(0.1)
+    assert job.get("done") and "applause" in job["log"]                     # the edit ran (and failed: there is no such sound), the job finished
+    assert server._lock.acquire(timeout=1)
+    server._lock.release()
+
+
 @needs_ffmpeg
 def test_two_recordings_are_lined_up_by_their_sound(tmp_path):
     import wave

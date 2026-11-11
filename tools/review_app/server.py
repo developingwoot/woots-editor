@@ -606,8 +606,7 @@ def start_make_version(work, name, stage):
             import noteactions
             times = {n["id"]: n.get("t", 0.0) for n in plain}
             job["log"] += f"\nDoing {len(r['actions'])} edit{'s' if len(r['actions']) != 1 else ''} for the notes."
-            with _lock:
-                done = noteactions.run(work, name, r["actions"], times, env=tool_env(), log=lambda s: None)
+            done = noteactions.run(work, name, r["actions"], times, env=tool_env(), log=lambda s: None)    # apply() already runs under _lock (not re-entrant)
             r = makeversion.after_actions(r, done, times)
             if not r["applied_ids"]:
                 return False, "Claude could not apply any of the notes: " + " ".join(r["changes"])
