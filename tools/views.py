@@ -260,6 +260,9 @@ def review(work: str, name: str, stage: str, version: int | None = None, running
     label = lambda n: reviewnotes.label(stage, n)           # noqa: E731
     out = {"key": key, "stage": stage, "has_video": cur is not None, "version": None, "versions": [], "notes": [], "clips": [], "button": None,
            "teaching": [], "moments": [], "graphics": []}
+    if stage == "cut":
+        import transitions
+        out["transitions"] = transitions.view()
     for v in reversed(vs):
         out["versions"].append({"n": v["n"], "label": label(v["n"]), "changes": v["changes"], "current": bool(cur) and v["n"] == cur["n"],
                                 "latest": v["n"] == vs[-1]["n"]})

@@ -90,7 +90,7 @@ def test_a_captured_page_goes_over_the_clip_and_into_the_credits(tmp_path):
     f = d / "web-broll" / f"{clip}.mp4"
     f.parent.mkdir(exist_ok=True)
     f.write_bytes(b"x")
-    server.attach_web_broll(w, n, "B02", {"file": str(f), "still": str(f.with_suffix(".png")), "url": "https://example.com/", "title": "Example Co", "seconds": 2.0, "found": True}, 0.5)
+    server.attach_web_broll(w, n, "B02", {"file": str(f), "still": str(f.with_suffix(".png")), "url": "https://example.com/", "title": "Example Co", "seconds": 2.0, "found": True}, 0.5, "", "flash")
     assert [x["kind"] for x in reviewnotes.open_notes(w, n, "cut")] == ["web"]
     cutview.set_choice(w, n, "B02", "remove", "Take this clip out", 3.0)               # another choice on the clip keeps the web page
     assert sorted(x["kind"] for x in reviewnotes.open_notes(w, n, "cut")) == ["remove", "web"]
@@ -98,7 +98,7 @@ def test_a_captured_page_goes_over_the_clip_and_into_the_credits(tmp_path):
     res = cutview.apply_choices(w, n)
     b = {x["id"]: x for x in json.loads((d / f"{n}.beatmap.json").read_text(encoding="utf-8"))["beats"]}["B02"]
     ins = b["on_screen"]["broll"][-1]
-    assert ins["file"] == str(f) and ins["at"] == 0.5 and ins["dur"] == 2.0 and ins["source"]["url"] == "https://example.com/"
+    assert ins["file"] == str(f) and ins["at"] == 0.5 and ins["dur"] == 2.0 and ins["source"]["url"] == "https://example.com/" and ins["transition"] == "flash"
     assert res["changes"] == ["Put the web page example.com over the clip at 0:04"]                 # 3.0 s into the cut + 0.5 s
     assert publish.web_credits(w, n) == ["Example Co - https://example.com/"]
 

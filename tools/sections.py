@@ -148,6 +148,12 @@ def read_notes(work: str, name: str) -> list[dict]:
     return [n for n in (read_json(notes_path(work, name), None) or {}).get("notes", [])]
 
 
+def _cutaways(b: dict) -> list:
+    """The B-roll inserts that lie over the beat's picture (a voice-over beat's first one IS its picture)."""
+    xs = [x for x in (b.get("on_screen") or {}).get("broll") or [] if x.get("file")]
+    return [] if b.get("skip") else xs[1:] if b.get("vo") else xs
+
+
 def plan(work: str, name: str, write: bool = True) -> dict:
     """The build plan. write=False computes it without touching the file (used by runs that only need the numbers)."""
     bmp = WORK / work / f"{name}.beatmap.json"
@@ -159,6 +165,12 @@ def plan(work: str, name: str, write: bool = True) -> dict:
     secs = []
     built = load_built(work, name)
     notes = [n for n in read_notes(work, name) if n.get("kind") == "graphic"]
+    import transitions
+    lib, dflt = transitions.library(), transitions.defaults()
+
+    def tsig(beats) -> str:                           # the transitions the section's cutaways get: changing one in the library or in Settings makes the section out of date
+        got = [transitions.pick(x, lib, dflt) for b in beats for x in _cutaways(b)]
+        return json.dumps(got, sort_keys=True) if any(p["kind"] != "cut" for p in got) else ""
     for i, g in enumerate(group(bm["beats"]), 1):
         gfx = [live_graphic(b) for b in g if live_graphic(b)]
         unbuilt = [b for b in g if live_graphic(b) and not graphic_built(live_graphic(b), b["id"], built)]
@@ -171,7 +183,8 @@ def plan(work: str, name: str, write: bool = True) -> dict:
         secs.append({"id": f"S{i:02d}", "title": titles[0] if titles else f"Part {i}", "beats": [b["id"] for b in g],
                      "dur": round(sum(b["dur"] for b in g), 1), "graphics": len(gfx), "unbuilt_graphics": len(unbuilt),
                      "needs_agent": bool(unbuilt) or bool(asked), "why": why, "asked": [{"beat": n.get("beat"), "t": n.get("t"), "text": n["text"]} for n in asked],
-                     "sig": hashlib.sha1(("".join(beat_sig(b) for b in g) + "".join(f"{n['id']}:{n['text']}" for n in mine)).encode()).hexdigest()[:12]})
+                     "sig": hashlib.sha1(("".join(beat_sig(b) for b in g) + "".join(f"{n['id']}:{n['text']}" for n in mine)
+                                          + tsig(g)).encode()).hexdigest()[:12]})
     data = {"generated": time.strftime("%Y-%m-%dT%H:%M:%S"), "beatmap_version": bm.get("version", 1),
             "beatmap_sha": hashlib.sha256(bmp.read_bytes()).hexdigest()[:16], "sections": secs}
     if write:
@@ -274,11 +287,34 @@ def _broll_pieces(beat_id: str, keep: list, at: float, dur: float, src_in: float
     return out or [(beat_id, at, dur, src_in)]
 
 
+class _Transitions:
+    """Puts each cutaway's transition (transitions.py) on its pieces and its sound into the edit's sound effects. The library, the defaults and the
+    sound kit are read once per edit; sounds of a role take turns."""
+
+    def __init__(self, sfx: list):
+        import transitions
+        self.t, self.sfx, self.lib, self.dflt, self.kit, self.n = transitions, sfx, transitions.library(), transitions.defaults(), None, {}
+
+    def add(self, pieces: list, insert: dict) -> list:
+        self.t.stamp(pieces, self.t.pick(insert, self.lib, self.dflt))
+        for pc in pieces:
+            for at, role in self.t.sound_times(pc):
+                if self.kit is None:
+                    import sfxkit
+                    self.kit = sfxkit.kit()
+                f = self.t.sound_file(role, self.n.get(role, 0), self.kit)
+                if f:
+                    self.n[role] = self.n.get(role, 0) + 1
+                    self.sfx.append({"seg": pc["seg"], "file": f, "at": at, "transition": True})
+        return pieces
+
+
 def baseline_edit(beats: list[dict], folder: str, built: dict | None = None, size=(960, 540), fps=30) -> dict:
     """The mechanical section.edit.json for these beats (see sectionrender.py for the format). Graphics that are
     built (see built_path) become overlays; the rest are listed in `notes` for the agent."""
     built = built or {}
     segs, broll, overlays, notes, sfx = [], [], [], [], []
+    trans = _Transitions(sfx)
     for b in beats:
         if b.get("skip"):
             continue
@@ -296,8 +332,8 @@ def baseline_edit(beats: list[dict], folder: str, built: dict | None = None, siz
             for br in brs[1:]:                              # more pictures on a voice-over beat lie over the first one
                 q = Path(br["file"])
                 q = q if q.is_absolute() else Path(folder) / br["file"]
-                broll.append({"seg": b["id"], "file": str(q), "in": float(br.get("in") or 0), "dur": float(br.get("dur") or 2), "at": float(br.get("at", 0.0)),
-                              **({"zoom": float(br["zoom"]), "pan": br.get("pan", "")} if br.get("zoom") else {})})
+                broll.extend(trans.add([{"seg": b["id"], "file": str(q), "in": float(br.get("in") or 0), "dur": float(br.get("dur") or 2), "at": float(br.get("at", 0.0)),
+                                         **({"zoom": float(br["zoom"]), "pan": br.get("pan", "")} if br.get("zoom") else {})}], br))
             g = live_graphic(b)
             if g and graphic_built(g, b["id"], built):
                 overlays.append({"seg": b["id"], "file": built[b["id"]]["file"], "at": float(built[b["id"]].get("at", g.get("at", 0.0))), "dur": float(g.get("dur") or 3)})
@@ -322,9 +358,10 @@ def baseline_edit(beats: list[dict], folder: str, built: dict | None = None, siz
             p = p if p.is_absolute() else Path(folder) / br["file"]
             extra = {**({"stabilize": True} if br.get("stabilize") else {}), **({"zoom": float(br["zoom"]), "pan": br.get("pan", "")} if br.get("zoom") else {}),
                      **({"speed": float(br["speed"])} if br.get("speed") else {}), **({"rotate": int(br["rotate"])} if br.get("rotate") else {})}
-            for seg_id, at, dur, src_in in _broll_pieces(b["id"], a.get("keep") or [[a["in"], a["out"]]], float(br.get("at", 0.5)), float(br.get("dur") or 2),
-                                                         float(br.get("in") or 0), float(br.get("speed") or 1.0)):
-                broll.append({"seg": seg_id, "file": str(p), "in": src_in, "dur": dur, "at": at, **extra})
+            pieces = [{"seg": seg_id, "file": str(p), "in": src_in, "dur": dur, "at": at, **extra}
+                      for seg_id, at, dur, src_in in _broll_pieces(b["id"], a.get("keep") or [[a["in"], a["out"]]], float(br.get("at", 0.5)), float(br.get("dur") or 2),
+                                                                   float(br.get("in") or 0), float(br.get("speed") or 1.0))]
+            broll.extend(trans.add(pieces, br))
         g = live_graphic(b)
         if g and graphic_built(g, b["id"], built):
             overlays.extend(_spread_overlay(b, built[b["id"]]["file"], float(built[b["id"]].get("at", g.get("at", 0.0))), float(g.get("dur") or 3)))

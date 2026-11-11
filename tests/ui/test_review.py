@@ -202,6 +202,8 @@ def test_a_web_page_can_be_asked_for_on_a_clip_and_a_local_address_is_refused(sc
     page.click("#actWeb")
     expect(page.locator("#webUrl")).to_be_visible()
     assert "added to the credits" in page.locator("#clipPanel").inner_text()
+    assert "Slide in from the right" in page.locator("#webTrans option").first.inner_text()      # the default first, then every other preset
+    page.select_option("#webTrans", "flash")
     page.fill("#webUrl", "http://127.0.0.1:8765/")
     page.click("#webGo")
     expect(page.locator("#sayBar")).to_contain_text("private network")

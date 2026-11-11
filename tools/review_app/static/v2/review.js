@@ -92,12 +92,17 @@ export async function render(root, key, stage, setBusy) {
       const find = h('input', { type: 'text', id: 'webFind', placeholder: 'Words on the page to highlight (optional)', autocomplete: 'off', class: 'fbInput' });
       const style = h('select', { id: 'webStyle' }, h('option', { value: 'scroll' }, 'Scroll down to the words'), h('option', { value: 'still' }, 'A still picture with a slow zoom'));
       const secs = h('input', { type: 'number', id: 'webSecs', min: 2, max: 12, step: 0.5, value: 5, style: 'width:70px' });
+      const tr = data.transitions || { presets: [], defaults: {} };
+      const dflt = tr.presets.find(p => p.id === tr.defaults.web);
+      const trans = h('select', { id: 'webTrans', title: 'How the page comes in and goes out' },
+        h('option', { value: '' }, `Comes in: ${dflt ? dflt.label : 'the default'} (Settings)`),
+        ...tr.presets.filter(p => p.id !== tr.defaults.web).map(p => h('option', { value: p.id }, `Comes in: ${p.label}`)));
       const inClip = video.currentTime >= clip.start && video.currentTime < clip.start + clip.dur;
       const at = inClip ? Math.max(0, video.currentTime - clip.start) : 0.5;
       for (const el of [url, find, secs]) el.addEventListener('keydown', e => e.stopPropagation());
       const go = h('button', { class: 'main', id: 'webGo', onclick: async () => {
         go.disabled = true;
-        try { await api('/api/v2/webbroll', { key, clip: clip.ref, url: url.value.trim(), find: find.value.trim(), style: style.value, seconds: Number(secs.value) || 5, at }); reopen = null; setBusy(); }
+        try { await api('/api/v2/webbroll', { key, clip: clip.ref, url: url.value.trim(), find: find.value.trim(), style: style.value, seconds: Number(secs.value) || 5, at, transition: trans.value }); reopen = null; setBusy(); }
         catch (e) { say(e.message); go.disabled = false; }
       } }, 'Capture the page');
       const now = clip.web ? h('div', { class: 'webNow', id: 'webNow' },
@@ -107,7 +112,7 @@ export async function render(root, key, stage, setBusy) {
           h('button', { class: 'quiet', id: 'webRemove', onclick: () => choose(clip, 'noweb') }, 'Do not use it'))) : null;
       body.replaceChildren(...[now,
         h('p', { class: 'muted small' }, `The page shows over this clip from ${fmt(clip.start + at)}${inClip ? ' (the playhead)' : ''}. Only public pages: nothing is signed in to and cookie banners are hidden. The address is added to the credits.`),
-        url, find, h('div', { class: 'row' }, style, h('label', { class: 'muted small' }, secs, ' seconds'), go)].filter(Boolean));
+        url, find, h('div', { class: 'row' }, style, h('label', { class: 'muted small' }, secs, ' seconds'), trans, go)].filter(Boolean));
       url.focus();
     }
 

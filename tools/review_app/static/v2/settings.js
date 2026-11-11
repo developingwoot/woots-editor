@@ -16,7 +16,7 @@ export async function render(root) {
     const dirty = Object.keys(draft).length > 0;
     root.replaceChildren(...[
       h('h1', {}, s.first_run ? 'Welcome: set up your folders and channel' : 'Settings'),
-      h('nav', { class: 'setNav', id: 'setNav' }, ...[['Folders', 'foldersCard'], ['Your channel', 'channelCard'], ['Claude models', 'claudeModelsCard'], ['Models', 'modelsCard'], ['This computer', 'computerCard']]
+      h('nav', { class: 'setNav', id: 'setNav' }, ...[['Folders', 'foldersCard'], ['Your channel', 'channelCard'], ['Claude models', 'claudeModelsCard'], ['Transitions', 'transitionsCard'], ['Models', 'modelsCard'], ['This computer', 'computerCard']]
         .map(([label, id]) => h('button', { class: 'quiet', type: 'button', onclick: () => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, label))),
       s.first_run ? h('p', { class: 'muted' }, 'Choose where the app keeps your footage and projects, then tell it about your channel. Nothing is uploaded; these folders stay on your computer.') : null,
       h('section', { class: 'card setCard', id: 'foldersCard' },
@@ -40,6 +40,7 @@ export async function render(root) {
           h('span', { class: 'muted small', id: 'settingsNote' }, note))),
       channelCard(),
       claudeModelsCard(),
+      transitionsCard(),
       modelsCard(),
       computerCard(),
       h('section', { class: 'card setCard', id: 'claudeCard' },
@@ -132,6 +133,22 @@ export async function render(root) {
         h('div', { class: 'row' }, pick(j.job, 'model', j.model, j.models), j.model === 'off' ? null : pick(j.job, 'effort', j.effort, claudeModels.efforts)))));
   };
 
+  // How a cutaway comes in over you and goes out: one choice for web pages, one for other B-roll. Saved the moment it changes; a clip can choose its own.
+  let trans = null;                                     // {presets: [{id, label}], defaults: {web, broll}}
+  const transitionsCard = () => {
+    if (!trans) return h('section', { class: 'card setCard', id: 'transitionsCard' }, h('h2', {}, 'Transitions'), h('p', { class: 'muted' }, 'Loading…'));
+    const row = (kind, label, help) => h('div', { class: 'setRow', 'data-kind': kind },
+      h('label', {}, h('b', {}, label), h('div', { class: 'muted small' }, help)),
+      h('select', { class: 'trPick', 'data-kind': kind, onchange: async e => {
+        try { trans = await api('/api/v2/transitions', { defaults: { [kind]: e.target.value } }); note = ''; } catch (err) { note = err.message; }
+        draw();
+      } }, ...trans.presets.map(p => h('option', { value: p.id, selected: p.id === trans.defaults[kind] }, p.label))));
+    return h('section', { class: 'card setCard', id: 'transitionsCard' }, h('h2', {}, 'Transitions'),
+      h('p', { class: 'muted small' }, 'How a cutaway comes in over you and goes out again. The sound comes from your sound effects (the whoosh, pop… roles). Sections with a cutaway are built again with the next preview. Add your own in the youtube-edit skill, transitions.json.'),
+      row('web', 'Web pages', 'A page captured on the rough cut, or a source shown from the fact check.'),
+      row('broll', 'Other B-roll', 'Shots of your footage over you. Most talking-head channels use a plain cut here.'));
+  };
+
   const JOBS = { speech: ['Reading your recordings', 'Turns speech into words with times.'], vision: ['Describing your footage', 'Looks at frames so clips can be found by what they show.'],
     embed: ['Finding clips', 'Matches a shot idea to a clip.'] };
   const modelsCard = () => {
@@ -205,5 +222,6 @@ export async function render(root) {
   api('/api/v2/computer').then(c => { computer = c; if (document.getElementById('computerCard')) draw(); }).catch(() => {});
   api('/api/v2/channel').then(c => { channel = c; if (document.getElementById('channelCard')) draw(); }).catch(() => {});
   api('/api/v2/claude-models').then(m => { claudeModels = m; if (document.getElementById('claudeModelsCard')) draw(); }).catch(() => {});
+  api('/api/v2/transitions').then(t => { trans = t; if (document.getElementById('transitionsCard')) draw(); }).catch(() => {});
   api('/api/v2/engines').then(m => { models = m; if (document.getElementById('modelsCard')) { draw(); watchDownloads(); } }).catch(() => {});
 }

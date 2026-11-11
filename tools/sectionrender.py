@@ -6,7 +6,8 @@ Usage (editor venv):
 section.edit.json:
   {"size": [960, 540], "fps": 30, "snap": true,
    "segments": [{"id": "B01", "src": "<video>", "in": 11.2, "out": 15.8, "zoom": 1.0, "cx": 0.5, "cy": 0.4}],
-   "broll":    [{"seg": "B03", "file": "<video>", "in": 2.0, "dur": 4.0, "at": 0.5}],     # cutaway over the segment, muted
+   "broll":    [{"seg": "B03", "file": "<video>", "in": 2.0, "dur": 4.0, "at": 0.5,      # cutaway over the segment, muted
+                 "t_in": {"kind": "slide", "dur": 0.35, "from": "right"}, "t_out": {...}}],   # optional: how it comes in and goes out (transitions.py)
    "overlays": [{"seg": "B01", "file": "<mov/mp4 with alpha>", "at": 0.0, "dur": 3.0}]}  # a rendered graphic over the segment
 
 * Segments play in the order listed, each re-encoded (H.264, 30 fps, AAC 48 kHz) and joined by stream copy.
@@ -27,6 +28,9 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import transitions  # noqa: E402  (how a cutaway comes in and goes out)
 
 LEVEL_TARGET = -16.0   # LUFS: every take of a section preview is brought to about this loudness, so clips from different days sound even
 LEVEL_MIN_S = 1.5      # s: a take shorter than this is too short to measure, it is left alone
@@ -206,8 +210,10 @@ def render_segment(edit: dict, seg: dict, a_in: float, a_out: float, out: Path, 
             move = f"scale={zw}:{zh}:force_original_aspect_ratio=increase,crop={W}:{H}:x='{px}':y='{py}',"
         sp = float(br.get("speed") or 1.0)
         slow = f"setpts=(PTS-STARTPTS)/{sp:.4f}," if abs(sp - 1.0) > 0.01 else ""
-        chains.append(f"[{k}:v]{rot}{slow}fps={fps},scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},{move}setsar=1,setpts=PTS-STARTPTS+{at}/TB[b{i}]")
-        chains.append(f"[{last}][b{i}]overlay=enable='between(t,{at:.3f},{at + dur:.3f})':eof_action=pass[vb{i}]")
+        tr = {**br, "at": at, "dur": dur}                                                                                # transitions in and out (transitions.py)
+        chains.append(f"[{k}:v]{rot}{slow}fps={fps},scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},{move}setsar=1,setpts=PTS-STARTPTS+{at}/TB,"
+                      f"{transitions.in_filters(tr, W, H)}null[b{i}]")
+        chains.append(f"[{last}][b{i}]overlay=enable='between(t,{at:.3f},{at + dur:.3f})'{transitions.overlay_xy(tr)}:eof_action=pass[vb{i}]")
         last, k = f"vb{i}", k + 1
     for i, ov in enumerate(overlays):
         at = float(ov.get("at", 0.0))

@@ -1,0 +1,13 @@
+{
+ "about": "How a cutaway (B-roll, a web page) comes in over the host and goes out again. Each preset: label, kind (cut, fade, slide, pop, flash), dur in seconds (0.1 to 1.0), from (right, left, top, bottom: where a slide comes in from; it leaves the other way) and sound (a role of the sound kit: whoosh, pop, hit, ding, riser, or none). Add your own presets here; 'defaults' says which preset each kind of cutaway gets unless Settings or the clip says otherwise.",
+ "presets": {
+  "cut": {"label": "Cut (no transition)", "kind": "cut"},
+  "dissolve": {"label": "Dissolve", "kind": "fade", "dur": 0.35, "sound": "none"},
+  "slide": {"label": "Slide in from the right, with a whoosh", "kind": "slide", "from": "right", "dur": 0.35, "sound": "whoosh"},
+  "slide-up": {"label": "Slide up from the bottom, with a whoosh", "kind": "slide", "from": "bottom", "dur": 0.35, "sound": "whoosh"},
+  "whip": {"label": "Whip (a fast slide), with a whoosh", "kind": "slide", "from": "left", "dur": 0.18, "sound": "whoosh"},
+  "pop": {"label": "Pop (grows in), with a pop", "kind": "pop", "dur": 0.25, "sound": "pop"},
+  "flash": {"label": "Flash of white, with a whoosh", "kind": "flash", "dur": 0.3, "sound": "whoosh"}
+ },
+ "defaults": {"web": "slide", "broll": "cut"}
+}

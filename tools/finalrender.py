@@ -172,6 +172,25 @@ def resolve_sfx(name: str):
     return _match(name, files)
 
 
+def transition_sounds(brolls: list, kit: dict | None = None) -> list:
+    """The whoosh (or other sound) of each cutaway's transition, on the output timeline. The sounds of a role take turns."""
+    import transitions
+    out, n = [], {}
+    for b in brolls:
+        start = (b.get("seg_info") or {}).get("start")
+        if start is None:
+            continue
+        for at, role in transitions.sound_times(b):
+            if kit is None:
+                import sfxkit
+                kit = sfxkit.kit()
+            f = transitions.sound_file(role, n.get(role, 0), kit)
+            if f:
+                n[role] = n.get(role, 0) + 1
+                out.append({"name": f"{role} (transition)", "beat": b["seg"], "t": round(float(start) + at, 3), "file": f, "why": ""})
+    return out
+
+
 def audio_plan(work: str, name: str) -> dict:
     """Music beds and SFX resolved to files and to times on the OUTPUT timeline. Pure planning: nothing is rendered."""
     import selfreview
@@ -217,6 +236,7 @@ def audio_plan(work: str, name: str) -> dict:
             f, why = resolve_sfx(nm)
             row = {"name": nm, "beat": sg["id"], "t": round(sg["start"] + off, 3), "file": str(f) if f else None, "why": why}
             (sfx if f else missing).append(row if f else {"kind": "sfx", **row})
+    sfx.extend(transition_sounds(T["broll"]))
     for bed in beds:
         f, why = resolve_music(bed["name"])
         bed["file"], bed["why"] = (str(f) if f else None), why
@@ -484,7 +504,7 @@ def run(work: str, name: str) -> dict:
     segs = [{"id": g["id"], "src": g["src"], "in": g["in"], "out": g["out"], "zoom": g.get("zoom", 1.0), "cx": g.get("cx", 0.5), "cy": g.get("cy", 0.4),
              **({"audio_src": g["audio_src"], "audio_in": g.get("audio_in", 0)} if g.get("audio_src") else {}), **({"mute": True} if g.get("mute") else {})} for g in T["segments"]]
     edit = {"size": SIZE, "fps": FPS, "snap": False, "audio": False, "quality": "final", "segments": segs,
-            "broll": [{k: b[k] for k in ("seg", "file", "in", "dur", "at", "stabilize", "rotate", "zoom", "pan", "speed") if k in b} for b in T["broll"]],
+            "broll": [{k: b[k] for k in ("seg", "file", "in", "dur", "at", "stabilize", "rotate", "zoom", "pan", "speed", "t_in", "t_out") if k in b} for b in T["broll"]],
             "overlays": [{k: o[k] for k in ("seg", "file", "at", "dur") if k in o} for o in T["overlays"]]}
     ep = fd / "final.edit.json"
     write_json(ep, edit)

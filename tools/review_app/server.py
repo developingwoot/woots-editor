@@ -886,14 +886,18 @@ def start_vision(work, name):
     return _job_run(job, [([str(PY), str(TOOLS / "brolllib.py"), work, "--name", name], TOOLS)])
 
 
-def start_web_broll(work, name, ref, url, style, find, seconds, at):
-    """Capture a web page as B-roll for one clip (webcapture.py in its own process); the clip then has a 'web' choice the next cut applies."""
+def start_web_broll(work, name, ref, url, style, find, seconds, at, transition=""):
+    """Capture a web page as B-roll for one clip (webcapture.py in its own process); the clip then has a 'web' choice the next cut applies.
+    `transition`: a preset of the transitions library for this page, or "" for the default."""
     import cutview
+    import transitions
     import webcapture
     from urllib.parse import urlsplit
     url = webcapture.check_url(url)
     if style not in webcapture.STYLES:
         raise ValueError("unknown style")
+    if transition and transition not in transitions.library()["presets"]:
+        raise ValueError("unknown transition")
     if not any(c["ref"] == ref for c in cutview.clips_of(cutview.beat_data(work, name))):
         raise ValueError("unknown clip")
     seconds = webcapture.seconds_of(seconds)
@@ -914,7 +918,7 @@ def start_web_broll(work, name, ref, url, style, find, seconds, at):
                 job["ok"] = False
                 return
             with _lock:
-                attach_web_broll(work, name, ref, got, at, find)
+                attach_web_broll(work, name, ref, got, at, find, transition)
             job["ok"] = True
             if find and not got.get("found"):
                 job["done_sentence"] = "Web page captured, but the words to highlight were not found on it"
@@ -925,7 +929,7 @@ def start_web_broll(work, name, ref, url, style, find, seconds, at):
     return job
 
 
-def attach_web_broll(work, name, ref, got: dict, at: float, find: str = ""):
+def attach_web_broll(work, name, ref, got: dict, at: float, find: str = "", transition: str = ""):
     """A captured page becomes the clip's 'web' choice (applied, and listed under What changed, when the next cut is made)."""
     import cutview
     from urllib.parse import urlsplit
@@ -933,7 +937,8 @@ def attach_web_broll(work, name, ref, got: dict, at: float, find: str = ""):
     host = urlsplit(got.get("url", "")).hostname or ""
     cutview.set_choice(work, name, ref, "web", f"Show the web page {host}" + (f", highlighting: {find[:80]}" if find else ""), clip["start"] + max(0.0, float(at or 0)),
                        {"file": got["file"], "still": got.get("still", ""), "url": got.get("url", ""), "title": got.get("title", ""), "host": host,
-                        "dur": got.get("seconds", 5.0), "at": max(0.0, float(at or 0)), "captured": time.strftime("%Y-%m-%d"), "found": bool(got.get("found"))})
+                        "dur": got.get("seconds", 5.0), "at": max(0.0, float(at or 0)), "captured": time.strftime("%Y-%m-%d"), "found": bool(got.get("found")),
+                        **({"transition": transition} if transition else {})})
 
 
 def start_find_options(work, name, ref):
@@ -1438,6 +1443,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(engines.view())
             if u.path == "/api/v2/claude-models":
                 return self.send_json(claudemodels.view())
+            if u.path == "/api/v2/transitions":
+                import transitions
+                return self.send_json(transitions.view())
             if u.path == "/api/v2/channel":
                 return self.send_json(channel.view())
             if u.path == "/api/v2/fonts":
@@ -1587,6 +1595,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({**appsetup.view(), "restarting": restart, "needs_restart": not restart})
             if u.path == "/api/v2/claude-models":
                 return self.send_json(claudemodels.save(b.get("choices") or {}))
+            if u.path == "/api/v2/transitions":
+                import transitions
+                return self.send_json(transitions.save_defaults(b.get("defaults") or {}))
             if u.path == "/api/v2/engines":
                 import engines
                 if b["op"] == "choose":
@@ -1633,7 +1644,7 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/api/v2/webbroll":
                 work, name = views.split_key(b["key"])
                 return self.send_json({"id": start_web_broll(work, name, b["clip"], b.get("url", ""), b.get("style", "scroll"), " ".join(str(b.get("find") or "").split())[:300],
-                                                             b.get("seconds", 5), float(b.get("at") or 0))["id"]})
+                                                             b.get("seconds", 5), float(b.get("at") or 0), str(b.get("transition") or ""))["id"]})
             if u.path == "/api/v2/factsource":                                # "Show the source": the fact check's page over the clip where the claim is said
                 work, name = views.split_key(b["key"])
                 s = accuracy.source_plan(work, name, str(b.get("id") or ""))

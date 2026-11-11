@@ -101,6 +101,17 @@ def test_a_right_claim_offers_show_the_source_and_a_refused_page_says_why(screen
     expect(page.locator("#factRight button[data-claim='C01']")).to_be_enabled()
 
 
+def test_settings_choose_the_transition_for_web_pages(screen):
+    import transitions
+    page = screen("/v2/#/settings")
+    page.wait_for_selector("#transitionsCard select.trPick[data-kind='web']")
+    assert page.locator("#transitionsCard select.trPick[data-kind='web']").input_value() == "slide"
+    page.select_option("#transitionsCard select.trPick[data-kind='web']", "flash")
+    expect(page.locator("#transitionsCard select.trPick[data-kind='web']")).to_have_value("flash")
+    assert transitions.defaults()["web"] == "flash"
+    page.select_option("#transitionsCard select.trPick[data-kind='web']", "slide")
+
+
 def test_resolve_card_says_what_is_needed_and_the_usage_line_shows_on_home(screen):
     page, r = outline(screen, "ui resolve")
     page.goto(page.url.rsplit("/", 1)[0] + "/final")
