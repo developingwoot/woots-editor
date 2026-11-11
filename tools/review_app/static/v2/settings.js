@@ -1,4 +1,4 @@
-import { h, api } from './util.js';
+import { h, api, say } from './util.js';
 import { pickFolder } from './folder.js';
 import { fontPicker, palettePicker } from './brandpickers.js';
 
@@ -142,11 +142,24 @@ export async function render(root) {
       h('select', { class: 'trPick', 'data-kind': kind, onchange: async e => {
         try { trans = await api('/api/v2/transitions', { defaults: { [kind]: e.target.value } }); note = ''; } catch (err) { note = err.message; }
         draw();
-      } }, ...trans.presets.map(p => h('option', { value: p.id, selected: p.id === trans.defaults[kind] }, p.label))));
+      } }, ...trans.presets.map(p => h('option', { value: p.id, selected: p.id === trans.defaults[kind] },
+        p.label + (p.kind === 'stinger' && !p.ready ? ' (not made yet: a slide until then)' : '')))));
+    const st = trans.presets.filter(p => p.kind === 'stinger' && p.known);
+    const missing = st.filter(p => !p.ready).length;
+    const make = h('button', { class: missing ? 'main' : 'quiet', id: 'makeStingers', onclick: async () => {
+      make.disabled = true;
+      try { await api('/api/v2/stingers/make', {}); make.textContent = 'Making…'; } catch (err) { say(err.message); make.disabled = false; }
+    } }, missing === st.length ? 'Make my stingers' : 'Make the missing ones');
     return h('section', { class: 'card setCard', id: 'transitionsCard' }, h('h2', {}, 'Transitions'),
       h('p', { class: 'muted small' }, 'How a cutaway comes in over you and goes out again. The sound comes from your sound effects (the whoosh, pop… roles). Sections with a cutaway are built again with the next preview. Add your own in the youtube-edit skill, transitions.json.'),
       row('web', 'Web pages', 'A page captured on the rough cut, or a source shown from the fact check.'),
-      row('broll', 'Other B-roll', 'Shots of your footage over you. Most talking-head channels use a plain cut here.'));
+      row('broll', 'Other B-roll', 'Shots of your footage over you. Most talking-head channels use a plain cut here.'),
+      st.length ? h('div', { class: 'setRow', id: 'stingers' },
+        h('label', {}, h('b', {}, 'Stingers'), h('div', { class: 'muted small' }, 'Short animations in your colours, font and channel name that cover the cut. They are made once on this computer (about a minute, nothing goes to Claude) and made again when your brand changes.')),
+        h('div', { class: 'stingerRow' }, ...st.map(p => h('figure', { class: 'stinger', 'data-id': p.stinger },
+          p.still ? h('img', { src: p.still, alt: '' }) : h('div', { class: 'stingerBlank' }, p.ready ? 'Made' : 'Not made yet'),
+          h('figcaption', { class: 'small' }, p.label.replace(' (stinger)', ''))))),
+        missing ? h('div', { class: 'row' }, make) : h('p', { class: 'muted small' }, 'All made for your current colours and font.')) : null);
   };
 
   const JOBS = { speech: ['Reading your recordings', 'Turns speech into words with times.'], vision: ['Describing your footage', 'Looks at frames so clips can be found by what they show.'],

@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="still" content="0.5">
+<!--
+  Stinger "stripes": eight vertical bars in the brand colours drop in one after another and cover the frame at 0.40 s
+  (the cut happens under them), then carry on down and out. 0.8 s, transparent outside the bars.
+  Filled in by tools/stingers.py: __PRIMARY__ __ACCENT__ __LIGHT__ __DARK__ (colours), __NAME__ (channel name), font.ttf (headline font).
+-->
+<style>
+  @font-face { font-family: Brand; src: url("font.ttf"); }
+  html, body { margin:0; background:transparent; }
+  #stage { position:relative; width:1920px; height:1080px; overflow:hidden; background:transparent; }
+  .bar { position:absolute; top:0; width:242px; height:1080px; transform:translateY(-1100px); }
+  .p { background:__PRIMARY__; } .a { background:__ACCENT__; }
+</style>
+</head>
+<body>
+<div id="stage" data-composition-id="stripes" data-start="0" data-duration="0.8" data-width="1920" data-height="1080" data-fps="30">
+  <div id="all" class="clip" data-start="0" data-duration="0.8" data-track-index="0"></div>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script>
+    const all = document.getElementById("all");
+    const N = 8, W = 1920 / N;
+    for (let i = 0; i < N; i++) {
+      const d = document.createElement("div");
+      d.className = "bar " + (i % 2 ? "a" : "p");
+      d.style.left = (i * W - 1) + "px";
+      all.appendChild(d);
+    }
+    const tl = gsap.timeline({ paused: true });
+    const bars = Array.from(document.querySelectorAll(".bar"));
+    bars.forEach((b, i) => {
+      const s = i * 0.03;                                              // they start one after another and all land at 0.40 s
+      tl.fromTo(b, { y: -1100 }, { y: 0, duration: 0.40 - s, ease: "power3.out" }, s);
+      tl.to(b, { y: 1100, duration: 0.30, ease: "power3.in" }, 0.40 + i * 0.012);
+    });
+    window.__timelines = window.__timelines || {};
+    window.__timelines.stripes = tl;
+  </script>
+</div>
+</body>
+</html>

@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="still" content="0.5">
+<!--
+  Stinger "name": a panel in the primary colour with an accent edge slams in from the right carrying the channel name in the headline font,
+  covers the frame at 0.40 s (the cut happens under it) and is gone to the left at 1.0 s. Transparent outside the panel.
+  Filled in by tools/stingers.py: __PRIMARY__ __ACCENT__ __LIGHT__ __DARK__ (colours), __NAME__ (channel name), font.ttf (headline font).
+-->
+<style>
+  @font-face { font-family: Brand; src: url("font.ttf"); }
+  html, body { margin:0; background:transparent; }
+  #stage { position:relative; width:1920px; height:1080px; overflow:hidden; background:transparent; }
+  #panel { position:absolute; top:0; left:0; width:1920px; height:1080px; background:__PRIMARY__; transform:translateX(2300px); }
+  #edge { position:absolute; top:0; left:-60px; width:60px; height:1080px; background:__ACCENT__; }
+  #edge2 { position:absolute; top:0; right:-60px; width:60px; height:1080px; background:__ACCENT__; }
+  #name { position:absolute; left:0; right:0; top:50%; transform:translateY(-50%); text-align:center; font-family:Brand, "Segoe UI", Arial, sans-serif;
+          font-size:150px; font-weight:800; color:__LIGHT__; letter-spacing:2px; white-space:nowrap; text-transform:uppercase; }
+</style>
+</head>
+<body>
+<div id="stage" data-composition-id="name" data-start="0" data-duration="1.0" data-width="1920" data-height="1080" data-fps="30">
+  <div id="all" class="clip" data-start="0" data-duration="1.0" data-track-index="0">
+    <div id="panel"><div id="edge"></div><div id="edge2"></div><div id="name">__NAME__</div></div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    tl.fromTo("#panel", { x: 2300 }, { x: 0, duration: 0.30, ease: "power4.out" }, 0.10);           // covering from 0.40 s
+    tl.fromTo("#name", { scale: 1.25, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.25, ease: "back.out(2)" }, 0.25);
+    tl.to("#panel", { x: -2300, duration: 0.30, ease: "power4.in" }, 0.70);
+    window.__timelines = window.__timelines || {};
+    window.__timelines.name = tl;
+  </script>
+</div>
+</body>
+</html>

@@ -1036,6 +1036,28 @@ def start_find_moments(work, name):
     return job
 
 
+def start_make_stingers():
+    """Render the stingers that are missing for the current brand (HyperFrames, about ten seconds each; nothing is sent to Claude)."""
+    import stingers
+    job = _job("stingers", ["render the stingers in your colours"])
+
+    def run():
+        try:
+            got = stingers.make(log=lambda s: job.__setitem__("log", job["log"] + s + "\n"))
+            bad = {k: v for k, v in got.items() if v not in ("made", "ready")}
+            job["ok"] = not bad
+            if bad:
+                job["log"] += "".join(f"{k}: {v}\n" for k, v in bad.items())
+        except Exception as e:                                      # noqa: BLE001
+            job["log"] += f"{type(e).__name__}: {e}\n"
+            job["ok"] = False
+        finally:
+            job["done"] = True
+            job["elapsed"] = round(time.time() - job["started"], 1)
+    threading.Thread(target=run, daemon=True).start()
+    return job
+
+
 def start_shorts_gfxplan(work, name, sid):
     """Claude plans the graphics of ONE short (where each goes, what it is): a small run; nothing is built."""
     raw = shortsapp.read_raw(work, name)
@@ -1575,6 +1597,10 @@ class Handler(BaseHTTPRequestHandler):
                 sub_dir = "web-broll" if file.startswith("web-broll/") else ""     # captured web pages live in their own folder
                 p = work_dir(work) / sub_dir / Path(file).name
                 return self.send_file(p, ranged=True)
+            if u.path.startswith("/stingers/"):                              # a made stinger's picture or clip (Settings)
+                import stingers
+                p = stingers.served(unquote(u.path[len("/stingers/"):]))
+                return self.send_file(p, ranged=True) if p else self.send_error(404)
             return self.send_error(404)
         except (ValueError, KeyError, FileNotFoundError) as e:
             return self.send_json({"error": str(e)}, 400)
@@ -1598,6 +1624,8 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/api/v2/transitions":
                 import transitions
                 return self.send_json(transitions.save_defaults(b.get("defaults") or {}))
+            if u.path == "/api/v2/stingers/make":
+                return self.send_json({"id": start_make_stingers()["id"]})
             if u.path == "/api/v2/engines":
                 import engines
                 if b["op"] == "choose":

@@ -106,10 +106,15 @@ def test_settings_choose_the_transition_for_web_pages(screen):
     page = screen("/v2/#/settings")
     page.wait_for_selector("#transitionsCard select.trPick[data-kind='web']")
     assert page.locator("#transitionsCard select.trPick[data-kind='web']").input_value() == "slide"
-    page.select_option("#transitionsCard select.trPick[data-kind='web']", "flash")
+    with page.expect_response(lambda r: r.url.endswith("/api/v2/transitions") and r.request.method == "POST"):
+        page.select_option("#transitionsCard select.trPick[data-kind='web']", "flash")
     expect(page.locator("#transitionsCard select.trPick[data-kind='web']")).to_have_value("flash")
     assert transitions.defaults()["web"] == "flash"
-    page.select_option("#transitionsCard select.trPick[data-kind='web']", "slide")
+    with page.expect_response(lambda r: r.url.endswith("/api/v2/transitions") and r.request.method == "POST"):
+        page.select_option("#transitionsCard select.trPick[data-kind='web']", "slide")
+    expect(page.locator("#stingers figure")).to_have_count(4)                      # not made yet in a fresh workspace: offered, never made by itself
+    assert page.locator("#makeStingers").inner_text() == "Make my stingers"
+    assert "not made yet" in page.locator("#transitionsCard select.trPick[data-kind='web'] option[value='brand-sweep']").inner_text()
 
 
 def test_resolve_card_says_what_is_needed_and_the_usage_line_shows_on_home(screen):

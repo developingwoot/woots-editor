@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="still" content="0.5">
+<!--
+  Stinger "iris": a ring of the accent colour and a disc of the primary colour grow from the centre and cover the frame at 0.40 s
+  (the cut happens under them), then shrink back to the centre and are gone at 0.8 s. Transparent around them.
+  Filled in by tools/stingers.py: __PRIMARY__ __ACCENT__ __LIGHT__ __DARK__ (colours), __NAME__ (channel name), font.ttf (headline font).
+-->
+<style>
+  @font-face { font-family: Brand; src: url("font.ttf"); }
+  html, body { margin:0; background:transparent; }
+  #stage { position:relative; width:1920px; height:1080px; overflow:hidden; background:transparent; }
+  .disc { position:absolute; left:50%; top:50%; width:2400px; height:2400px; margin:-1200px 0 0 -1200px; border-radius:50%; transform:scale(0); }
+  #ring { background:__ACCENT__; }
+  #disc { background:__PRIMARY__; }
+</style>
+</head>
+<body>
+<div id="stage" data-composition-id="iris" data-start="0" data-duration="0.8" data-width="1920" data-height="1080" data-fps="30">
+  <div id="all" class="clip" data-start="0" data-duration="0.8" data-track-index="0">
+    <div id="ring" class="disc"></div>
+    <div id="disc" class="disc"></div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    tl.fromTo("#ring", { scale: 0 }, { scale: 1, duration: 0.34, ease: "power3.in" }, 0.00);
+    tl.fromTo("#disc", { scale: 0 }, { scale: 1, duration: 0.34, ease: "power3.in" }, 0.06);     // full cover at 0.40 s
+    tl.to("#disc", { scale: 0, duration: 0.30, ease: "power3.out" }, 0.40);
+    tl.to("#ring", { scale: 0, duration: 0.30, ease: "power3.out" }, 0.48);
+    window.__timelines = window.__timelines || {};
+    window.__timelines.iris = tl;
+  </script>
+</div>
+</body>
+</html>

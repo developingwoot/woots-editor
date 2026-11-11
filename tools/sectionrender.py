@@ -197,8 +197,12 @@ def render_segment(edit: dict, seg: dict, a_in: float, a_out: float, out: Path, 
     for ov in overlays:
         args += (["-ss", f"{float(ov['in']):.3f}"] if float(ov.get("in") or 0) > 0 else []) + ["-i", ov["file"]]        # "in": this piece starts that far into the graphic (it carries on across a cut)
     chains, last, k = [f"[0:v]{base_filter(W, H, fps, z, cx, cy)},setsar=1[v0]"], "v0", (2 if va else 1)
+    plays = []                                                                                                     # stingers over the cutaways' cuts: (file, start)
     for i, br in enumerate(brolls):
         at, dur = float(br.get("at", 0.5)), min(br["dur"], max(0.1, D - float(br.get("at", 0.5))))
+        if "stinger" in ((br.get("t_in") or {}).get("kind"), (br.get("t_out") or {}).get("kind")):
+            at, dur, got = transitions.stinger_times({**br, "at": at, "dur": dur}, D)
+            plays += got
         rot = {180: "hflip,vflip,", 90: "transpose=1,", 270: "transpose=2,"}.get(int(br.get("rotate") or 0) % 360, "")           # a clip filmed upside down or sideways
         zm = float(br.get("zoom") or 1.0)                                                                                # a slow push-in / pan across the clip: zoom 1.3, pan left|right|up|down
         move = ""
@@ -220,6 +224,11 @@ def render_segment(edit: dict, seg: dict, a_in: float, a_out: float, out: Path, 
         chains.append(f"[{k}:v]format=rgba,fps={fps},scale={W}:{H},setpts=PTS-STARTPTS+{at}/TB[o{i}]")
         chains.append(f"[{last}][o{i}]overlay=eof_action=pass[vo{i}]")
         last, k = f"vo{i}", k + 1
+    for i, (f, start) in enumerate(plays):                                                                         # on top of everything: it hides the cut under it
+        args += (["-ss", f"{-start:.3f}"] if start < 0 else []) + ["-i", f]
+        chains.append(f"[{k}:v]format=rgba,fps={fps},scale={W}:{H},setpts=PTS-STARTPTS+{max(0.0, start):.3f}/TB[s{i}]")
+        chains.append(f"[{last}][s{i}]overlay=eof_action=pass[vs{i}]")
+        last, k = f"vs{i}", k + 1
     chains.append(f"[{last}]format=yuv420p[vout]")
     with_audio = edit.get("audio", True)                    # the final render builds its sound separately (voice chain, music, SFX)
     if with_audio:
@@ -276,6 +285,8 @@ def render(edit_path: Path, out_dir: Path | None = None, out_name: str = "previe
         for x in brolls + overlays:
             if not Path(x["file"]).exists():
                 raise ValueError(f"{seg['id']}: file not found: {x['file']}")
+        brolls = [{k: v for k, v in b.items() if not (k in ("t_in", "t_out") and isinstance(v, dict) and v.get("kind") == "stinger" and not Path(v.get("file", "")).is_file())}
+                  for b in brolls]                                         # a stinger deleted since the plan was made: a plain cut there
         brolls = [_stab(b, out_dir / "stab") if b.get("stabilize") else b for b in brolls]
         gain = 0.0
         if seg.get("gain_db") is not None:                       # the whole recording was measured once (loudness.py): every piece of it gets the same gain

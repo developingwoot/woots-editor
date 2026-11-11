@@ -17,6 +17,7 @@ _PIPELINES = {
     "teaching": ("Looking for teaching moments", "Teaching moments found", 1),
     "moments": ("Looking for fun moments", "Fun moments found", 1),
     "webcapture": ("Capturing the web page", "Web page captured: make the next cut to see it", 1),
+    "stingers": ("Making your stingers", "Stingers made: choose one under Transitions", 1),
     "publish": ("Writing the publishing details", "Publishing details ready", 2),
     "shorts": ("Working on your shorts", "Shorts ready", None),
     "score": ("Measuring the final against the reference videos", "Final measured", 3),

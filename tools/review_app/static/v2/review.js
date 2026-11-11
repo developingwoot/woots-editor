@@ -96,7 +96,7 @@ export async function render(root, key, stage, setBusy) {
       const dflt = tr.presets.find(p => p.id === tr.defaults.web);
       const trans = h('select', { id: 'webTrans', title: 'How the page comes in and goes out' },
         h('option', { value: '' }, `Comes in: ${dflt ? dflt.label : 'the default'} (Settings)`),
-        ...tr.presets.filter(p => p.id !== tr.defaults.web).map(p => h('option', { value: p.id }, `Comes in: ${p.label}`)));
+        ...tr.presets.filter(p => p.id !== tr.defaults.web).map(p => h('option', { value: p.id }, `Comes in: ${p.label}${p.kind === 'stinger' && !p.ready ? ' (make it in Settings first)' : ''}`)));
       const inClip = video.currentTime >= clip.start && video.currentTime < clip.start + clip.dur;
       const at = inClip ? Math.max(0, video.currentTime - clip.start) : 0.5;
       for (const el of [url, find, secs]) el.addEventListener('keydown', e => e.stopPropagation());
