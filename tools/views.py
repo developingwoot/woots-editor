@@ -303,6 +303,9 @@ def review(work: str, name: str, stage: str, version: int | None = None, running
     if stage == "cut":
         import teaching
         starts = {b["id"]: b.get("start", 0.0) for b in _beat_list(work, name)}
+        real = makeversion.clip_times(work, name, "cut")                     # where the clips play in the latest cut (the plan's times are estimates)
+        if real:
+            starts = {k: v[0] for k, v in real.items()}
         for m in teaching.seed(work, name):
             out["teaching"].append({"id": m["id"], "when": time_text(starts.get(m["beat"], 0.0)), "t": starts.get(m["beat"], 0.0),
                                     "term": m["term"], "why": m["why"], "status": m["status"]})

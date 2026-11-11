@@ -57,6 +57,16 @@ def _clock(t: float) -> str:
     return f"{t // 60}:{t % 60:02d}"
 
 
+def _times(work: str, name: str) -> dict:
+    import makeversion
+    return makeversion.clip_times(work, name, STAGE)
+
+
+def _start(b: dict, times: dict) -> float:
+    """Where the clip starts in the rough cut the host watches (the plan's own estimate when there is no cut yet)."""
+    return times[b["id"]][0] if b["id"] in times else float(b.get("start") or 0)
+
+
 def _library(work: str, name: str) -> dict:
     """{rel: {dur, samples}} of the footage library (brolllib.py); empty when the footage has not been looked at."""
     import brolllib
@@ -107,10 +117,14 @@ def find_prompt(work: str, name: str, fd: Path) -> str:
     fd.mkdir(parents=True, exist_ok=True)
     bm = _bm(work, name)
     import locks
+    import makeversion
     good = locks.beat_ids(work, name, bm)
-    rows = [{"beat": b["id"], "starts_at": _clock(float(b.get("start") or 0)), "seconds": round(float(b.get("dur") or 0), 1), "said": b.get("said", ""),
-             "has_broll": has_broll(b), "has_graphic": bool(b.get("graphic")), "has_text": bool((b.get("on_screen") or {}).get("text")), "good": b["id"] in good}
-            for b in bm.get("beats", []) if b.get("said") and not b.get("skip")]
+    times = _times(work, name)
+    live = [b for b in bm.get("beats", []) if b.get("said") and not b.get("skip") and (not times or b["id"] in times)]          # only the clips in the cut
+    live.sort(key=lambda b: _start(b, times))
+    rows = [{"beat": b["id"], "starts_at": _clock(_start(b, times)), "seconds": round(times[b["id"]][1] if b["id"] in times else float(b.get("dur") or 0), 1),
+             "said": makeversion.kept_said(b), "has_broll": has_broll(b), "has_graphic": bool(b.get("graphic")), "has_text": bool((b.get("on_screen") or {}).get("text")),
+             "good": b["id"] in good} for b in live]
     (fd / "beats.json").write_text(json.dumps(rows, indent=1, ensure_ascii=False), encoding="utf-8")
     takes = {(b.get("aroll") or {}).get("rel") for b in bm.get("beats", [])}
     lines = footage_lines(_library(work, name), takes)
@@ -176,7 +190,8 @@ def import_found(work: str, name: str, p: Path) -> tuple[bool, str]:
     except (OSError, ValueError, AttributeError):
         return False, "Claude's answer could not be read."
     import accuracy
-    by = {b["id"]: b for b in _bm(work, name).get("beats", []) if not b.get("skip")}
+    times = _times(work, name)
+    by = {b["id"]: b for b in _bm(work, name).get("beats", []) if not b.get("skip") and (not times or b["id"] in times)}
     lib = _library(work, name)
     ideas = [i for i in load(work, name) if i["status"] != "suggested"]
     seen = {(i["beat"], i["kind"], i["text"].lower()) for i in ideas}
@@ -209,7 +224,7 @@ def add_own(work: str, name: str, t: float, text: str, kind: str = "correction")
     if not text:
         raise ValueError("type the text to show")
     beats = _bm(work, name).get("beats", [])
-    b, at = noteactions.beat_at(beats, float(t))
+    b, at = noteactions.beat_at(beats, float(t), _times(work, name) or None)          # t is the playhead in the rough cut
     ideas = load(work, name)
     n_id = 1 + max([int(re.sub(r"\D", "", i["id"]) or 0) for i in ideas] + [0])
     idea = {"id": f"i{n_id}", "beat": b["id"], "at": round(min(at, max(0.0, float(b.get("dur") or 0) - 1.0)), 2), "kind": kind, "text": text,
@@ -261,14 +276,15 @@ def set_status(work: str, name: str, iid: str, status: str, text: str | None = N
     if b is None:
         raise ValueError("that clip is no longer in the cut")
     if i["kind"] in ("footage", *TEXT_KINDS):
+        start = _start(b, _times(work, name))
         with reviewnotes._lock:
             j = reviewnotes.load(work, name)
             _drop_choice(j, iid)
             there = in_plan(b, iid)
             if status == "yes" and not there:
-                _add_choice(j, i, float(b.get("start") or 0))
+                _add_choice(j, i, start)
             elif status != "yes" and there:
-                _add_choice(j, i, float(b.get("start") or 0), remove=True)
+                _add_choice(j, i, start, remove=True)
             reviewnotes.save(work, name, j)
     elif i["kind"] == "film":
         import shootplan
@@ -300,7 +316,7 @@ def apply_choice(work: str, name: str, b: dict, ch: dict) -> str | None:
     if not i:
         return None
     on = b.setdefault("on_screen", {"shot": "a-roll", "note": "", "broll": []})
-    when = _clock(float(b.get("start") or 0) + float(i.get("at") or 0))
+    when = _clock(_start(b, _times(work, name)) + float(i.get("at") or 0))
     if ch.get("remove"):
         on["broll"] = [x for x in on.get("broll", []) if x.get("idea") != i["id"]]
         on["text"] = [x for x in on.get("text") or [] if x.get("idea") != i["id"]]

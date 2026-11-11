@@ -43,6 +43,42 @@ def clips_of(work: str, name: str) -> list:
     return [{"start": s["start"], "dur": s["dur"]} for s in stitch.get("sections", [])]
 
 
+def clip_times(work: str, name: str, stage: str = "cut") -> dict:
+    """Where each clip really plays in the video the host watches: {beat id: (start, dur)} in seconds. The rough cut: the latest cut version's clips;
+    the preview: the stitched sections. The beat map's own start times are estimates that are not kept up to date after every change (clips taken out,
+    snapped cut points), so a time the host gives (a note, the playhead) is turned into a clip with these. Empty when there is no video yet."""
+    out = {}
+    if stage == "cut":
+        vs = reviewnotes.versions(work, name, "cut")
+        for c in (vs[-1]["clips"] if vs else []):
+            if c.get("ref"):
+                out[c["ref"]] = (float(c["start"]), float(c["dur"]))
+        return out
+    try:
+        import selfreview
+        for s in selfreview.timeline(work, name)["segments"]:
+            bid = str(s["id"]).split(".")[0]
+            if bid in out:                                  # the pieces of a trimmed beat: one clip
+                a, _ = out[bid]
+                out[bid] = (a, round(float(s["start"]) + float(s["dur"]) - a, 3))
+            else:
+                out[bid] = (float(s["start"]), float(s["dur"]))
+    except Exception:                                       # noqa: BLE001  (no stitched preview yet)
+        return {}
+    return out
+
+
+def kept_said(b: dict) -> str:
+    """What the host says in the clip as it plays in the cut: the take's words inside the kept stretches (a trimmed beat drops some), else the beat's text."""
+    a = b.get("aroll") or {}
+    words = a.get("words") or []
+    if not words:
+        return b.get("said", "")
+    keep = a.get("keep") or [[a.get("in", 0.0), a.get("out", 0.0)]]
+    got = [w[0] for w in words if any(k0 - 0.001 <= (w[1] + w[2]) / 2 <= k1 + 0.001 for k0, k1 in keep)]
+    return " ".join(got) if got else b.get("said", "")
+
+
 def ensure_baseline(work: str, name: str, stage: str = "preview"):
     """The preview that exists before any version was made becomes version 1, so the first make has something to compare with."""
     src = preview_file(work, name)
@@ -67,8 +103,10 @@ def brief(work: str, name: str, stage: str, fd: Path) -> str:
         (fd / "beatmap.json").write_text(json.dumps(bm, indent=1), encoding="utf-8")
         import locks
         good = locks.beat_ids(work, name, bm)
-        rows = [{"id": b["id"], "section": b.get("section", ""), **({} if b.get("skip") else {"starts_at": views.time_text(float(b.get("start") or 0))}),
-                 "seconds": round(float(b.get("dur") or 0), 1), "said": (b.get("said") or "")[:240],
+        times = clip_times(work, name, stage)
+        start = lambda b: times[b["id"]][0] if b["id"] in times else float(b.get("start") or 0)     # noqa: E731  (where it plays in the video the host watched)
+        rows = [{"id": b["id"], "section": b.get("section", ""), **({} if b.get("skip") else {"starts_at": views.time_text(start(b))}),
+                 "seconds": round(float(b.get("dur") or 0), 1), "said": kept_said(b)[:240],
                  "good": b["id"] in good, "skipped": bool(b.get("skip"))} for b in bm.get("beats", [])]
         (fd / "beats.json").write_text(json.dumps(rows, indent=1, ensure_ascii=False), encoding="utf-8")
     import noteactions

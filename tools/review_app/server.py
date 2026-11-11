@@ -606,7 +606,8 @@ def start_make_version(work, name, stage):
             import noteactions
             times = {n["id"]: n.get("t", 0.0) for n in plain}
             job["log"] += f"\nDoing {len(r['actions'])} edit{'s' if len(r['actions']) != 1 else ''} for the notes."
-            done = noteactions.run(work, name, r["actions"], times, env=tool_env(), log=lambda s: None)    # apply() already runs under _lock (not re-entrant)
+            done = noteactions.run(work, name, r["actions"], times, env=tool_env(), log=lambda s: None,     # apply() already runs under _lock (not re-entrant)
+                                   times=makeversion.clip_times(work, name, stage))                       # the notes' times are times in the video the host watched
             r = makeversion.after_actions(r, done, times)
             if not r["applied_ids"]:
                 return False, "Claude could not apply any of the notes: " + " ".join(r["changes"])
@@ -935,9 +936,11 @@ def attach_web_broll(work, name, ref, got: dict, at: float, find: str = "", tran
     """A captured page becomes the clip's 'web' choice (applied, and listed under What changed, when the next cut is made)."""
     import cutview
     from urllib.parse import urlsplit
+    import makeversion
     clip = next(c for c in cutview.clips_of(cutview.beat_data(work, name)) if c["ref"] == ref)
+    start = makeversion.clip_times(work, name, "cut").get(ref, (clip["start"], 0))[0]          # where the clip plays in the cut (the plan's time is an estimate)
     host = urlsplit(got.get("url", "")).hostname or ""
-    cutview.set_choice(work, name, ref, "web", f"Show the web page {host}" + (f", highlighting: {find[:80]}" if find else ""), clip["start"] + max(0.0, float(at or 0)),
+    cutview.set_choice(work, name, ref, "web", f"Show the web page {host}" + (f", highlighting: {find[:80]}" if find else ""), start + max(0.0, float(at or 0)),
                        {"file": got["file"], "still": got.get("still", ""), "url": got.get("url", ""), "title": got.get("title", ""), "host": host,
                         "dur": got.get("seconds", 5.0), "at": max(0.0, float(at or 0)), "captured": time.strftime("%Y-%m-%d"), "found": bool(got.get("found")),
                         **({"transition": transition} if transition else {})})

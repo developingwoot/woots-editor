@@ -56,35 +56,40 @@ def parse(ans: dict, open_ids: set) -> list:
     return out
 
 
-def beat_at(beats: list, t: float):
-    """(beat, seconds into it) of the clip playing at t, from the plan's times; the last clip when t is past the end. Skipped beats are not in the video."""
-    live = [b for b in beats if not b.get("skip") and (b.get("aroll") or b.get("vo"))]
+def _span(b: dict, times: dict | None) -> tuple:
+    return times[b["id"]] if times and b["id"] in times else (float(b.get("start") or 0), float(b.get("dur") or 0))
+
+
+def beat_at(beats: list, t: float, times: dict | None = None):
+    """(beat, seconds into it) of the clip playing at t; the nearest clip when t falls in no clip. `times` = {beat id: (start, dur)} where each clip really
+    plays (makeversion.clip_times): only those clips are in the video. Without it the plan's own times are used (skipped beats are not in the video)."""
+    live = [b for b in beats if not b.get("skip") and (b.get("aroll") or b.get("vo")) and (not times or b["id"] in times)]
     for b in live:
-        s = float(b.get("start") or 0)
-        if s <= t < s + float(b.get("dur") or 0):
+        s, d = _span(b, times)
+        if s <= t < s + d:
             return b, round(t - s, 2)
     if not live:
         raise ValueError("there are no clips in the plan")
-    b = min(live, key=lambda x: abs(float(x.get("start") or 0) - t))
+    b = min(live, key=lambda x: abs(_span(x, times)[0] - t))
     return b, 0.0
 
 
-def add_sfx(beats: list, t: float, sound: str) -> str:
+def add_sfx(beats: list, t: float, sound: str, times: dict | None = None) -> str:
     import finalrender
     f, why = finalrender.resolve_sfx(sound)
     if not f:
         raise ValueError(f"the sound '{sound}' was not found ({why})")
-    b, at = beat_at(beats, t)
+    b, at = beat_at(beats, t, times)
     au = b.setdefault("audio", {})
     au["sfx"] = list(au.get("sfx") or []) + [f"{Path(f).stem} @ {at}"]
     return f"Added the sound {Path(f).stem} at {_clock(t)} (heard from the preview on: the rough cut has no sound effects)"
 
 
-def add_text(beats: list, t: float, text: str, kind: str = "correction") -> str:
+def add_text(beats: list, t: float, text: str, kind: str = "correction", times: dict | None = None) -> str:
     """On-screen text (textcards.py) on the clip playing at t: a correction of something misspoken, or a detail."""
     import skillrules
     import textcards
-    b, at = beat_at(beats, t)
+    b, at = beat_at(beats, t, times)
     e = textcards.entry({"text": text, "kind": kind, "at": at}, float(b.get("dur") or 0), skillrules.rules()["text_card_s"])
     if not e:
         raise ValueError("the text to show was empty")
@@ -93,11 +98,11 @@ def add_text(beats: list, t: float, text: str, kind: str = "correction") -> str:
     return f"Showed “{e['text']}” on screen at {_clock(t)}"
 
 
-def add_web(work: str, beats: list, a: dict, env=None) -> str:
+def add_web(work: str, beats: list, a: dict, env=None, times: dict | None = None) -> str:
     import cutview
     import webcapture
     url = webcapture.check_url(a["url"])
-    b, at = beat_at(beats, seconds_of(a["time"]))
+    b, at = beat_at(beats, seconds_of(a["time"]), times)
     find = " ".join(str(a.get("find") or "").split())[:300]
     got = webcapture.capture_apart(url, config.WORK / work / "web-broll", "scroll" if find else "still", find, webcapture.seconds_of(a.get("seconds", 5)), env=env)
     if not got.get("ok"):
@@ -126,7 +131,7 @@ def angle_inserts(b: dict, file: str, start: float, length: float) -> list:
     return out
 
 
-def add_angle(work: str, name: str, beats: list, file: str, t: float, find=None, length_of=None) -> str:
+def add_angle(work: str, name: str, beats: list, file: str, t: float, find=None, length_of=None, times: dict | None = None) -> str:
     """The other angle over the clips it covers. `find` and `length_of` (tests) stand in for anglesync.locate and anglesync.duration."""
     import anglesync
     import shootplan
@@ -137,7 +142,7 @@ def add_angle(work: str, name: str, beats: list, file: str, t: float, find=None,
     if p.suffix.lower() not in VIDEO_EXT or not p.is_file() or not folder or not config.inside(folder, p):
         raise ValueError("the other recording must be a video in this video's footage folder")
     find = find or anglesync.locate
-    near = [b for b in beats if not b.get("skip") and b.get("aroll") and abs(float(b.get("start") or 0) - t) <= NEAR_S]
+    near = [b for b in beats if not b.get("skip") and b.get("aroll") and (not times or b["id"] in times) and abs(_span(b, times)[0] - t) <= NEAR_S]
     best = None
     for rel in dict.fromkeys(b["aroll"]["rel"] for b in near):
         spans = [k for b in near if b["aroll"]["rel"] == rel for k in _kept(b)]
@@ -160,7 +165,7 @@ def add_angle(work: str, name: str, beats: list, file: str, t: float, find=None,
             covered.append(b)
     if not covered:
         raise ValueError(f"{p.name} was found in the recording, but at a moment the cut does not use")
-    first = min(float(b.get("start") or 0) + x["at"] for b in covered for x in b["on_screen"]["broll"] if x.get("angle"))
+    first = min(_span(b, times)[0] + x["at"] for b in covered for x in b["on_screen"]["broll"] if x.get("angle"))
     return f"Used the other angle ({p.name}) from {_clock(first)}, with the sound of your take"
 
 
@@ -169,8 +174,9 @@ def _clock(t: float) -> str:
     return f"{t // 60}:{t % 60:02d}"
 
 
-def run(work: str, name: str, actions: list, note_times: dict, env=None, log=print, find=None, length_of=None) -> dict:
-    """Do the actions on the beat map; write it once. {"changes": [...], "failed": {note id: why}}."""
+def run(work: str, name: str, actions: list, note_times: dict, env=None, log=print, find=None, length_of=None, times: dict | None = None) -> dict:
+    """Do the actions on the beat map; write it once. {"changes": [...], "failed": {note id: why}}. `times`: where each clip really plays in the
+    video the notes were made on (makeversion.clip_times); without it the plan's own times are used."""
     import beatmap
     p = config.WORK / work / f"{name}.beatmap.json"
     bm = beatmap.read_json(p)
@@ -181,13 +187,13 @@ def run(work: str, name: str, actions: list, note_times: dict, env=None, log=pri
         try:
             log(f"{a['do']} for note {a['note']}")
             if a["do"] == "sfx":
-                text = add_sfx(bm["beats"], seconds_of(a["time"]), str(a["sound"]))
+                text = add_sfx(bm["beats"], seconds_of(a["time"]), str(a["sound"]), times)
             elif a["do"] == "web":
-                text = add_web(work, bm["beats"], a, env)
+                text = add_web(work, bm["beats"], a, env, times)
             elif a["do"] == "text":
-                text = add_text(bm["beats"], seconds_of(a["time"]), str(a["text"]), "detail" if a.get("kind") == "detail" else "correction")
+                text = add_text(bm["beats"], seconds_of(a["time"]), str(a["text"]), "detail" if a.get("kind") == "detail" else "correction", times)
             else:
-                text = add_angle(work, name, bm["beats"], str(a["file"]), float(note_times.get(a["note"]) or 0), find, length_of)
+                text = add_angle(work, name, bm["beats"], str(a["file"]), float(note_times.get(a["note"]) or 0), find, length_of, times)
             changes.append(text)
             by_note.setdefault(a["note"], []).append(text)
         except Exception as e:                                          # noqa: BLE001  (one action that cannot be done is reported, the rest go on)

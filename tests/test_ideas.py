@@ -202,6 +202,38 @@ def test_the_brief_lists_the_footage_but_not_the_takes(tmp_path):
     assert "correction" in prompt and "at most 12 ideas" in prompt
 
 
+def cut_version(r, clips):
+    """A rough cut version whose clips play at these times (as rendered), without rendering one."""
+    reviewnotes.add_version(r["work"], r["name"], "cut", r["dir"] / "footage" / "take1.mp4", ["The first cut"], clips)
+
+
+def test_times_are_where_the_clips_play_in_the_cut_not_the_plans_estimate(tmp_path):
+    import makeversion
+    r = make_project.build(cut=True, title="ideas real times")
+    w, n = r["work"], r["name"]
+    cut_version(r, [{"start": 0.0, "dur": 3.0, "ref": "B01"}, {"start": 3.0, "dur": 1.5, "ref": "TP01"}, {"start": 4.5, "dur": 3.0, "ref": "B03"}])   # B02 is not in this cut
+    times = makeversion.clip_times(w, n, "cut")
+    assert times == {"B01": (0.0, 3.0), "TP01": (3.0, 1.5), "B03": (4.5, 3.0)}
+    beats = plan(r)["beats"]
+    assert beat(r, "B03")["start"] == 7.5                                                  # the plan still counts B02
+    b, at = noteactions.beat_at(beats, 5.0, times)
+    assert (b["id"], at) == ("B03", 0.5) and noteactions.beat_at(beats, 5.0)[0]["id"] == "B02"
+    i = ideas.add_own(w, n, 5.0, "*the end", "correction")                                  # the playhead at 0:05 is in B03 in this cut
+    assert (i["beat"], i["at"]) == ("B03", 0.5) and reviewnotes.open_notes(w, n, "cut")[0]["text"] == "Show “*the end” at 0:05"
+    ideas.find_prompt(w, n, tmp_path / "fd")
+    rows = json.loads((tmp_path / "fd" / "beats.json").read_text(encoding="utf-8"))
+    assert [(x["beat"], x["starts_at"]) for x in rows] == [("B01", "0:00"), ("TP01", "0:03"), ("B03", "0:04")]
+    assert {x["id"]: x["when"] for x in views.review(w, n, "cut")["ideas"]} == {i["id"]: "0:05"}
+
+
+def test_claude_reads_only_the_words_the_cut_keeps():
+    import makeversion
+    b = {"said": "one two three four", "aroll": {"in": 0.0, "out": 4.0, "keep": [[0.0, 1.0], [3.0, 4.0]],
+                                                  "words": [["one", 0.1, 0.5], ["two", 1.2, 1.6], ["three", 2.2, 2.6], ["four", 3.2, 3.6]]}}
+    assert makeversion.kept_said(b) == "one four"
+    assert makeversion.kept_said({"said": "plain", "aroll": {"in": 0, "out": 1, "words": []}}) == "plain"
+
+
 def test_a_note_can_ask_for_text_on_screen():
     r = make_project.build(cut=True, title="ideas note text")
     t = beat(r, "B03")["start"] + 0.5
