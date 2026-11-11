@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "fixtures"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools" / "review_app"))
 import make_project  # noqa: E402
 import makeversion  # noqa: E402
@@ -55,3 +56,18 @@ def test_claude_can_answer_a_whole_video_note_by_listing_beats_to_take_out(tmp_p
     ok, msg, res = makeversion.apply_answer(w, n, "cut", ans)
     bm = {b["id"]: b for b in json.loads((d / f"{n}.beatmap.json").read_text(encoding="utf-8"))["beats"]}
     assert ok and bm["B02"]["skip"] is True and not bm["B01"].get("skip") and res["changes"] == ["Took out two weaker clips"]
+
+
+def test_good_parts_times_follow_beats_that_were_taken_out():
+    import locks
+    from test_locks import beat
+    data = {"beats": [beat(1, 0.0, ["First thing we say here."]), beat(2, 3.0, ["Second thing we say here."]), beat(3, 6.0, ["Third thing we say here."])]}
+    import beatmap
+    beatmap.retime(data["beats"])
+    before = {s["beat"]: s["start"] for s in locks.transcript(data)}
+    data["beats"][1]["skip"] = True                     # taken out, the old start values left in the file (the plan was not retimed)
+    data["beats"][1]["end"] = data["beats"][1]["start"] + data["beats"][1]["dur"]
+    after = {s["beat"]: s["start"] for s in locks.transcript(data)}
+    assert "B02" not in after and after["B03"] == before["B03"] - data["beats"][1]["dur"]
+    beatmap.retime(data["beats"])                       # once retimed the same answer: nothing is counted twice
+    assert {s["beat"]: s["start"] for s in locks.transcript(data)} == after

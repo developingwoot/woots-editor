@@ -76,12 +76,16 @@ def transcript(data: dict) -> list:
     """Every sentence the cut plays, in order, with its place in the cut: [{id, beat, text, start, end}] (seconds in the cut)."""
     import cutreview
     out = []
+    removed = 0.0                               # time of beats taken out (skip) whose later beats still hold their old start: not counted twice when the plan was retimed
     for b in data.get("beats", []):
+        begin = float(b.get("start", 0.0)) - removed
+        if b.get("skip"):
+            removed += max(0.0, float(b.get("end", 0.0)) - float(b.get("start", 0.0)))
         if not _talking(b):
             continue
         ar = b["aroll"]
         keep = ar.get("keep") or [[ar["in"], ar["out"]]]
-        starts, acc = [], float(b.get("start", 0.0))
+        starts, acc = [], begin
         for a, z in keep:
             starts.append((a, z, acc))
             acc += z - a

@@ -112,6 +112,9 @@ def apply_answer(work: str, name: str, stage: str, path: Path) -> tuple[bool, st
                 taken += 1
         bm = base if taken or bm is not None else None
     if bm is not None:
+        import beatmap
+        if all("dur" in b for b in bm["beats"]):
+            beatmap.retime(bm["beats"])         # the times after a beat that was taken out move up
         projectstore.write_json(WORK / work / f"{name}.beatmap.json", bm, why="notes applied")
     changes = [" ".join(str(a["summary"]).split())[:200] for a in applied]
     n_skipped = len([s for s in ans.get("skipped") or [] if isinstance(s, dict)])
