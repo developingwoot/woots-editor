@@ -29,6 +29,9 @@ $venvPy = ".venv\Scripts\python.exe"
 Write-Host "Installing the packages (this can take a few minutes) ..."
 if (Test-Path "requirements.lock") { & $venvPy -m pip install --require-hashes -r requirements.lock } else { & $venvPy -m pip install -r requirements.txt }
 if ($LASTEXITCODE -ne 0) { Write-Host "Installing the packages failed."; exit 1 }
+Write-Host "Installing the browser used to capture web pages as B-roll ..."
+& $venvPy -m playwright install chromium
+if ($LASTEXITCODE -ne 0) { Write-Host "The browser for web pages could not be installed: everything else works; run setup again later to add it." }
 
 Write-Host ""
 Write-Host "Checking the programs the app needs:"

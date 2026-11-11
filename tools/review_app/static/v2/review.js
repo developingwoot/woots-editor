@@ -75,13 +75,40 @@ export async function render(root, key, stage, setBusy) {
       const body = h('div', { class: 'cpBody' });
       panel.replaceChildren(h('div', { class: 'cpHead' }, h('b', {}, `Clip at ${clip.at}`),
         clip.pending ? h('span', { class: 'chip' }, PENDING[clip.pending]) : null,
+        clip.web ? h('span', { class: 'chip' }, 'Web page') : null,
         h('span', { class: 'spacer' }),
         h('button', { class: 'quiet', onclick: () => choose(clip, 'keep') }, 'Keep'),
         h('button', { class: 'quiet', id: 'actReplace', onclick: () => replaceUI(clip, body) }, 'Replace'),
         h('button', { class: 'quiet', id: 'actTrim', onclick: () => trimUI(clip, body) }, 'Trim'),
+        h('button', { class: 'quiet', id: 'actWeb', onclick: () => webUI(clip, body) }, 'Web page'),
         h('button', { class: 'quiet', id: 'actRemove', onclick: () => choose(clip, 'remove') }, 'Remove this clip'),
         h('button', { class: 'quiet', id: 'actNote', onclick: () => { state.pin = clip.start; noteBox.focus(); rangeHint.textContent = `Note at ${fmt(clip.start)}`; } }, 'Note')),
         body);
+    }
+
+    // B-roll from a web page: the host pastes the address (and, if they like, the words to highlight); the page is captured as a short clip over this one.
+    function webUI(clip, body) {
+      const url = h('input', { type: 'url', id: 'webUrl', placeholder: 'https://…', autocomplete: 'off', class: 'fbInput' });
+      const find = h('input', { type: 'text', id: 'webFind', placeholder: 'Words on the page to highlight (optional)', autocomplete: 'off', class: 'fbInput' });
+      const style = h('select', { id: 'webStyle' }, h('option', { value: 'scroll' }, 'Scroll down to the words'), h('option', { value: 'still' }, 'A still picture with a slow zoom'));
+      const secs = h('input', { type: 'number', id: 'webSecs', min: 2, max: 12, step: 0.5, value: 5, style: 'width:70px' });
+      const inClip = video.currentTime >= clip.start && video.currentTime < clip.start + clip.dur;
+      const at = inClip ? Math.max(0, video.currentTime - clip.start) : 0.5;
+      for (const el of [url, find, secs]) el.addEventListener('keydown', e => e.stopPropagation());
+      const go = h('button', { class: 'main', id: 'webGo', onclick: async () => {
+        go.disabled = true;
+        try { await api('/api/v2/webbroll', { key, clip: clip.ref, url: url.value.trim(), find: find.value.trim(), style: style.value, seconds: Number(secs.value) || 5, at }); reopen = null; setBusy(); }
+        catch (e) { say(e.message); go.disabled = false; }
+      } }, 'Capture the page');
+      const now = clip.web ? h('div', { class: 'webNow', id: 'webNow' },
+        h('img', { src: clip.web.still, alt: '', style: 'max-width:240px;border:1px solid var(--line);border-radius:6px' }),
+        h('div', {}, h('div', {}, `${clip.web.title || clip.web.host} goes over this clip in the next cut.`),
+          clip.web.found ? null : h('div', { class: 'muted small' }, 'The words to highlight were not found on the page.'),
+          h('button', { class: 'quiet', id: 'webRemove', onclick: () => choose(clip, 'noweb') }, 'Do not use it'))) : null;
+      body.replaceChildren(...[now,
+        h('p', { class: 'muted small' }, `The page shows over this clip from ${fmt(clip.start + at)}${inClip ? ' (the playhead)' : ''}. Only public pages: nothing is signed in to and cookie banners are hidden. The address is added to the credits.`),
+        url, find, h('div', { class: 'row' }, style, h('label', { class: 'muted small' }, secs, ' seconds'), go)].filter(Boolean));
+      url.focus();
     }
 
     async function replaceUI(clip, body) {

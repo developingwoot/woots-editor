@@ -886,6 +886,56 @@ def start_vision(work, name):
     return _job_run(job, [([str(PY), str(TOOLS / "brolllib.py"), work, "--name", name], TOOLS)])
 
 
+def start_web_broll(work, name, ref, url, style, find, seconds, at):
+    """Capture a web page as B-roll for one clip (webcapture.py in its own process); the clip then has a 'web' choice the next cut applies."""
+    import cutview
+    import webcapture
+    from urllib.parse import urlsplit
+    url = webcapture.check_url(url)
+    if style not in webcapture.STYLES:
+        raise ValueError("unknown style")
+    if not any(c["ref"] == ref for c in cutview.clips_of(cutview.beat_data(work, name))):
+        raise ValueError("unknown clip")
+    seconds = webcapture.seconds_of(seconds)
+    job = _job("webcapture", ["open the page and capture it"])
+    job.update(work=work, name=name, stage="cut")
+
+    def run():
+        try:
+            arg = json.dumps({"url": url, "out": str(WORK / work / "web-broll"), "style": style, "find": find, "seconds": seconds})
+            try:
+                p = subprocess.run([str(PY), str(TOOLS / "webcapture.py"), arg], cwd=TOOLS, env=tool_env(), capture_output=True, text=True, encoding="utf-8",
+                                   errors="replace", timeout=180, creationflags=platformx.NO_WINDOW)
+                got = json.loads((p.stdout or "").strip().splitlines()[-1]) if (p.stdout or "").strip() else {"ok": False, "error": (p.stderr or "")[-300:]}
+            except subprocess.TimeoutExpired:
+                got = {"ok": False, "error": "the page took too long to capture"}
+            if not got.get("ok"):
+                job["log"] += got.get("error") or "the page could not be captured"
+                job["ok"] = False
+                return
+            with _lock:
+                attach_web_broll(work, name, ref, got, at, find)
+            job["ok"] = True
+            if find and not got.get("found"):
+                job["done_sentence"] = "Web page captured, but the words to highlight were not found on it"
+        finally:
+            job["done"] = True
+            job["elapsed"] = round(time.time() - job["started"], 1)
+    threading.Thread(target=run, daemon=True).start()
+    return job
+
+
+def attach_web_broll(work, name, ref, got: dict, at: float, find: str = ""):
+    """A captured page becomes the clip's 'web' choice (applied, and listed under What changed, when the next cut is made)."""
+    import cutview
+    from urllib.parse import urlsplit
+    clip = next(c for c in cutview.clips_of(cutview.beat_data(work, name)) if c["ref"] == ref)
+    host = urlsplit(got.get("url", "")).hostname or ""
+    cutview.set_choice(work, name, ref, "web", f"Show the web page {host}" + (f", highlighting: {find[:80]}" if find else ""), clip["start"] + max(0.0, float(at or 0)),
+                       {"file": got["file"], "still": got.get("still", ""), "url": got.get("url", ""), "title": got.get("title", ""), "host": host,
+                        "dur": got.get("seconds", 5.0), "at": max(0.0, float(at or 0)), "captured": time.strftime("%Y-%m-%d"), "found": bool(got.get("found"))})
+
+
 def start_find_options(work, name, ref):
     """Claude searches every recording for other takes of one clip's line (slower and costs a little; used when there are fewer than 2 others)."""
     import cutview
@@ -1514,7 +1564,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_file(shortsapp.wd_of(work) / "shorts" / Path(file).name, ranged=True)
             if u.path.startswith("/media/"):
                 work, file = unquote(u.path[len("/media/"):]).split("/", 1)
-                p = work_dir(work) / Path(file).name
+                sub_dir = "web-broll" if file.startswith("web-broll/") else ""     # captured web pages live in their own folder
+                p = work_dir(work) / sub_dir / Path(file).name
                 return self.send_file(p, ranged=True)
             return self.send_error(404)
         except (ValueError, KeyError, FileNotFoundError) as e:
@@ -1579,10 +1630,16 @@ class Handler(BaseHTTPRequestHandler):
                     else:
                         raise ValueError("unknown operation")
                 return self.send_json(views.review(work, name, b["stage"]))
+            if u.path == "/api/v2/webbroll":
+                work, name = views.split_key(b["key"])
+                return self.send_json({"id": start_web_broll(work, name, b["clip"], b.get("url", ""), b.get("style", "scroll"), " ".join(str(b.get("find") or "").split())[:300],
+                                                             b.get("seconds", 5), float(b.get("at") or 0))["id"]})
             if u.path == "/api/v2/clipchoice":
                 import cutview
                 work, name = views.split_key(b["key"])
                 kind, t = b["kind"], float(b.get("t", 0))
+                if kind == "web":
+                    raise ValueError("a web page is added with its own button")      # its file comes from the capture, never from the page
                 text = {"keep": "", "remove": "Take this clip out", "replace": "Use another take for this clip",
                         "trim": "Trim this clip"}.get(kind, "")
                 with _lock:

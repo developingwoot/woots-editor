@@ -120,12 +120,13 @@ def vision_status(work: str, name: str) -> dict:
 
 def set_choice(work: str, name: str, ref: str, kind: str, text: str, t: float, choice: dict | None = None) -> None:
     """The host picks Keep / Replace / Remove / Trim for a clip. Keep clears the clip's open choice; the others replace it (one choice per clip)."""
-    if kind not in ("keep", "replace", "remove", "trim"):
+    if kind not in ("keep", "replace", "remove", "trim", "web", "noweb"):
         raise ValueError("unknown choice")
     with reviewnotes._lock:
         j = reviewnotes.load(work, name)
-        j[STAGE] = [n for n in j[STAGE] if not (n.get("clip") == ref and n.get("choice") is not None and n.get("status") != "done")]
-        if kind != "keep":
+        same = (lambda n: n.get("kind") == "web") if kind in ("web", "noweb") else (lambda n: n.get("kind") != "web")     # a web picture sits beside the clip's other choice
+        j[STAGE] = [n for n in j[STAGE] if not (n.get("clip") == ref and n.get("choice") is not None and n.get("status") != "done" and same(n))]
+        if kind not in ("keep", "noweb"):
             nid = 1 + max([n["id"] for n in j[STAGE]] + [0])
             j[STAGE].append({"id": nid, "t": round(float(t), 1), "t_end": None, "text": text, "clip": ref, "kind": kind, "choice": choice or {},
                              "status": "open", "applied_in": None})
@@ -164,6 +165,16 @@ def apply_choices(work: str, name: str) -> dict:
             for ln in b.get("script_lines", []):
                 picked[ln] = sp["id"]
             changes.append(f"Swapped the clip at {at} for another take")
+        elif n["kind"] == "web" and ch.get("file"):
+            at_text = at                                         # the note's time is already where the page starts
+            on = b.setdefault("on_screen", {"shot": "a-roll", "note": "", "broll": []})
+            room = max(0.5, float(b.get("dur") or 0) - 0.2)
+            dur = min(float(ch.get("dur") or 5), room)
+            at = min(max(0.0, float(ch.get("at") or 0)), max(0.0, float(b.get("dur") or 0) - dur))
+            on["broll"] = [x for x in on.get("broll", []) if x.get("file") != ch["file"]] + [
+                {"file": ch["file"], "in": 0.0, "dur": round(dur, 2), "at": round(at, 2), "why": f"From the web page {ch.get('title') or ch.get('url', '')}"[:160],
+                 "source": {"url": ch.get("url", ""), "title": ch.get("title", ""), "captured": ch.get("captured", "")}}]
+            changes.append(f"Put the web page {ch.get('host') or ch.get('url', '')} over the clip at {at_text}")
         elif n["kind"] == "trim" and b.get("aroll"):
             a = b["aroll"]
             lo, hi = float(a["span_in"]), float(a["span_out"])

@@ -16,6 +16,7 @@ _PIPELINES = {
     "options": ("Looking for more takes", "More takes found", 2),
     "teaching": ("Looking for teaching moments", "Teaching moments found", 1),
     "moments": ("Looking for fun moments", "Fun moments found", 1),
+    "webcapture": ("Capturing the web page", "Web page captured: make the next cut to see it", 1),
     "publish": ("Writing the publishing details", "Publishing details ready", 2),
     "shorts": ("Working on your shorts", "Shorts ready", None),
     "score": ("Measuring the final against the reference videos", "Final measured", 3),
@@ -62,7 +63,7 @@ def job_sentence(job: dict, now: float | None = None) -> dict:
 # ----------------------------------------------------------------------------- home and step bar
 STEPS = [("outline", "Outline"), ("footage", "Footage"), ("rough-cut", "Rough cut"), ("preview", "Preview"), ("final", "Final"), ("shorts", "Shorts")]
 STEP_IDS = [s for s, _ in STEPS]
-_PIPELINE_STEP = {"archive": "final", "vision": "footage", "options": "rough-cut", "teaching": "rough-cut", "moments": "rough-cut", "analyze": "footage", "clipmap": "footage", "cut": "rough-cut", "preview": "preview", "outline": "outline", "final": "final",
+_PIPELINE_STEP = {"archive": "final", "vision": "footage", "options": "rough-cut", "teaching": "rough-cut", "moments": "rough-cut", "webcapture": "rough-cut", "analyze": "footage", "clipmap": "footage", "cut": "rough-cut", "preview": "preview", "outline": "outline", "final": "final",
                   "publish": "final", "shorts": "shorts", "score": "final"}
 
 
@@ -253,7 +254,9 @@ def review(work: str, name: str, stage: str, version: int | None = None, running
     key = key_of(work, name)
     notes = reviewnotes.notes(work, name, stage)
     open_n = [n for n in notes if n.get("status") != "done"]
-    pending = {n["clip"]: n["kind"] for n in open_n if n.get("choice") is not None and n.get("clip")}
+    pending = {n["clip"]: n["kind"] for n in open_n if n.get("choice") is not None and n.get("clip") and n.get("kind") != "web"}
+    web = {n["clip"]: n["choice"] for n in open_n if n.get("kind") == "web" and n.get("clip")}
+    from pathlib import Path
     label = lambda n: reviewnotes.label(stage, n)           # noqa: E731
     out = {"key": key, "stage": stage, "has_video": cur is not None, "version": None, "versions": [], "notes": [], "clips": [], "button": None,
            "teaching": [], "moments": [], "graphics": []}
@@ -270,6 +273,9 @@ def review(work: str, name: str, stage: str, version: int | None = None, running
             mid = c["start"] + c["dur"] / 2
             out["clips"].append({"start": c["start"], "dur": c["dur"], "at": time_text(c["start"]), "share": c["dur"] / total if total else 0,
                                  "ref": c.get("ref"), "pending": pending.get(c.get("ref")),
+                                 "web": ({"host": web[c["ref"]].get("host", ""), "title": web[c["ref"]].get("title", ""), "found": web[c["ref"]].get("found", True),
+                                          "still": f"/media/{quote(work)}/web-broll/{quote(Path(web[c['ref']].get('still', '')).name)}",
+                                          "video": f"/media/{quote(work)}/web-broll/{quote(Path(web[c['ref']]['file']).name)}"} if c.get("ref") in web else None),
                                  "frame": f"/api/v2/frame?key={quote(key)}&file={quote(cur['file'])}&t={mid:.1f}"})
     for n in sorted(notes, key=lambda x: (not x.get("whole"), x["t"])):
         when = "Whole video" if n.get("whole") else time_text(n["t"]) + (f"–{time_text(n['t_end'])}" if n.get("t_end") is not None else "")

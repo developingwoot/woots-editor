@@ -86,7 +86,9 @@ def screen(base, page):
         page.goto(base + path)
         page.wait_for_load_state("networkidle")
         return page
+    go.allow = set()                                                # a test that expects an error answer names it here (a refused request logs one)
     yield go
+    errors = [e for e in errors if not any(a in e for a in go.allow)]
     assert not errors, errors
 
 

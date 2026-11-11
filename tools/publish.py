@@ -91,6 +91,24 @@ def chapter_lines(work: str, name: str) -> list:
         return []
 
 
+def web_credits(work: str, name: str) -> list:
+    """Web pages shown in the video (B-roll captured from a page): one credit line each, the page's title and address."""
+    try:
+        bm = json.loads((WORK / work / f"{name}.beatmap.json").read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return []
+    out = []
+    for b in bm.get("beats", []):
+        if b.get("skip"):
+            continue
+        for x in (b.get("on_screen") or {}).get("broll", []):
+            src = x.get("source") or {}
+            line = " - ".join(v for v in (src.get("title", "").strip(), src.get("url", "").strip()) if v)
+            if src.get("url") and line not in out:
+                out.append(line)
+    return out
+
+
 def build_description(hook: str, summary: str, chapters: list, credits: list) -> str:
     parts = [_clean(hook, 300), _clean(summary, 1200)]
     if chapters:
@@ -168,7 +186,7 @@ def apply_answer(work: str, name: str, p: Path) -> tuple[bool, str]:
     if d["title"] and d["title"] not in titles:
         d["titles"].append(d["title"])                     # a title the creator chose or typed is never thrown away
     d["title_why"] = {t: w for t, w in why.items() if t in titles}
-    d["description"] = build_description(_clean(a.get("hook"), n["hook_max_chars"]), a.get("summary"), chapter_lines(work, name), [str(c) for c in a.get("credits") or []])
+    d["description"] = build_description(_clean(a.get("hook"), n["hook_max_chars"]), a.get("summary"), chapter_lines(work, name), [str(c) for c in a.get("credits") or []] + web_credits(work, name))
     d["tags"] = clean_tags([str(t) for t in a.get("tags") or []], n["tags_max"])
     d["pinned_comment"] = _clean(a.get("pinned_comment"), 300)
     d["thumbnail_prompts"] = [x for x in (_clean(x, 400) for x in a.get("thumbnail_prompts") or []) if x][:3]

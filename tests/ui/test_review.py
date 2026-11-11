@@ -193,3 +193,16 @@ def test_a_note_can_be_about_the_whole_video(screen):
     assert page.locator("#notes .when").inner_text() == "Whole video"
     assert page.locator("#wholeNote").is_checked() is False
     assert clutter(visible_text(page)) == []
+
+
+def test_a_web_page_can_be_asked_for_on_a_clip_and_a_local_address_is_refused(screen):
+    screen.allow.add("status of 400")                               # the refusal is an error answer, shown as a message
+    page, _ = open_cut(screen, "ui web broll")
+    page.locator("#strip .clip").nth(1).click()
+    page.click("#actWeb")
+    expect(page.locator("#webUrl")).to_be_visible()
+    assert "added to the credits" in page.locator("#clipPanel").inner_text()
+    page.fill("#webUrl", "http://127.0.0.1:8765/")
+    page.click("#webGo")
+    expect(page.locator("#sayBar")).to_contain_text("private network")
+    assert clutter(visible_text(page)) == []
