@@ -182,3 +182,14 @@ def test_graphics_in_the_preview_can_be_skipped_before_the_build(screen):
     page.locator("#graphicsList .tick").click()
     expect(page.locator("#graphicsList summary")).to_have_text("Graphics in this preview (0)")
     assert clutter(visible_text(page)) == []
+
+
+def test_a_note_can_be_about_the_whole_video(screen):
+    page, _ = open_cut(screen, "ui whole note")
+    page.fill("#noteText", "The video is too long, kill more darlings")
+    page.check("#wholeNote")
+    page.press("#noteText", "Enter")
+    expect(page.locator("#notes li")).to_have_count(1)
+    assert page.locator("#notes .when").inner_text() == "Whole video"
+    assert page.locator("#wholeNote").is_checked() is False
+    assert clutter(visible_text(page)) == []

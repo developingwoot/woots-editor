@@ -657,6 +657,57 @@ def start_make_version(work, name, stage):
     return job
 
 
+def mark_reads_stale(work, name):
+    """New recordings were read: the takes read, the story and the cut read were made for the old set, so each is made again with the next cut (their answers stay until then)."""
+    import story
+    for mod in (takes, story, cutreview):
+        p = mod.path(work, name)
+        data = read_json(p, None)
+        if isinstance(data, dict) and data.get("v"):
+            data["v"] = 0
+            projectstore.write_json(p, data, why="new recordings")
+
+
+def start_read_recordings(work, name):
+    """Read (speech to words) and look at every recording that is new since last time, without making a cut. Make the rough cut again afterwards to use them."""
+    import brolllib
+    import footageview
+    rec = footageview.recordings(work, name)
+    if not rec["folder"]:
+        raise ValueError("choose the folder you recorded into first")
+    job = _job("analyze", ["read the new recordings", "look at the new footage"])
+    job.update(work=work, name=name)
+    fake = bool(os.environ.get("WOOTS_FAKE_CLAUDE"))
+
+    def run():
+        import hashlib
+        try:
+            job["ok"] = True
+            if rec["unread_refs"] and not fake:
+                paths = [(rel, footage_path_ok(work, name, rel)) for rel in rec["unread_refs"]]
+                tdir = work_dir(work) / "footage"
+                tdir.mkdir(exist_ok=True)
+                items = [{"src": str(p), "out": str(tdir / (hashlib.sha1(rel.encode()).hexdigest()[:10] + ".transcript.json"))} for rel, p in paths]
+                man = tdir / "analyze.manifest.json"
+                man.write_text(json.dumps(items), encoding="utf-8")
+                if not _transcribe(job, work, name, paths, items, man):
+                    job["log"] += "\nreading the recordings failed"
+                    job["ok"] = False
+                    return
+            if rec["unread_refs"]:
+                with _lock:
+                    mark_reads_stale(work, name)
+            job["step"] = 1
+            if not job.get("stop") and not fake and not brolllib.state(work, name)["ready"] and not _look_at_footage(job, work, name):
+                job["log"] += "\nlooking at the footage failed"
+                job["ok"] = False
+        finally:
+            job["done"] = True
+            job["elapsed"] = round(time.time() - job["started"], 1)
+    threading.Thread(target=run, daemon=True).start()
+    return job
+
+
 def start_rough_cut(work, name):
     """The Footage step's one button: read any recordings not read yet, look at all the footage, match the takes to the outline, build the beat map,
     find footage for the shot ideas, then cut the clips together and keep it as the next cut. Each part is skipped when it is already done."""
@@ -702,6 +753,9 @@ def start_rough_cut(work, name):
                 man.write_text(json.dumps(items), encoding="utf-8")
                 if not _transcribe(job, work, name, paths, items, man):
                     return fail("\nreading the recordings failed")
+            if rec["unread_refs"]:
+                with _lock:
+                    mark_reads_stale(work, name)
             if job.get("stop"):
                 return fail(" Stopped.")
             if not has_outline:                                                   # no outline: Claude writes one from what was recorded (C2)
@@ -1517,7 +1571,7 @@ class Handler(BaseHTTPRequestHandler):
                 with _lock:
                     op = b["op"]
                     if op == "add":
-                        reviewnotes.add(work, name, b["stage"], b.get("text"), b.get("t", 0), b.get("t_end"))
+                        reviewnotes.add(work, name, b["stage"], b.get("text"), b.get("t", 0), b.get("t_end"), whole=bool(b.get("whole")))
                     elif op == "edit":
                         reviewnotes.edit(work, name, b["stage"], int(b["id"]), b.get("text"))
                     elif op == "delete":
@@ -1607,6 +1661,9 @@ class Handler(BaseHTTPRequestHandler):
                     else:
                         raise ValueError("unknown operation")
                 return self.send_json({"tags": tags.load(work, name)})
+            if u.path == "/api/v2/footage/read":
+                work, name = views.split_key(b["key"])
+                return self.send_json({"id": start_read_recordings(work, name)["id"]})
             if u.path == "/api/v2/footage/cut":
                 work, name = views.split_key(b["key"])
                 return self.send_json({"id": start_rough_cut(work, name)["id"]})

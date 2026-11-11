@@ -42,6 +42,9 @@ export async function render(root, key, setBusy) {
       go.disabled = true;
       try { await post('/api/v2/footage/cut'); setBusy(); } catch (e) { say(e.message); go.disabled = false; }
     } }, b.label);
+    const readNew = d.read_button.visible ? h('div', { class: 'card makebar', id: 'readNewCard' },
+      h('button', { class: 'quiet', id: 'readNew', onclick: async e => { e.target.disabled = true; try { await post('/api/v2/footage/read'); setBusy(); } catch (err) { say(err.message); e.target.disabled = false; } } }, d.read_button.label),
+      h('div', { class: 'muted small' }, `${d.read_button.detail} (${d.read_button.estimate})`)) : null;
     const copy = d.missing.length ? h('button', { class: 'quiet', id: 'copyMissing', onclick: async () => {
       try { await navigator.clipboard.writeText(d.missing.join('\n')); copy.textContent = 'Copied'; } catch { copy.textContent = 'Could not copy'; }
     } }, `Copy the list of missing shots (${d.missing.length})`) : null;
@@ -63,7 +66,7 @@ export async function render(root, key, setBusy) {
           r.ignored ? null : h('button', { class: 'quiet tiny tagBtn', title: 'Say what is on screen in this clip', onclick: async () => { await tagClip(key, r.ref); draw(await api(`/api/v2/footage?key=${encodeURIComponent(key)}`)); } }, 'Tag'),
           h('button', { class: 'quiet tiny', title: r.ignored ? 'Use this recording' : 'This recording is not part of this video', onclick: async () => draw(await post('/api/v2/footage/ignore', { rel: r.ref, ignore: !r.ignored })) }, r.ignored ? 'Use it' : 'Leave out')))))) : null;
 
-    root.replaceChildren(...[folderCard, bar, shots, grid].filter(Boolean));
+    root.replaceChildren(...[folderCard, readNew, bar, shots, grid].filter(Boolean));
   }
   await draw(await api(`/api/v2/footage?key=${encodeURIComponent(key)}`));
 }

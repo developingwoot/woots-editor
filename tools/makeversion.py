@@ -58,14 +58,17 @@ def plain_notes(work: str, name: str, stage: str) -> list:
 def brief(work: str, name: str, stage: str, fd: Path) -> str:
     """Write the notes and the plan into fd and return the prompt. Claude answers in answer.json (see apply_answer)."""
     fd.mkdir(parents=True, exist_ok=True)
-    notes = [{"id": n["id"], "time": views.time_text(n["t"]), "until": views.time_text(n["t_end"]) if n.get("t_end") is not None else None,
-              "note": n["text"]} for n in plain_notes(work, name, stage)]
+    notes = [({"id": n["id"], "time": "whole video", "until": None, "note": n["text"]} if n.get("whole") else
+              {"id": n["id"], "time": views.time_text(n["t"]), "until": views.time_text(n["t_end"]) if n.get("t_end") is not None else None, "note": n["text"]})
+             for n in plain_notes(work, name, stage)]
     (fd / "notes.json").write_text(json.dumps(notes, indent=1), encoding="utf-8")
     bm = read_json(WORK / work / f"{name}.beatmap.json")
     if bm is not None:
         (fd / "beatmap.json").write_text(json.dumps(bm, indent=1), encoding="utf-8")
     return (
         f"The host watched the {'rough cut' if stage == 'cut' else 'preview'} of the host's video and left notes (notes.json, times are minutes:seconds into the video).\n"
+        "A note whose time is \"whole video\" is about the video as a whole (for example: too long, cut more, be pickier). Apply it across the plan: set `skip` on the weakest beats (never a beat the host marked good), "
+        "shorten, or tighten as the note asks, and say in the summary what you did overall.\n"
         "beatmap.json is the plan the video is built from. For each note, decide whether a change to the beat map makes the video match what the host asked.\n"
         "Write answer.json in this folder:\n"
         '{"applied": [{"id": <note id>, "summary": "<one plain sentence about what you changed, no ids or file names>"}],\n'

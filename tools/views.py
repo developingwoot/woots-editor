@@ -271,9 +271,9 @@ def review(work: str, name: str, stage: str, version: int | None = None, running
             out["clips"].append({"start": c["start"], "dur": c["dur"], "at": time_text(c["start"]), "share": c["dur"] / total if total else 0,
                                  "ref": c.get("ref"), "pending": pending.get(c.get("ref")),
                                  "frame": f"/api/v2/frame?key={quote(key)}&file={quote(cur['file'])}&t={mid:.1f}"})
-    for n in sorted(notes, key=lambda x: x["t"]):
-        when = time_text(n["t"]) + (f"–{time_text(n['t_end'])}" if n.get("t_end") is not None else "")
-        out["notes"].append({"id": n["id"], "t": n["t"], "t_end": n.get("t_end"), "when": when, "text": n["text"], "done": n.get("status") == "done",
+    for n in sorted(notes, key=lambda x: (not x.get("whole"), x["t"])):
+        when = "Whole video" if n.get("whole") else time_text(n["t"]) + (f"–{time_text(n['t_end'])}" if n.get("t_end") is not None else "")
+        out["notes"].append({"id": n["id"], "t": n["t"], "t_end": n.get("t_end"), "when": when, "text": n["text"], "done": n.get("status") == "done", "whole": bool(n.get("whole")),
                              "done_in": label(n["applied_in"]) if n.get("applied_in") else None, "clip_change": n.get("choice") is not None})
     nxt = (vs[-1]["n"] + 1) if vs else 1
     changes = sum(1 for n in open_n if n.get("choice") is not None)
@@ -523,6 +523,8 @@ def footage_view(work: str, name: str, running: bool = False, reading: bool = Fa
                                    "guessed": rec["how"] == "guessed", "set": bool(rec["folder"])},
             "recordings": {k: rec[k] for k in ("total", "read", "unread", "looked", "ignored", "thin", "rows")}, "has_outline": has_outline, "sections": sections,
             "missing": miss,
+            "read_button": {"label": f"Read the {rec['unread']} new recording{'s' if rec['unread'] != 1 else ''}", "visible": bool(rec["unread"]) and not running and not reading,
+                            "detail": "Turns what you said into words and looks at the footage. Then make the rough cut again to use it.", "estimate": minutes_text(_PIPELINES["analyze"][2])},
             "button": {"label": "Make the rough cut again" if cut_made else "Write the outline and make the rough cut" if not has_outline else "Make the rough cut", "enabled": not why and not running, "why": why,
                        "detail": ("First it " + ", ".join(steps[:-1]) + " and " + steps[-1] + ".") if not why and len(steps) > 1 else "",
                        "estimate": cut_estimate(rec["unread"])},

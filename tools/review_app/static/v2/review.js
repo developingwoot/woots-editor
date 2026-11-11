@@ -46,6 +46,7 @@ export async function render(root, key, stage, setBusy) {
     const panel = h('div', { class: 'clipPanel', id: 'clipPanel', hidden: true });
     const noteBox = h('input', { id: 'noteText', type: 'text', placeholder: 'Type a note, press Enter', autocomplete: 'off' });
     const rangeHint = h('div', { class: 'muted small', id: 'rangeHint' });
+    const wholeBox = h('input', { type: 'checkbox', id: 'wholeNote' });
 
     const pad = () => (state.range ? `${fmt(state.range[0])}–${fmt(state.range[1])}` : fmt(state.pin ?? (video.currentTime || 0)));
     const addNote = async () => {
@@ -55,7 +56,9 @@ export async function render(root, key, stage, setBusy) {
       const t_end = state.range ? state.range[1] : null;
       noteBox.value = '';
       state.range = state.pin = null;
-      await draw(await post('/api/v2/notes', { op: 'add', text, t, t_end }));
+      const whole = wholeBox.checked;
+      wholeBox.checked = false;
+      await draw(await post('/api/v2/notes', { op: 'add', text, t, t_end, whole }));
     };
     noteBox.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') addNote(); });
     noteBox.addEventListener('focus', () => { rangeHint.textContent = `Note at ${pad()}`; });
@@ -142,7 +145,7 @@ export async function render(root, key, stage, setBusy) {
       ...data.versions.map(x => h('option', { value: x.n, selected: x.current }, x.label + (x.latest ? ' (latest)' : ''))));
 
     const notesList = h('ul', { class: 'notes', id: 'notes' }, ...data.notes.map(n => h('li', { class: n.done ? 'done' : '' },
-      h('a', { class: 'when', href: '#', onclick: e => { e.preventDefault(); video.currentTime = n.t; } }, n.when),
+      h('a', { class: 'when', href: '#', onclick: e => { e.preventDefault(); if (!n.whole) video.currentTime = n.t; } }, n.when),
       n.clip_change ? h('span', { class: 'ntext' }, n.text) : h('span', { class: 'ntext', contenteditable: 'true', spellcheck: 'false', onblur: async e => {
         const text = e.target.textContent.trim();
         if (text && text !== n.text) await post('/api/v2/notes', { op: 'edit', id: n.id, text });
@@ -192,7 +195,7 @@ export async function render(root, key, stage, setBusy) {
             h('span', { class: 'when' }, g.when), h('span', { class: 'ntext' }, h('b', {}, g.what), ' ', h('span', { class: 'muted' }, [g.kind, g.words && `over “${g.words.slice(0, 60)}”`].filter(Boolean).join(' · '))),
             h('button', { class: 'tick' + (g.skipped ? ' on' : ''), 'aria-label': g.skipped ? 'Build this graphic again' : 'Skip this graphic', title: g.skipped ? 'Skipped: click to build it' : 'Skip this graphic',
               onclick: async () => draw(await post('/api/v2/graphics/skip', { beat: g.beat, skip: !g.skipped })) }, '✕'))))) : null,
-        notesList, noteBox, rangeHint,
+        notesList, noteBox, h('label', { class: 'muted small wholeLabel' }, wholeBox, ' This note is about the whole video (too long, be pickier, more energy)'), rangeHint,
         h('div', { class: 'makebox' }, makeButton(b), h('div', { class: 'muted small' }, [b.detail, b.estimate].filter(Boolean).join(' · ')), copy))));
     if (reopen) { selected = reopen; reopen = null; const c = data.clips.find(x => x.ref === selected); if (c) { await openPanel(c); document.getElementById('actReplace').click(); } }
     else if (selected) { const c = data.clips.find(x => x.ref === selected); if (c) openPanel(c); }

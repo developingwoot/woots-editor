@@ -89,7 +89,8 @@ def open_notes(work: str, name: str, stage: str) -> list:
     return [n for n in notes(work, name, stage) if n.get("status") != "done"]
 
 
-def add(work: str, name: str, stage: str, text: str, t: float, t_end: float | None = None, clip=None, kind: str = "note") -> dict:
+def add(work: str, name: str, stage: str, text: str, t: float, t_end: float | None = None, clip=None, kind: str = "note", whole: bool = False) -> dict:
+    """`whole`: a note about the whole video, not a moment in it (too long, tighter, more energy): it has no time and Claude applies it across the plan."""
     text = " ".join(str(text or "").split())
     if len(text) < 2:
         raise ValueError("write the note first")
@@ -99,6 +100,8 @@ def add(work: str, name: str, stage: str, text: str, t: float, t_end: float | No
         note = {"id": 1 + max([n["id"] for n in lst] + [0]), "t": round(max(0.0, float(t)), 1),
                 "t_end": None if t_end is None else round(float(t_end), 1), "text": text[:800], "clip": clip, "kind": kind,
                 "status": "open", "applied_in": None}
+        if whole:
+            note.update(t=0.0, t_end=None, whole=True)
         lst.append(note)
         save(work, name, j)
     return note

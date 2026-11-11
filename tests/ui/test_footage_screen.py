@@ -91,3 +91,22 @@ def test_a_recording_can_be_left_out_and_put_back(screen):
     page.locator("#recordings .rec.ignored button", has_text="Use it").click()
     expect(page.locator("#recordings .rec.ignored")).to_have_count(0)
     assert "5 recordings" in page.inner_text("#footageSummary") and "left out" not in page.inner_text("#footageSummary")
+
+
+def test_new_recordings_can_be_read_without_making_a_cut(screen):
+    import json
+    page, r = open_footage(screen, "ui footage read new")
+    page.wait_for_selector("#cutBtn")
+    assert page.locator("#readNew").count() == 0                          # everything is read: no button
+    fp = r["dir"] / f"{r['name']}.footage.json"
+    cfg = json.loads(fp.read_text(encoding="utf-8"))
+    cfg["analysis"].pop(next(iter(cfg["analysis"])))                      # one recording is new
+    fp.write_text(json.dumps(cfg), encoding="utf-8")
+    page.reload()
+    page.wait_for_selector("#readNew")
+    assert page.inner_text("#readNew") == "Read the 1 new recording"
+    assert page.locator('#recordings .rec[data-speech="not read yet"]').count() == 1
+    page.click("#readNew")                                                # the test server fakes the reading: the job starts and ends at once
+    page.wait_for_timeout(1500)
+    assert page.locator("#sayBar:visible").count() == 0                   # no error message
+    assert clutter(visible_text(page)) == []

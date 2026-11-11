@@ -1,0 +1,42 @@
+import json
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "fixtures"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools" / "review_app"))
+import make_project  # noqa: E402
+import makeversion  # noqa: E402
+import reviewnotes  # noqa: E402
+import views  # noqa: E402
+
+needs_ffmpeg = pytest.mark.skipif(not make_project.have_ffmpeg(), reason="ffmpeg missing")
+
+
+@needs_ffmpeg
+def test_a_note_for_the_whole_video_has_no_time_and_claude_is_told_so(tmp_path):
+    r = make_project.build(cut=True, title="whole note")
+    w, n = r["work"], r["name"]
+    reviewnotes.add(w, n, "cut", "Be more judicious about killing darlings", 12.0)
+    reviewnotes.add(w, n, "cut", "The video is too long", 99.0, whole=True)
+    view = views.review(w, n, "cut")
+    assert [x["when"] for x in view["notes"]][0] == "Whole video" and view["notes"][0]["whole"] and view["notes"][0]["t"] == 0.0
+    assert not view["notes"][1]["whole"]
+    prompt = makeversion.brief(w, n, "cut", tmp_path)
+    sent = json.loads((tmp_path / "notes.json").read_text(encoding="utf-8"))
+    assert {x["note"]: x["time"] for x in sent}["The video is too long"] == "whole video"
+    assert "whole video" in prompt and "skip" in prompt
+
+
+def test_reads_made_for_the_old_recordings_are_marked_to_be_made_again(tmp_path, monkeypatch):
+    import server
+    import story
+    monkeypatch.setattr(server, "takes", type("T", (), {"path": staticmethod(lambda w, n: tmp_path / "t.json")}))
+    monkeypatch.setattr(story, "path", lambda w, n: tmp_path / "s.json")
+    (tmp_path / "t.json").write_text(json.dumps({"v": 2, "x": 1}), encoding="utf-8")
+    (tmp_path / "s.json").write_text(json.dumps({"v": 1, "logline": "kept"}), encoding="utf-8")
+    server.mark_reads_stale("w", "n")
+    assert json.loads((tmp_path / "t.json").read_text(encoding="utf-8")) == {"v": 0, "x": 1}
+    assert json.loads((tmp_path / "s.json").read_text(encoding="utf-8"))["logline"] == "kept"
+    assert json.loads((tmp_path / "s.json").read_text(encoding="utf-8"))["v"] == 0
