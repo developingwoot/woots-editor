@@ -84,6 +84,23 @@ def test_fact_check_card_shows_the_problems_with_sources_and_can_dismiss_one(scr
     assert "Dismissed (1)" in page.inner_text("#factCard")
 
 
+def test_a_right_claim_offers_show_the_source_and_a_refused_page_says_why(screen):
+    import views
+    r = make_project.build(cut=True, title="ui fact source")
+    (r["dir"] / f"{r['name']}.accuracy.json").write_text(json.dumps({"status": "done", "summary": "All right.", "dismissed": [], "findings": [], "claims": [
+        {"id": "C01", "beat": "B02", "verdict": "correct", "quote": "Gears turn", "claim": "y", "explanation": "",
+         "sources": [{"title": "Gear page", "url": "http://127.0.0.1:9/gears", "evidence": "gears turn together"}]},
+        {"id": "C02", "verdict": "correct", "quote": "Teeth mesh", "claim": "z", "explanation": "", "sources": []}]}), encoding="utf-8")
+    page = screen(f"/v2/#/v/{views.key_of(r['work'], r['name'])}/final")
+    page.wait_for_selector("#factCard #factRight")
+    page.click("#factRight summary")
+    assert "gears turn together" in page.inner_text("#factRight") and "No web page was given" in page.inner_text("#factRight")
+    screen.allow.add("status of 400")                               # a page on this computer is refused, and the refusal is shown
+    page.click("#factRight button[data-claim='C01']")
+    expect(page.locator("#sayBar")).to_contain_text("private network")
+    expect(page.locator("#factRight button[data-claim='C01']")).to_be_enabled()
+
+
 def test_resolve_card_says_what_is_needed_and_the_usage_line_shows_on_home(screen):
     page, r = outline(screen, "ui resolve")
     page.goto(page.url.rsplit("/", 1)[0] + "/final")

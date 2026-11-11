@@ -5,6 +5,7 @@ What changed in each release, written for the people who use the app. Newest fir
 ## Unreleased
 
 - B-roll from a web page: on any clip of the rough cut, paste a page's address (and the words to highlight) and the page is captured as a short clip over that clip, scrolling to the words or as a still with a slow zoom. Only public pages; the address goes into the description's credits.
+- Show the source: the fact check now keeps the words on each source page that back a claim. For a claim it found right, "Show the source" captures that page, scrolled to those words and highlighted, over the clip where you say it.
 - Notes can be about the whole video ("too long, be pickier").
 - New recordings can be read on the Footage screen without making a cut.
 

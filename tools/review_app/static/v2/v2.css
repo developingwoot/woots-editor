@@ -240,6 +240,8 @@ ul.history li, ul.facts li { display: flex; flex-wrap: wrap; align-items: baseli
 ul.history .when { color: #666; font-size: 13px; }
 ul.facts li { flex-direction: column; align-items: flex-start; gap: 4px; }
 ul.facts .quote { font-style: italic; }
+.factRight { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 6px 0; border-top: 1px solid #ddd; }
+.factRight .quote { font-style: italic; }
 .bed { padding: 8px 0; border-top: 1px solid #ddd; }
 .bed .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .auditionPlayer { width: 100%; max-width: 420px; margin-top: 6px; }

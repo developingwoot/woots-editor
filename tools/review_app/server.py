@@ -1634,6 +1634,10 @@ class Handler(BaseHTTPRequestHandler):
                 work, name = views.split_key(b["key"])
                 return self.send_json({"id": start_web_broll(work, name, b["clip"], b.get("url", ""), b.get("style", "scroll"), " ".join(str(b.get("find") or "").split())[:300],
                                                              b.get("seconds", 5), float(b.get("at") or 0))["id"]})
+            if u.path == "/api/v2/factsource":                                # "Show the source": the fact check's page over the clip where the claim is said
+                work, name = views.split_key(b["key"])
+                s = accuracy.source_plan(work, name, str(b.get("id") or ""))
+                return self.send_json({"id": start_web_broll(work, name, s["clip"], s["url"], "scroll", s["find"], s["seconds"], s["at"])["id"], "at": s["at"]})
             if u.path == "/api/v2/clipchoice":
                 import cutview
                 work, name = views.split_key(b["key"])

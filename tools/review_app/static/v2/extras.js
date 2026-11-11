@@ -1,10 +1,12 @@
-import { h, api } from './util.js';
+import { h, api, say } from './util.js';
 
 // Cards that sit on the Preview and Final screens: the fact check, the music chooser, the DaVinci Resolve export. A usage line for Home.
 const enc = encodeURIComponent;
 const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const VERDICT = { incorrect: 'Wrong', misleading: 'Misleading', imprecise: 'Not precise', unverifiable: 'Could not confirm' };
 const safeLink = u => /^https?:\/\//i.test(u || '');
+// The page to show for a claim (same choice as accuracy.best_source): the first web link with evidence words, else the first web link.
+const source = c => { const ok = (c.sources || []).filter(s => s && safeLink(s.url)); return ok.find(s => (s.evidence || '').trim()) || ok[0] || null; };
 
 // --- Check the facts: Claude checks what is said against real sources; this only reports, it never changes the plan.
 export function factCheckCard(key) {
@@ -31,6 +33,7 @@ export function factCheckCard(key) {
     const gone = new Set(d.dismissed || []);
     const open = d.findings.filter(f => !gone.has(f.id));
     const closed = d.findings.filter(f => gone.has(f.id));
+    const right = d.claims.filter(c => c.verdict === 'correct');
     const dismiss = (f, undo) => async () => draw(await api('/api/accuracy/dismiss', { work, name, id: f.id, undo }));
     body.replaceChildren(
       d.summary ? h('p', { id: 'factSummary' }, d.summary) : null,
@@ -43,6 +46,20 @@ export function factCheckCard(key) {
         h('button', { class: 'quiet', onclick: dismiss(f, false) }, 'Dismiss')))) : h('p', { class: 'muted', id: 'factNone' }, 'No problems found.'),
       closed.length ? h('details', {}, h('summary', {}, `Dismissed (${closed.length})`),
         ...closed.map(f => h('div', { class: 'small' }, `“${f.quote}” `, h('button', { class: 'quiet', onclick: dismiss(f, true) }, 'Bring back')))) : null,
+      right.length ? h('details', { id: 'factRight' }, h('summary', {}, `Checked and right (${right.length}): show a source on screen`),
+        h('p', { class: 'muted small' }, 'Show the source captures the page, scrolled to the words that back the claim and highlighted, over the clip where you say it. It goes in with the next cut, and the page is added to the credits.'),
+        ...right.map(f => {
+          const s = source(f);
+          const btn = s ? h('button', { class: 'quiet', 'data-claim': f.id, onclick: async () => {
+            btn.disabled = true;
+            try { await api('/api/v2/factsource', { key, id: f.id }); btn.textContent = 'Capturing…'; say('Capturing the source page. It goes over the clip in the next cut.'); }
+            catch (e) { say(e.message); btn.disabled = false; }
+          } }, 'Show the source') : null;
+          return h('div', { class: 'factRight' }, h('div', { class: 'quote' }, `“${f.quote}”`),
+            s ? h('div', { class: 'small' }, h('a', { href: s.url, target: '_blank', rel: 'noopener noreferrer' }, s.title || s.url),
+              s.evidence ? h('span', { class: 'muted' }, ` “${s.evidence}”`) : null) : h('div', { class: 'muted small' }, 'No web page was given for this one.'),
+            btn);
+        })) : null,
       d.claims.length ? h('p', { class: 'muted small' }, `${d.claims.length} claims checked.`) : null);
   };
   run.addEventListener('click', async () => {
