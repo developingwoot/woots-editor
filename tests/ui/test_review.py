@@ -129,8 +129,14 @@ def test_ideas_for_broll_and_on_screen_text_are_answered_on_the_card(screen):
     row = page.locator('#ideas li[data-kind="correction"]')
     assert "Correction" in row.inner_text()
     row.locator(".ideaText").fill("*the tape shirt")
+    page.evaluate("const v = document.getElementById('player'); v.currentTime = 5; v.dataset.mine = '1'")
+    page.wait_for_function("document.getElementById('player').currentTime >= 4.9")
+    row.locator("button.tick").first.scroll_into_view_if_needed()
+    scroll = page.evaluate("document.scrollingElement.scrollTop")
     row.locator("button.tick").first.click()                              # yes, with my own words
     expect(page.locator('#ideas li.yes[data-kind="correction"]')).to_have_count(1)
+    assert page.evaluate("[document.getElementById('player').dataset.mine, document.getElementById('player').currentTime]") == ["1", 5]   # the same player, at the same moment
+    assert abs(page.evaluate("document.scrollingElement.scrollTop") - scroll) < 2
     expect(page.locator('#ideas li[data-kind="correction"] .ideaText')).to_have_value("*the tape shirt")
     expect(page.locator("#makeBtn")).to_be_enabled()
     assert "Show “*the tape shirt” at" in page.locator("#notes").inner_text()

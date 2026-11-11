@@ -42,7 +42,13 @@ export async function render(root, key, stage, setBusy) {
       return;
     }
     const v = data.version;
-    const video = h('video', { id: 'player', src: v.video, controls: true, preload: 'metadata' });
+    // A redraw after an answer (a tick, a choice, a note) keeps the same player: same video, same moment, still playing, and the page where it was.
+    const prev = root.querySelector('#player');
+    const same = prev && prev.getAttribute('src') === v.video;
+    const playing = same && !prev.paused;
+    const scroller = document.scrollingElement;
+    const scrollY = scroller ? scroller.scrollTop : 0;
+    const video = same ? prev : h('video', { id: 'player', src: v.video, controls: true, preload: 'metadata' });
     const strip = h('div', { class: 'strip', id: 'strip' });
     const panel = h('div', { class: 'clipPanel', id: 'clipPanel', hidden: true });
     const noteBox = h('input', { id: 'noteText', type: 'text', placeholder: 'Type a note, press Enter', autocomplete: 'off' });
@@ -212,10 +218,10 @@ export async function render(root, key, stage, setBusy) {
       }, { once: true });
     });
 
-    video.addEventListener('timeupdate', () => {
+    video.ontimeupdate = () => {                         // a property, not a listener: the player is reused by the next redraw, with that redraw's strip
       const t = video.currentTime;
       for (const el of strip.children) el.classList.toggle('playing', t >= +el.dataset.start && t < +el.dataset.start + +el.dataset.dur);
-    });
+    };
 
     const verMenu = h('select', { id: 'versionMenu', onchange: async e => { version = +e.target.value; await draw(await load()); } },
       ...data.versions.map(x => h('option', { value: x.n, selected: x.current }, x.label + (x.latest ? ' (latest)' : ''))));
@@ -274,6 +280,10 @@ export async function render(root, key, stage, setBusy) {
               onclick: async () => draw(await post('/api/v2/graphics/skip', { beat: g.beat, skip: !g.skipped })) }, '✕'))))) : null,
         notesList, noteBox, h('label', { class: 'muted small wholeLabel' }, wholeBox, ' This note is about the whole video (too long, be pickier, more energy)'), rangeHint,
         h('div', { class: 'makebox' }, makeButton(b), h('div', { class: 'muted small' }, [b.detail, b.estimate].filter(Boolean).join(' · ')), copy))));
+    if (same) {
+      if (scroller) scroller.scrollTop = scrollY;
+      if (playing) video.play().catch(() => {});        // moving the player in the page pauses it
+    }
     if (reopen) { selected = reopen; reopen = null; const c = data.clips.find(x => x.ref === selected); if (c) { await openPanel(c); document.getElementById('actReplace').click(); } }
     else if (selected) { const c = data.clips.find(x => x.ref === selected); if (c) openPanel(c); }
     keyHandler = (e) => {
