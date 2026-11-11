@@ -253,9 +253,18 @@ def _add_choice(j: dict, i: dict, start: float, remove: bool = False):
                      "choice": {"idea": i["id"], **({"remove": True} if remove else {})}, "status": "open", "applied_in": None})
 
 
-def in_plan(b: dict, iid: str) -> bool:
+def in_plan(b: dict, i: dict) -> bool:
+    """The idea is in the plan already (a cut was made with it): its insert or text, or for a web page a page from its address on that clip."""
     on = b.get("on_screen") or {}
-    return any(x.get("idea") == iid for x in (on.get("broll") or []) + (on.get("text") or []))
+    if i["kind"] == "web":
+        return any((x.get("source") or {}).get("url") == i.get("url") for x in on.get("broll") or [])
+    return any(x.get("idea") == i["id"] for x in (on.get("broll") or []) + (on.get("text") or []))
+
+
+def web_in_plan(work: str, name: str, iid: str) -> bool:
+    i = next((x for x in load(work, name) if x["id"] == iid), None)
+    b = next((x for x in _bm(work, name).get("beats", []) if i and x["id"] == i["beat"]), None)
+    return bool(i and b and i["kind"] == "web" and in_plan(b, i))
 
 
 def set_status(work: str, name: str, iid: str, status: str, text: str | None = None) -> dict:
@@ -275,15 +284,15 @@ def set_status(work: str, name: str, iid: str, status: str, text: str | None = N
     b = next((x for x in _bm(work, name).get("beats", []) if x["id"] == i["beat"]), None)
     if b is None:
         raise ValueError("that clip is no longer in the cut")
-    if i["kind"] in ("footage", *TEXT_KINDS):
+    if i["kind"] in ("footage", "web", *TEXT_KINDS):
         start = _start(b, _times(work, name))
         with reviewnotes._lock:
             j = reviewnotes.load(work, name)
             _drop_choice(j, iid)
-            there = in_plan(b, iid)
-            if status == "yes" and not there:
+            there = in_plan(b, i)
+            if status == "yes" and not there and i["kind"] != "web":     # a web page is captured first (the server); its page becomes a web choice
                 _add_choice(j, i, start)
-            elif status != "yes" and there:
+            elif status != "yes" and there:                              # in the cut already: the next cut takes it out
                 _add_choice(j, i, start, remove=True)
             reviewnotes.save(work, name, j)
     elif i["kind"] == "film":
@@ -318,7 +327,8 @@ def apply_choice(work: str, name: str, b: dict, ch: dict) -> str | None:
     on = b.setdefault("on_screen", {"shot": "a-roll", "note": "", "broll": []})
     when = _clock(_start(b, _times(work, name)) + float(i.get("at") or 0))
     if ch.get("remove"):
-        on["broll"] = [x for x in on.get("broll", []) if x.get("idea") != i["id"]]
+        on["broll"] = [x for x in on.get("broll", []) if x.get("idea") != i["id"]
+                       and not (i["kind"] == "web" and (x.get("source") or {}).get("url") == i.get("url"))]
         on["text"] = [x for x in on.get("text") or [] if x.get("idea") != i["id"]]
         if not on["text"]:
             on.pop("text")

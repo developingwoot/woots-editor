@@ -1064,9 +1064,9 @@ def idea_answer(work, name, iid, status, text=None):
     if not i:
         raise ValueError("there is no such idea")
     if i["kind"] == "web":
-        if status == "yes":
+        if status == "yes" and not ideas.web_in_plan(work, name, iid):          # in the cut already (a no taken back): nothing to capture
             start_web_broll(work, name, i["beat"], i["url"], "scroll" if i.get("find") else "still", i.get("find", ""), 5, float(i.get("at") or 0))
-        elif i["status"] == "yes":
+        elif status != "yes" and i["status"] == "yes":                         # a capture still waiting for the next cut is dropped; one in the cut is taken out (set_status)
             with _lock:
                 cutview.set_choice(work, name, i["beat"], "noweb", "", 0)
     with _lock:

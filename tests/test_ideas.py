@@ -166,6 +166,27 @@ def test_a_yes_on_footage_puts_the_shot_over_the_clip(tmp_path):
     assert ins == {"file": "take3.mp4", "in": 0.2, "dur": 2.8, "at": 0.0, "why": "Idea: the end card", "idea": "i1"}
 
 
+def test_a_no_on_a_web_page_already_in_the_cut_takes_it_out(tmp_path, monkeypatch):
+    import webcapture
+    monkeypatch.setattr(webcapture, "check_url", lambda u: u)
+    r = make_project.build(cut=True, title="ideas web out")
+    w, n = r["work"], r["name"]
+    ideas.import_found(w, n, answer(tmp_path, [{"beat": "B01", "kind": "web", "url": "https://store.example/p2s", "text": "the product page"}]))
+    ideas.set_status(w, n, "i1", "yes")                                                         # the server captures it; the page goes in with a cut
+    assert not [x for x in reviewnotes.open_notes(w, n, "cut") if x.get("kind") == "idea"]
+    bm = plan(r)
+    b = next(x for x in bm["beats"] if x["id"] == "B01")
+    cutview.put_web(b, {"file": "page.mp4", "dur": 2.0, "at": 0.5, "url": "https://store.example/p2s", "title": "P2S"})
+    import beatmap
+    beatmap.write_json(r["dir"] / f"{n}.beatmap.json", bm)
+    assert ideas.web_in_plan(w, n, "i1")
+    ideas.set_status(w, n, "i1", "no")
+    assert [x["text"] for x in reviewnotes.open_notes(w, n, "cut")] == ["Take out: Show the product page at 0:00"]
+    out = cutview.apply_choices(w, n)
+    assert out["changes"] == ["Took out the idea at 0:00 (the product page)"] and beat(r, "B01")["on_screen"]["broll"] == []
+    assert not ideas.web_in_plan(w, n, "i1")
+
+
 def test_a_yes_on_a_shot_to_film_adds_a_pickup_and_a_no_removes_it(tmp_path):
     import shootplan
     r = make_project.build(cut=True, title="ideas film")
