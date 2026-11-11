@@ -319,7 +319,7 @@ def check_flash(c: Ctx):
     s, n = c.s, 0
     for o in c.T["overlays"]:
         si = o.get("seg_info")
-        if not si or not Path(o["file"]).exists():
+        if not si or o.get("card") or not Path(o["file"]).exists():            # a text card (a still PNG) is not an animated graphic
             continue
         m = c.mov(o["file"])
         if not m:
@@ -353,7 +353,7 @@ def check_late_text(c: Ctx):
     s, n, skipped = c.s, 0, 0
     for o in c.T["overlays"]:
         si, g = o.get("seg_info"), c.graphic_of(o["seg"])
-        if not si or not g.get("text") or not Path(o["file"]).exists():
+        if not si or o.get("card") or not g.get("text") or not Path(o["file"]).exists():
             continue
         m = c.mov(o["file"])
         if not m:
@@ -385,7 +385,7 @@ def check_plays_twice(c: Ctx):
     n, seen = 0, {}
     for o in c.T["overlays"]:
         si = o.get("seg_info")
-        if not si or not Path(o["file"]).exists():
+        if not si or o.get("card") or not Path(o["file"]).exists():            # a text card (a still PNG) is not an animated graphic
             continue
         m = c.mov(o["file"])
         if not m:
@@ -429,7 +429,7 @@ def check_face(c: Ctx):
     W, H = c.T["size"]
     for o in c.T["overlays"]:
         si = o.get("seg_info")
-        if not si or not Path(o["file"]).exists():
+        if not si or o.get("card") or not Path(o["file"]).exists():            # a text card (a still PNG) is not an animated graphic
             continue
         m = c.mov(o["file"])
         if not m or m["full_frame"]:

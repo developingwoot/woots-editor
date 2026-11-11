@@ -31,7 +31,7 @@ def files(skill: str, pattern: str = "*.md") -> list:
 DEFAULTS = {"min_piece_s": 3.0, "beat_min_s": 15.0, "beat_max_s": 30.0, "repeat_phrase_words": 4, "repeat_phrase_within_words": 40,
             "repeat_phrase_within_s": 20.0, "repeat_sentence_share": 0.5, "repeat_sentence_far_share": 0.7, "repeat_sentence_s": 60.0, "cold_open_after_s": 120.0,
             "cold_open_min_s": 6.0, "cold_open_max_s": 15.0, "broll_max_s": 8.0, "max_pause_s": 0.5, "broll_min_beat_s": 12.0, "retake_share": 0.6, "splice_min_words": 4, "punch_in_zoom": 1.3, "punch_hold_s": 15.0, "punch_flat_s": 30.0, "hook_total_s": 30.0, "min_words": 60, "min_words_per_s": 0.8,
-            "pace": "calm"}
+            "ideas_max": 12, "text_card_s": 4.0, "pace": "calm"}
 # "pace" in rough-cut.json picks how often the picture changes. "calm" uses the numbers in the file as they are; "fast" replaces these with a cut that changes
 # the picture every few seconds (the usual rhythm of maker and tech channels: median shot about 3 to 4 s, nothing on screen unchanged for much over 12 s)
 # and allows a longer hook as long as the picture keeps changing. Anything else is read as "calm".
@@ -62,6 +62,7 @@ RUN_FILES = {                                                      # which skill
     "publish": (*COMMON, "youtube-publish/SKILL.md", "youtube-publish/metadata.md", "youtube-script/hook-library.md"),
     "outline": (*COMMON,),
     "moments": (*COMMON, "youtube-graphics/moments.md", "youtube-graphics/graphics.json"),
+    "ideas": (*COMMON, "youtube-edit/ideas.md", "youtube-edit/rough-cut.json", "youtube-edit/lessons.md"),
 }
 
 

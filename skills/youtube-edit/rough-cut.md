@@ -20,6 +20,9 @@ The app builds the first cut from your recordings. It reads `rough-cut.json` (ev
 - **Cutaways.** B-roll covers at most `broll_max_s` seconds at a time and only when the picture shows what is being said.
 - **Transitions.** A cutaway comes in and goes out with a preset from `transitions.json` (a web page slides in with a whoosh, other B-roll is a plain cut, unless Settings say otherwise).
   To give one insert its own, put `"transition": "<preset id>"` on that insert in `on_screen.broll`. Use moves sparingly: a whoosh on every cutaway soon feels cheap.
+- **On-screen text.** A slip of the tongue is fixed with a short correction on screen instead of a retake: `on_screen.text` of the beat,
+  `[{"text": "*0.4 mm nozzle, not 0.6", "kind": "correction", "at": <seconds into the clip>, "dur": <about text_card_s>}]`. `kind` "detail" adds a short fact (a price, a model number).
+  At most about 8 words, one per clip. The suggestions and their rules are in `ideas.md`.
 - **Punch-ins.** A slow zoom of `punch_in_zoom` keeps a long shot alive; hold at most `punch_hold_s` before a change.
 - **The opening.** The hook, any cold open and the intro together fit `hook_total_s`: the point of the video starts by then.
 - **Cold open.** If the real start is later than `cold_open_after_s`, open with `cold_open_min_s` to `cold_open_max_s` seconds of the best line.

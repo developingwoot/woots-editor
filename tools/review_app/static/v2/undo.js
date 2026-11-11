@@ -4,7 +4,7 @@ import { h, api } from './util.js';
 // "History": the list of versions of this video's plan files, each with "Put this back".
 const enc = encodeURIComponent;
 const LABELS = { script: 'Script', clips: 'Clips', beatmap: 'Plan', graphicsplan: 'Graphics', graphicsreview: 'Graphics', notes: 'Notes', sectionnotes: 'Notes', watchnotes: 'Notes',
-  teaching: 'Teaching moments', publish: 'Publishing details', shots: 'Shots', takes: 'Takes', tags: 'Tags', locks: 'Locks', trims: 'Trims', footage: 'Footage', workflow: 'Settings', shorts: 'Shorts' };
+  teaching: 'Teaching moments', publish: 'Publishing details', shots: 'Shots', takes: 'Takes', tags: 'Tags', locks: 'Locks', trims: 'Trims', footage: 'Footage', workflow: 'Settings', shorts: 'Shorts', ideas: 'Ideas', moments: 'Fun moments' };
 const labelOf = (file, name) => { const rest = file.startsWith(name + '.') ? file.slice(name.length + 1) : file; const k = rest.split('.')[0]; return LABELS[k] || k; };
 const keyOf = () => { const m = /^#\/v\/([^/]+)\//.exec(location.hash); return m ? decodeURIComponent(m[1]) : null; };
 

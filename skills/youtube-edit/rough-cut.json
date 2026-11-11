@@ -22,5 +22,7 @@
   "broll_min_beat_s": 12,
   "retake_share": 0.6,
   "repeat_sentence_far_share": 0.7,
-  "splice_min_words": 4
+  "splice_min_words": 4,
+  "ideas_max": 12,
+  "text_card_s": 4.0
 }

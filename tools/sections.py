@@ -267,6 +267,29 @@ def _spread_overlay(b: dict, file: str, at: float, dur: float) -> list:
     return out or [{"seg": b["id"], "file": file, "at": at, "dur": dur}]
 
 
+def _text_overlays(b: dict, notes: list) -> list:
+    """The beat's on-screen text (on_screen.text, textcards.py) as still overlays that fade in on their first piece and out on their last."""
+    rows = (b.get("on_screen") or {}).get("text") or []
+    if not rows:
+        return []
+    import skillrules
+    import textcards
+    dflt, out = skillrules.rules()["text_card_s"], []
+    for x in rows:
+        e = textcards.entry(x, float(b.get("dur") or 0), dflt) if isinstance(x, dict) else None
+        if not e:
+            continue
+        try:
+            f = str(textcards.card(e["text"], e["kind"]))
+        except Exception as ex:                                        # noqa: BLE001  (a card that cannot be drawn is left out and reported)
+            notes.append(f"{b['id']}: the on-screen text '{e['text'][:30]}' could not be drawn ({ex})")
+            continue
+        parts = [{**p, "still": True, "card": True} for p in _spread_overlay(b, f, e["at"], e["dur"])]
+        parts[0]["fade_in"], parts[-1]["fade_out"] = True, True
+        out += parts
+    return out
+
+
 def _punch(beat: dict, k: int) -> tuple:
     """(zoom, eye line) of piece k of a beat: the alternating punch-in of framing.py, whose zoom keeps the eyes on one line of the screen."""
     p = (beat.get("on_screen") or {}).get("punch") or {}
@@ -339,6 +362,7 @@ def baseline_edit(beats: list[dict], folder: str, built: dict | None = None, siz
                 overlays.append({"seg": b["id"], "file": built[b["id"]]["file"], "at": float(built[b["id"]].get("at", g.get("at", 0.0))), "dur": float(g.get("dur") or 3)})
             elif g:
                 notes.append(f"{b['id']}: graphic '{g.get('idea', '')[:40]}' is not built yet")
+            overlays.extend(_text_overlays(b, notes))
             sfx.extend(_sfx_for(b, g, built, notes))
             continue
         if not a:
@@ -367,6 +391,7 @@ def baseline_edit(beats: list[dict], folder: str, built: dict | None = None, siz
             overlays.extend(_spread_overlay(b, built[b["id"]]["file"], float(built[b["id"]].get("at", g.get("at", 0.0))), float(g.get("dur") or 3)))
         elif g:
             notes.append(f"{b['id']}: graphic '{g.get('idea', '')[:40]}' is not built yet")
+        overlays.extend(_text_overlays(b, notes))
         sfx.extend(_sfx_for(b, g, built, notes))
     return {"size": list(size), "fps": fps, "snap": True, "segments": segs, "broll": broll, "overlays": overlays, "sfx": sfx, "notes": notes}
 

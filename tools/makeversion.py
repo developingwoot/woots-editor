@@ -83,6 +83,8 @@ def brief(work: str, name: str, stage: str, fd: Path) -> str:
         ' - a web page as B-roll: {"note": <id>, "do": "web", "time": "0:31", "url": "<the public address the note gives>", "find": "<a few words that are on that page to scroll to and highlight, or empty>", "seconds": 5}.'
         " The app captures the page itself; never say it cannot be done because there is no recording of the page.\n"
         ' - a sound effect: {"note": <id>, "do": "sfx", "time": "0:31", "sound": "<one name from sounds.txt that fits what the note asks for>"}.\n'
+        ' - on-screen text: {"note": <id>, "do": "text", "time": "0:31", "text": "<the words on screen, at most about 8>", "kind": "correction|detail"}.'
+        ' A correction fixes something the host misspoke and starts with an asterisk ("*0.4 mm nozzle, not 0.6"); a detail adds a short fact (a price, a model number).\n'
         ' - another camera angle with the take\'s own sound: {"note": <id>, "do": "angle", "file": "<the recording the note names, exactly as written>"}.'
         " The app lines it up with the take by its sound and shows its picture wherever it covers the cut.\n"
         "For each note, decide whether `skip_beats`, `edits` or a change to the beat map makes the video match what the host asked. A note that needs an edit is applied: put it under `applied`.\n"

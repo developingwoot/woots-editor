@@ -4,6 +4,8 @@
         capture the public page (webcapture.py) and put it over the clip playing at that time
   {"note": id, "do": "sfx",   "time": "0:31", "sound": "<a file name from sounds.txt>"}
         a sound effect from the host's SFX folder at that time
+  {"note": id, "do": "text",  "time": "0:31", "text": "*0.4 mm nozzle, not 0.6", "kind": "correction|detail"}
+        a short line of on-screen text (textcards.py) on the clip playing at that time
   {"note": id, "do": "angle", "file": "<the other recording named in the note>"}
         the other camera's picture over the host's take, the take's sound kept: the recording is found in the takes near the note by its sound
         (anglesync.py) and its picture goes over every kept stretch of the cut it covers
@@ -19,7 +21,7 @@ from pathlib import Path
 import config
 import projectstore
 
-KINDS = ("web", "sfx", "angle")
+KINDS = ("web", "sfx", "angle", "text")
 VIDEO_EXT = {".mp4", ".mov", ".mkv", ".m4v", ".avi", ".mts", ".webm"}
 NEAR_S = 60.0                  # an angle is looked for in the takes of the beats this close to the note
 
@@ -40,7 +42,9 @@ def parse(ans: dict, open_ids: set) -> list:
     for a in ans.get("edits") or []:
         if not isinstance(a, dict) or a.get("note") not in open_ids or a.get("do") not in KINDS:
             continue
-        if a["do"] in ("web", "sfx") and seconds_of(a.get("time")) is None:
+        if a["do"] in ("web", "sfx", "text") and seconds_of(a.get("time")) is None:
+            continue
+        if a["do"] == "text" and not str(a.get("text") or "").strip():
             continue
         if a["do"] == "web" and not str(a.get("url") or "").strip():
             continue
@@ -74,6 +78,19 @@ def add_sfx(beats: list, t: float, sound: str) -> str:
     au = b.setdefault("audio", {})
     au["sfx"] = list(au.get("sfx") or []) + [f"{Path(f).stem} @ {at}"]
     return f"Added the sound {Path(f).stem} at {_clock(t)} (heard from the preview on: the rough cut has no sound effects)"
+
+
+def add_text(beats: list, t: float, text: str, kind: str = "correction") -> str:
+    """On-screen text (textcards.py) on the clip playing at t: a correction of something misspoken, or a detail."""
+    import skillrules
+    import textcards
+    b, at = beat_at(beats, t)
+    e = textcards.entry({"text": text, "kind": kind, "at": at}, float(b.get("dur") or 0), skillrules.rules()["text_card_s"])
+    if not e:
+        raise ValueError("the text to show was empty")
+    on = b.setdefault("on_screen", {"shot": "a-roll", "note": "", "broll": []})
+    on["text"] = [x for x in on.get("text") or [] if x.get("text") != e["text"]] + [e]
+    return f"Showed “{e['text']}” on screen at {_clock(t)}"
 
 
 def add_web(work: str, beats: list, a: dict, env=None) -> str:
@@ -167,6 +184,8 @@ def run(work: str, name: str, actions: list, note_times: dict, env=None, log=pri
                 text = add_sfx(bm["beats"], seconds_of(a["time"]), str(a["sound"]))
             elif a["do"] == "web":
                 text = add_web(work, bm["beats"], a, env)
+            elif a["do"] == "text":
+                text = add_text(bm["beats"], seconds_of(a["time"]), str(a["text"]), "detail" if a.get("kind") == "detail" else "correction")
             else:
                 text = add_angle(work, name, bm["beats"], str(a["file"]), float(note_times.get(a["note"]) or 0), find, length_of)
             changes.append(text)

@@ -8,7 +8,8 @@ section.edit.json:
    "segments": [{"id": "B01", "src": "<video>", "in": 11.2, "out": 15.8, "zoom": 1.0, "cx": 0.5, "cy": 0.4}],
    "broll":    [{"seg": "B03", "file": "<video>", "in": 2.0, "dur": 4.0, "at": 0.5,      # cutaway over the segment, muted
                  "t_in": {"kind": "slide", "dur": 0.35, "from": "right"}, "t_out": {...}}],   # optional: how it comes in and goes out (transitions.py)
-   "overlays": [{"seg": "B01", "file": "<mov/mp4 with alpha>", "at": 0.0, "dur": 3.0}]}  # a rendered graphic over the segment
+   "overlays": [{"seg": "B01", "file": "<mov/mp4 with alpha>", "at": 0.0, "dur": 3.0},     # a rendered graphic over the segment
+                {"seg": "B02", "file": "<png>", "at": 1.0, "dur": 4.0, "still": true, "fade_in": true, "fade_out": true}]}   # an on-screen text card (textcards.py)
 
 * Segments play in the order listed, each re-encoded (H.264, 30 fps, AAC 48 kHz) and joined by stream copy.
 * `snap`: every cut point moves to the quietest 5 ms inside +-0.12 s of the nominal time (Parakeet word times can be
@@ -181,6 +182,16 @@ def join_sound(wavs: list, seconds: list, out: Path, rate: int = 48000) -> None:
             done += want
 
 
+def card_fades(ov: dict, fade: float = 0.2) -> str:
+    """The alpha fades of a still overlay (an on-screen text card): in on its first piece, out on its last. Nothing for a rendered graphic."""
+    if not ov.get("still"):
+        return ""
+    d = float(ov["dur"])
+    f = min(fade, d / 3)
+    return ((f"fade=t=in:st=0:d={f:.3f}:alpha=1," if ov.get("fade_in") else "") +
+            (f"fade=t=out:st={max(0.0, d - f):.3f}:d={f:.3f}:alpha=1," if ov.get("fade_out") else ""))
+
+
 def render_segment(edit: dict, seg: dict, a_in: float, a_out: float, out: Path, brolls: list, overlays: list, gain_db: float = 0.0, sfx: list = ()):
     W, H = edit["size"]
     fps = edit.get("fps", 30)
@@ -195,6 +206,9 @@ def render_segment(edit: dict, seg: dict, a_in: float, a_out: float, out: Path, 
     for br in brolls:
         args += ["-ss", f"{br['in']:.3f}", "-t", f"{br['dur'] * float(br.get('speed') or 1.0):.3f}", "-i", br["file"]]       # speed < 1 = slow motion: dur is the time on screen, the source needed is dur * speed
     for ov in overlays:
+        if ov.get("still"):                                                                                        # an on-screen text card (a PNG): held for its time
+            args += ["-loop", "1", "-t", f"{float(ov['dur']):.3f}", "-i", ov["file"]]
+            continue
         args += (["-ss", f"{float(ov['in']):.3f}"] if float(ov.get("in") or 0) > 0 else []) + ["-i", ov["file"]]        # "in": this piece starts that far into the graphic (it carries on across a cut)
     chains, last, k = [f"[0:v]{base_filter(W, H, fps, z, cx, cy)},setsar=1[v0]"], "v0", (2 if va else 1)
     plays = []                                                                                                     # stingers over the cutaways' cuts: (file, start)
@@ -221,7 +235,7 @@ def render_segment(edit: dict, seg: dict, a_in: float, a_out: float, out: Path, 
         last, k = f"vb{i}", k + 1
     for i, ov in enumerate(overlays):
         at = float(ov.get("at", 0.0))
-        chains.append(f"[{k}:v]format=rgba,fps={fps},scale={W}:{H},setpts=PTS-STARTPTS+{at}/TB[o{i}]")
+        chains.append(f"[{k}:v]format=rgba,fps={fps},scale={W}:{H},{card_fades(ov)}setpts=PTS-STARTPTS+{at}/TB[o{i}]")
         chains.append(f"[{last}][o{i}]overlay=eof_action=pass[vo{i}]")
         last, k = f"vo{i}", k + 1
     for i, (f, start) in enumerate(plays):                                                                         # on top of everything: it hides the cut under it

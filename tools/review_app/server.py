@@ -1038,6 +1038,38 @@ def start_find_moments(work, name):
     return job
 
 
+def start_find_ideas(work, name):
+    """Claude reads what the host says and the footage library and suggests B-roll and on-screen text for the rough cut (changes no plan but ideas.json)."""
+    import ideas
+    job = _job("ideas", ["Claude reads the cut and your footage"])
+    job.update(work=work, name=name)
+
+    def run():
+        fd = WORK / work / "v2-run" / "ideas"
+        _claude_run(job, fd, ideas.find_prompt(work, name, fd), "ideas.json", lambda p, r: ideas.import_found(work, name, p), budget="0.8")
+        job["done"] = True
+        job["elapsed"] = round(time.time() - job["started"], 1)
+    threading.Thread(target=run, daemon=True).start()
+    return job
+
+
+def idea_answer(work, name, iid, status, text=None):
+    """The host's yes / no on an idea. A yes on a web page starts its capture (the page becomes the clip's web choice); taking it back drops that choice."""
+    import cutview
+    import ideas
+    i = next((x for x in ideas.load(work, name) if x["id"] == iid), None)
+    if not i:
+        raise ValueError("there is no such idea")
+    if i["kind"] == "web":
+        if status == "yes":
+            start_web_broll(work, name, i["beat"], i["url"], "scroll" if i.get("find") else "still", i.get("find", ""), 5, float(i.get("at") or 0))
+        elif i["status"] == "yes":
+            with _lock:
+                cutview.set_choice(work, name, i["beat"], "noweb", "", 0)
+    with _lock:
+        ideas.set_status(work, name, iid, status, text)
+
+
 def start_make_stingers():
     """Render the stingers that are missing for the current brand (HyperFrames, about ten seconds each; nothing is sent to Claude)."""
     import stingers
@@ -1837,6 +1869,19 @@ class Handler(BaseHTTPRequestHandler):
             if u.path == "/api/v2/teaching/find":
                 work, name = views.split_key(b["key"])
                 return self.send_json({"id": start_find_teaching(work, name)["id"]})
+            if u.path == "/api/v2/ideas/find":
+                work, name = views.split_key(b["key"])
+                return self.send_json({"id": start_find_ideas(work, name)["id"]})
+            if u.path == "/api/v2/ideas":                                     # yes / no on a B-roll or on-screen text idea
+                work, name = views.split_key(b["key"])
+                idea_answer(work, name, str(b.get("id") or ""), str(b.get("status") or ""), b.get("text"))
+                return self.send_json(views.review(work, name, "cut", running=bool(_busy())))
+            if u.path == "/api/v2/ideas/add":                                 # the host's own on-screen text at the playhead
+                import ideas
+                work, name = views.split_key(b["key"])
+                with _lock:
+                    ideas.add_own(work, name, float(b.get("t") or 0), str(b.get("text") or ""), str(b.get("kind") or "correction"))
+                return self.send_json(views.review(work, name, "cut", running=bool(_busy())))
             if u.path == "/api/v2/moments/find":
                 work, name = views.split_key(b["key"])
                 return self.send_json({"id": start_find_moments(work, name)["id"]})

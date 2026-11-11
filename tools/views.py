@@ -16,6 +16,7 @@ _PIPELINES = {
     "options": ("Looking for more takes", "More takes found", 2),
     "teaching": ("Looking for teaching moments", "Teaching moments found", 1),
     "moments": ("Looking for fun moments", "Fun moments found", 1),
+    "ideas": ("Looking for B-roll and on-screen text ideas", "Ideas found", 2),
     "webcapture": ("Capturing the web page", "Web page captured: make the next cut to see it", 1),
     "stingers": ("Making your stingers", "Stingers made: choose one under Transitions", 1),
     "publish": ("Writing the publishing details", "Publishing details ready", 2),
@@ -64,7 +65,7 @@ def job_sentence(job: dict, now: float | None = None) -> dict:
 # ----------------------------------------------------------------------------- home and step bar
 STEPS = [("outline", "Outline"), ("footage", "Footage"), ("rough-cut", "Rough cut"), ("preview", "Preview"), ("final", "Final"), ("shorts", "Shorts")]
 STEP_IDS = [s for s, _ in STEPS]
-_PIPELINE_STEP = {"archive": "final", "vision": "footage", "options": "rough-cut", "teaching": "rough-cut", "moments": "rough-cut", "webcapture": "rough-cut", "analyze": "footage", "clipmap": "footage", "cut": "rough-cut", "preview": "preview", "outline": "outline", "final": "final",
+_PIPELINE_STEP = {"archive": "final", "vision": "footage", "options": "rough-cut", "teaching": "rough-cut", "moments": "rough-cut", "ideas": "rough-cut", "webcapture": "rough-cut", "analyze": "footage", "clipmap": "footage", "cut": "rough-cut", "preview": "preview", "outline": "outline", "final": "final",
                   "publish": "final", "shorts": "shorts", "score": "final"}
 
 
@@ -255,12 +256,12 @@ def review(work: str, name: str, stage: str, version: int | None = None, running
     key = key_of(work, name)
     notes = reviewnotes.notes(work, name, stage)
     open_n = [n for n in notes if n.get("status") != "done"]
-    pending = {n["clip"]: n["kind"] for n in open_n if n.get("choice") is not None and n.get("clip") and n.get("kind") != "web"}
+    pending = {n["clip"]: n["kind"] for n in open_n if n.get("choice") is not None and n.get("clip") and n.get("kind") not in ("web", "idea")}
     web = {n["clip"]: n["choice"] for n in open_n if n.get("kind") == "web" and n.get("clip")}
     from pathlib import Path
     label = lambda n: reviewnotes.label(stage, n)           # noqa: E731
     out = {"key": key, "stage": stage, "has_video": cur is not None, "version": None, "versions": [], "notes": [], "clips": [], "button": None,
-           "teaching": [], "moments": [], "graphics": []}
+           "teaching": [], "moments": [], "graphics": [], "ideas": []}
     if stage == "cut":
         import transitions
         out["transitions"] = transitions.view()
@@ -311,7 +312,25 @@ def review(work: str, name: str, stage: str, version: int | None = None, running
             t = starts.get(m["beat"], 0.0)
             out["moments"].append({"id": m["id"], "when": time_text(t), "t": t, "kind": m["kind"], "text": m["text"], "why": m["why"], "status": m["status"]})
         out["moments"].sort(key=lambda m: m["t"])
+        out["ideas"] = idea_rows(work, name, starts)
     return out
+
+
+def idea_rows(work: str, name: str, starts: dict) -> list:
+    """The B-roll and on-screen text ideas (ideas.py) for the card: when, what, a picture for footage, the address for a web page; in the order of the video."""
+    import ideas
+    from urllib.parse import quote, urlsplit
+    key = key_of(work, name)
+    rows = []
+    for i in ideas.load(work, name):
+        if i["beat"] not in starts:
+            continue                                          # its clip was taken out of the cut
+        t = starts[i["beat"]] + float(i.get("at") or 0)
+        rows.append({"id": i["id"], "kind": i["kind"], "when": time_text(t), "t": t, "text": i["text"], "why": i.get("why", ""), "status": i["status"],
+                     "own": bool(i.get("own")),
+                     **({"frame": f"/api/v2/sourceframe?key={quote(key)}&rel={quote(i['rel'])}&t={float(i['t']):.1f}"} if i["kind"] == "footage" else {}),
+                     **({"url": i["url"], "host": urlsplit(i["url"]).hostname or i["url"], "find": i.get("find", "")} if i["kind"] == "web" else {})})
+    return sorted(rows, key=lambda r: r["t"])
 
 
 def WORK_OF(work: str):

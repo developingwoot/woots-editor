@@ -121,6 +121,32 @@ def test_claude_can_suggest_fun_moments_and_a_tick_accepts_one(screen):
     assert clutter(visible_text(page)) == []
 
 
+def test_ideas_for_broll_and_on_screen_text_are_answered_on_the_card(screen):
+    page, r = open_cut(screen, "ui cut ideas")
+    expect(page.locator("#makeBtn")).to_be_disabled()
+    page.click("#findIdeas")
+    expect(page.locator("#ideas li")).to_have_count(2, timeout=30000)
+    row = page.locator('#ideas li[data-kind="correction"]')
+    assert "Correction" in row.inner_text()
+    row.locator(".ideaText").fill("*the tape shirt")
+    row.locator("button.tick").first.click()                              # yes, with my own words
+    expect(page.locator('#ideas li.yes[data-kind="correction"]')).to_have_count(1)
+    expect(page.locator('#ideas li[data-kind="correction"] .ideaText')).to_have_value("*the tape shirt")
+    expect(page.locator("#makeBtn")).to_be_enabled()
+    assert "Show “*the tape shirt” at" in page.locator("#notes").inner_text()
+    page.locator('#ideas li[data-kind="film"] button.tick').first.click()  # a shot to film: it goes on the shoot plan's pickups
+    expect(page.locator('#ideas li.yes[data-kind="film"]')).to_have_count(1)
+    import shootplan
+    assert [p["what"] for p in shootplan.state(r["work"], r["name"])["pickups"]] == ["the shirt from above"]
+    page.evaluate("document.getElementById('player').currentTime = 7.5")
+    page.wait_for_function("document.getElementById('player').currentTime >= 7.4")
+    page.fill("#ownText", "*0.4 mm nozzle")
+    page.press("#ownText", "Enter")                                       # my own correction at the playhead
+    expect(page.locator("#ideas li")).to_have_count(3)
+    assert "*0.4 mm nozzle" in page.locator("#notes").inner_text()
+    assert clutter(visible_text(page)) == []
+
+
 def test_search_all_footage_adds_takes_for_a_clip_with_none(screen):
     page, _ = open_cut(screen, "ui cut search")
     page.locator("#strip .clip").nth(3).click()            # the last clip has no other take

@@ -6,6 +6,7 @@ import { factCheckCard, musicCard } from './extras.js';
 // In the rough cut a click on a clip also opens Keep / Replace / Trim / Remove / Note for that clip, and teaching moments sit below the strip.
 const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 const PENDING = { replace: 'Another take', remove: 'Out', trim: 'Trimmed' };
+const IDEA_KIND = { footage: 'Your footage', web: 'Web page', film: 'Film it', correction: 'Correction', detail: 'Detail' };
 
 let keyHandler = null;
 let reopen = null;                                     // a clip whose Replace panel to open again after a background search
@@ -149,6 +150,49 @@ export async function render(root, key, stage, setBusy) {
         h('button', { class: 'main small', id: 'trimGo', onclick: () => choose(clip, 'trim', { cut_start: +a.value, cut_end: +z.value }) }, 'Trim this clip'));
     }
 
+    // B-roll and on-screen text ideas (ideas.py): Claude suggests, a tick says yes (applied when the next cut is made), a cross says no.
+    // A text idea's words can be changed before the tick; the form at the bottom adds the host's own text at the playhead (a slip of the tongue fixed on screen).
+    function ideasCard(list, video) {
+      const yesTitle = { footage: 'Use this shot in the next cut', web: 'Capture the page and use it in the next cut', film: 'Add it to the pickups on the shoot plan',
+        correction: 'Show this text in the next cut', detail: 'Show this text in the next cut' };
+      const answer = async (i, status, text) => {
+        try {
+          const r = await post('/api/v2/ideas', { id: i.id, status, ...(text !== undefined ? { text } : {}) });
+          if (i.kind === 'web' && status === 'yes') setBusy();
+          await draw(r);
+        } catch (e) { say(e.message); }
+      };
+      const row = i => {
+        const isText = i.kind === 'correction' || i.kind === 'detail';
+        const edit = isText ? h('input', { type: 'text', class: 'ideaText', value: i.text, maxlength: 90, 'aria-label': 'The words on screen', onkeydown: e => e.stopPropagation() }) : null;
+        const what = isText ? edit : h('b', {}, i.kind === 'web' ? i.host : i.text);
+        return h('li', { class: `idea ${i.status}`, 'data-id': i.id, 'data-kind': i.kind },
+          h('a', { class: 'when', href: '#', onclick: e => { e.preventDefault(); video.currentTime = i.t; } }, i.when),
+          i.frame ? h('img', { class: 'ideaFrame', src: i.frame, alt: '', loading: 'lazy' }) : null,
+          h('span', { class: 'ntext' }, h('span', { class: 'chip' }, IDEA_KIND[i.kind]), ' ', what,
+            i.kind === 'web' && i.find ? h('span', { class: 'muted small' }, ` at “${i.find}”`) : null,
+            i.why ? h('div', { class: 'muted small' }, i.why) : null),
+          h('button', { class: 'tick' + (i.status === 'yes' ? ' on' : ''), title: yesTitle[i.kind], onclick: () => answer(i, i.status === 'yes' ? 'suggested' : 'yes', edit && i.status !== 'yes' ? edit.value : undefined) }, '✓'),
+          h('button', { class: 'tick' + (i.status === 'no' ? ' on' : ''), title: 'Not this one', onclick: () => answer(i, i.status === 'no' ? 'suggested' : 'no') }, '✕'));
+      };
+      const own = h('input', { type: 'text', id: 'ownText', placeholder: '*the right words, e.g. *0.4 mm nozzle', maxlength: 90, autocomplete: 'off', class: 'fbInput' });
+      const kind = h('select', { id: 'ownKind' }, h('option', { value: 'correction' }, 'Correction'), h('option', { value: 'detail' }, 'Detail'));
+      const add = h('button', { class: 'quiet', id: 'ownAdd', onclick: async () => {
+        const text = own.value.trim();
+        if (!text) { own.focus(); return; }
+        try { await draw(await post('/api/v2/ideas/add', { t: video.currentTime || 0, text, kind: kind.value })); } catch (e) { say(e.message); }
+      } }, 'Add at the playhead');
+      own.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') add.click(); });
+      return h('div', { class: 'card teach', id: 'ideas' },
+        h('div', { class: 'rhead' }, h('b', {}, 'B-roll and on-screen text'),
+          h('button', { class: 'quiet', id: 'findIdeas', onclick: async () => { try { await api('/api/v2/ideas/find', { key }); setBusy(); } catch (e) { say(e.message); } } },
+            list.some(i => !i.own) ? 'Ask Claude again' : 'Ask Claude for ideas')),
+        list.length ? h('ul', { class: 'moments ideas' }, ...list.map(row))
+          : h('p', { class: 'muted small' }, 'None yet. Claude suggests shots from your footage, web pages, shots to film next time, and on-screen corrections where you misspoke.'),
+        h('div', { class: 'row ownText' }, own, kind, add),
+        h('div', { class: 'muted small' }, 'Misspoke? Pause where it happens and type the right words: they show on screen for a few seconds in the next cut.'));
+    }
+
     for (const c of data.clips) {
       const cell = h('div', { class: 'clip' + (c.pending ? ' pending' : '') + (c.ref === selected ? ' selected' : ''), style: `flex: ${Math.max(c.share, 0.04)} 1 0`,
         'data-start': c.start, 'data-dur': c.dur, 'data-ref': c.ref || '', title: c.at },
@@ -207,13 +251,14 @@ export async function render(root, key, stage, setBusy) {
         h('button', { class: 'tick' + (m.status === 'no' ? ' on' : ''), title: 'No pop-up here', onclick: async () => draw(await post('/api/v2/moments', { id: m.id, status: m.status === 'no' ? 'suggested' : 'no' })) }, '✕'))))
         : h('p', { class: 'muted small' }, 'None yet. A fun moment is a short sticker or number on a good line.')) : null;
 
+    const ideas = stage === 'cut' ? ideasCard(data.ideas || [], video) : null;
     const marks = stage === 'cut' && v.latest && total ? marksCard(key, video, total) : null;
     const b = data.button;
     root.replaceChildren(h('div', { class: 'review' },
       h('div', { class: 'left' }, video, strip, marks && marks.overlay, panel,
         h('div', { class: 'muted small' }, stage === 'cut'
           ? 'Click a clip to keep, replace, trim or remove it. Space plays, arrows jump 5 seconds, N adds a note.'
-          : 'Space plays, arrows jump 5 seconds, N adds a note. Shift and drag over the clips to note a range.'), marks && marks.card, teach, fun, stage === 'preview' ? musicCard(key) : null, stage === 'preview' ? factCheckCard(key) : null),
+          : 'Space plays, arrows jump 5 seconds, N adds a note. Shift and drag over the clips to note a range.'), marks && marks.card, ideas, teach, fun, stage === 'preview' ? musicCard(key) : null, stage === 'preview' ? factCheckCard(key) : null),
       h('aside', { class: 'right card' },
         h('div', { class: 'rhead' }, h('b', {}, 'Notes'), verMenu),
         v.changes.length ? h('details', { class: 'changes' }, h('summary', {}, `What changed in ${v.label}`), ...(v.suggestions.length ? [h('div', { class: 'suggest', id: 'suggestions' }, h('b', {}, 'Claude suggests'),
