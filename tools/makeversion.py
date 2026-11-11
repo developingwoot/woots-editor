@@ -65,14 +65,22 @@ def brief(work: str, name: str, stage: str, fd: Path) -> str:
     bm = read_json(WORK / work / f"{name}.beatmap.json")
     if bm is not None:
         (fd / "beatmap.json").write_text(json.dumps(bm, indent=1), encoding="utf-8")
+        import locks
+        good = locks.beat_ids(work, name, bm)
+        rows = [{"id": b["id"], "section": b.get("section", ""), "seconds": round(float(b.get("dur") or 0), 1), "said": (b.get("said") or "")[:240],
+                 "good": b["id"] in good, "skipped": bool(b.get("skip"))} for b in bm.get("beats", [])]
+        (fd / "beats.json").write_text(json.dumps(rows, indent=1, ensure_ascii=False), encoding="utf-8")
     return (
         f"The host watched the {'rough cut' if stage == 'cut' else 'preview'} of the host's video and left notes (notes.json, times are minutes:seconds into the video).\n"
         "A note whose time is \"whole video\" is about the video as a whole (for example: too long, cut more, be pickier). Apply it across the plan: set `skip` on the weakest beats (never a beat the host marked good), "
         "shorten, or tighten as the note asks, and say in the summary what you did overall.\n"
-        "beatmap.json is the plan the video is built from. For each note, decide whether a change to the beat map makes the video match what the host asked.\n"
+        "beats.json is a short list of every beat (id, section, seconds, what is said, `good` = the host marked it good, `skipped`): read it first. beatmap.json is the whole plan and is large.\n"
+        "To take beats out of the video, list their ids in `skip_beats` (never one marked good) and do NOT send `beatmap`. Send `beatmap` only for a change `skip_beats` cannot make, and then send the whole file.\n"
+        "For each note, decide whether a change to the beat map makes the video match what the host asked.\n"
         "Write answer.json in this folder:\n"
         '{"applied": [{"id": <note id>, "summary": "<one plain sentence about what you changed, no ids or file names>"}],\n'
         ' "skipped": [{"id": <note id>, "why": "<one plain sentence>"}],\n'
+        ' "skip_beats": ["<beat id to take out>"],\n'
         ' "lesson": "<optional: ONE general sentence, no times and no video names, only when a note taught something that applies to other videos>",\n'
         ' "beatmap": <the whole edited beat map, only if you changed it>}\n'
         "Change as little as possible. Keep every field you do not need to change exactly as it is. Do not write anywhere else.")
@@ -88,9 +96,22 @@ def apply_answer(work: str, name: str, stage: str, path: Path) -> tuple[bool, st
     if not applied:
         return False, "Claude could not apply any of the notes.", {}
     bm = ans.get("beatmap")
+    if bm is not None and (not isinstance(bm, dict) or not isinstance(bm.get("beats"), list)):
+        return False, "Claude's edited plan was not usable, so nothing was changed.", {}
+    skip = [str(x) for x in ans.get("skip_beats") or [] if isinstance(x, (str, int))]
+    if skip:
+        base = bm if bm is not None else read_json(WORK / work / f"{name}.beatmap.json")
+        if not isinstance(base, dict):
+            return False, "There is no plan to take beats out of.", {}
+        import locks
+        good = locks.beat_ids(work, name, base)
+        taken = 0
+        for b in base["beats"]:
+            if b.get("id") in skip and b["id"] not in good and not b.get("skip"):
+                b["skip"] = True
+                taken += 1
+        bm = base if taken or bm is not None else None
     if bm is not None:
-        if not isinstance(bm, dict) or not isinstance(bm.get("beats"), list):
-            return False, "Claude's edited plan was not usable, so nothing was changed.", {}
         projectstore.write_json(WORK / work / f"{name}.beatmap.json", bm, why="notes applied")
     changes = [" ".join(str(a["summary"]).split())[:200] for a in applied]
     n_skipped = len([s for s in ans.get("skipped") or [] if isinstance(s, dict)])

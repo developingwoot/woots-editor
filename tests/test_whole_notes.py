@@ -40,3 +40,18 @@ def test_reads_made_for_the_old_recordings_are_marked_to_be_made_again(tmp_path,
     assert json.loads((tmp_path / "t.json").read_text(encoding="utf-8")) == {"v": 0, "x": 1}
     assert json.loads((tmp_path / "s.json").read_text(encoding="utf-8"))["logline"] == "kept"
     assert json.loads((tmp_path / "s.json").read_text(encoding="utf-8"))["v"] == 0
+
+
+@needs_ffmpeg
+def test_claude_can_answer_a_whole_video_note_by_listing_beats_to_take_out(tmp_path):
+    r = make_project.build(cut=True, title="whole skip")
+    w, n, d = r["work"], r["name"], r["dir"]
+    note = reviewnotes.add(w, n, "cut", "Too long, be pickier", 0, whole=True)
+    prompt = makeversion.brief(w, n, "cut", tmp_path)
+    rows = json.loads((tmp_path / "beats.json").read_text(encoding="utf-8"))
+    assert {"id", "seconds", "said", "good", "skipped"} <= set(rows[0]) and "skip_beats" in prompt
+    ans = tmp_path / "answer.json"
+    ans.write_text(json.dumps({"applied": [{"id": note["id"], "summary": "Took out two weaker clips"}], "skip_beats": ["B02", "nope"]}), encoding="utf-8")
+    ok, msg, res = makeversion.apply_answer(w, n, "cut", ans)
+    bm = {b["id"]: b for b in json.loads((d / f"{n}.beatmap.json").read_text(encoding="utf-8"))["beats"]}
+    assert ok and bm["B02"]["skip"] is True and not bm["B01"].get("skip") and res["changes"] == ["Took out two weaker clips"]
