@@ -249,6 +249,19 @@ def capture(url: str, out_dir: Path, style: str = "scroll", find: str = "", seco
     return {"file": str(mp4), "still": str(png), "title": title, "url": final_url, "found": found, "seconds": seconds, "style": style}
 
 
+def capture_apart(url: str, out_dir, style: str, find: str, seconds, env=None, timeout: int = 180) -> dict:
+    """capture() in a process of its own (the browser never runs inside the app's server): {"ok", ...capture's result} or {"ok": False, "error"}."""
+    import platformx
+    arg = json.dumps({"url": url, "out": str(out_dir), "style": style, "find": find, "seconds": seconds})
+    try:
+        p = subprocess.run([sys.executable, os.path.abspath(__file__), arg], cwd=os.path.dirname(os.path.abspath(__file__)), env=env, capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", timeout=timeout, creationflags=platformx.NO_WINDOW)
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "the page took too long to capture"}
+    out = (p.stdout or "").strip()
+    return json.loads(out.splitlines()[-1]) if out else {"ok": False, "error": (p.stderr or "")[-300:] or "the page could not be captured"}
+
+
 def main(argv: list) -> int:
     try:
         a = json.loads(argv[1])

@@ -67,20 +67,30 @@ def brief(work: str, name: str, stage: str, fd: Path) -> str:
         (fd / "beatmap.json").write_text(json.dumps(bm, indent=1), encoding="utf-8")
         import locks
         good = locks.beat_ids(work, name, bm)
-        rows = [{"id": b["id"], "section": b.get("section", ""), "seconds": round(float(b.get("dur") or 0), 1), "said": (b.get("said") or "")[:240],
+        rows = [{"id": b["id"], "section": b.get("section", ""), **({} if b.get("skip") else {"starts_at": views.time_text(float(b.get("start") or 0))}),
+                 "seconds": round(float(b.get("dur") or 0), 1), "said": (b.get("said") or "")[:240],
                  "good": b["id"] in good, "skipped": bool(b.get("skip"))} for b in bm.get("beats", [])]
         (fd / "beats.json").write_text(json.dumps(rows, indent=1, ensure_ascii=False), encoding="utf-8")
+    import noteactions
+    (fd / "sounds.txt").write_text(noteactions.sounds_list() or "(the host has no sound effects yet)", encoding="utf-8")
     return (
         f"The host watched the {'rough cut' if stage == 'cut' else 'preview'} of the host's video and left notes (notes.json, times are minutes:seconds into the video).\n"
         "A note whose time is \"whole video\" is about the video as a whole (for example: too long, cut more, be pickier). Apply it across the plan: set `skip` on the weakest beats (never a beat the host marked good), "
         "shorten, or tighten as the note asks, and say in the summary what you did overall.\n"
-        "beats.json is a short list of every beat (id, section, seconds, what is said, `good` = the host marked it good, `skipped`): read it first. beatmap.json is the whole plan and is large.\n"
-        "To take beats out of the video, list their ids in `skip_beats` (never one marked good) and do NOT send `beatmap`. Send `beatmap` only for a change `skip_beats` cannot make, and then send the whole file.\n"
-        "For each note, decide whether a change to the beat map makes the video match what the host asked.\n"
+        "beats.json is a short list of every beat (id, section, where it starts in the video, seconds, what is said, `good` = the host marked it good, `skipped`): read it first. beatmap.json is the whole plan and is large.\n"
+        "To take beats out of the video, list their ids in `skip_beats` (never one marked good) and do NOT send `beatmap`. Send `beatmap` only for a change `skip_beats` and `edits` cannot make, and then send the whole file.\n"
+        "The app can also do these for you; list them in `edits` (times are minutes:seconds into the video, like the notes; use what is said in beats.json to put the time on the word the note means):\n"
+        ' - a web page as B-roll: {"note": <id>, "do": "web", "time": "0:31", "url": "<the public address the note gives>", "find": "<a few words that are on that page to scroll to and highlight, or empty>", "seconds": 5}.'
+        " The app captures the page itself; never say it cannot be done because there is no recording of the page.\n"
+        ' - a sound effect: {"note": <id>, "do": "sfx", "time": "0:31", "sound": "<one name from sounds.txt that fits what the note asks for>"}.\n'
+        ' - another camera angle with the take\'s own sound: {"note": <id>, "do": "angle", "file": "<the recording the note names, exactly as written>"}.'
+        " The app lines it up with the take by its sound and shows its picture wherever it covers the cut.\n"
+        "For each note, decide whether `skip_beats`, `edits` or a change to the beat map makes the video match what the host asked. A note that needs an edit is applied: put it under `applied`.\n"
         "Write answer.json in this folder:\n"
         '{"applied": [{"id": <note id>, "summary": "<one plain sentence about what you changed, no ids or file names>"}],\n'
         ' "skipped": [{"id": <note id>, "why": "<one plain sentence>"}],\n'
         ' "skip_beats": ["<beat id to take out>"],\n'
+        ' "edits": [<the edits above>],\n'
         ' "lesson": "<optional: ONE general sentence, no times and no video names, only when a note taught something that applies to other videos>",\n'
         ' "beatmap": <the whole edited beat map, only if you changed it>}\n'
         "Change as little as possible. Keep every field you do not need to change exactly as it is. Do not write anywhere else.")
@@ -94,7 +104,8 @@ def apply_answer(work: str, name: str, stage: str, path: Path) -> tuple[bool, st
     open_ids = {n["id"] for n in plain_notes(work, name, stage)}
     applied = [a for a in ans.get("applied") or [] if isinstance(a, dict) and a.get("id") in open_ids and str(a.get("summary", "")).strip()]
     if not applied:
-        return False, "Claude could not apply any of the notes.", {}
+        whys = [" ".join(str(s.get("why", "")).split())[:300] for s in ans.get("skipped") or [] if isinstance(s, dict) and str(s.get("why", "")).strip()]
+        return False, "Claude could not apply any of the notes." + "".join(f" {w}" for w in whys), {}
     bm = ans.get("beatmap")
     if bm is not None and (not isinstance(bm, dict) or not isinstance(bm.get("beats"), list)):
         return False, "Claude's edited plan was not usable, so nothing was changed.", {}
@@ -119,7 +130,26 @@ def apply_answer(work: str, name: str, stage: str, path: Path) -> tuple[bool, st
     changes = [" ".join(str(a["summary"]).split())[:200] for a in applied]
     n_skipped = len([s for s in ans.get("skipped") or [] if isinstance(s, dict)])
     msg = f"Applied {len(applied)} note{'s' if len(applied) != 1 else ''}" + (f"; {n_skipped} could not be applied." if n_skipped else ".")
-    return True, msg, {"applied_ids": [a["id"] for a in applied], "changes": changes, "lesson": clean_lesson(ans.get("lesson"))}
+    import noteactions
+    return True, msg, {"applied_ids": [a["id"] for a in applied], "changes": changes, "lesson": clean_lesson(ans.get("lesson")),
+                       "summaries": {a["id"]: changes[i] for i, a in enumerate(applied)}, "actions": noteactions.parse(ans, {a["id"] for a in applied})}
+
+
+def after_actions(result: dict, done: dict, note_times: dict) -> dict:
+    """The applied notes after the app did their edits (noteactions.run's {changes, failed, by_note}): a note whose edit failed is not done (it stays open),
+    and What changed says why; for a note the app did, What changed shows what the app did instead of Claude's summary."""
+    failed, by_note = done.get("failed") or {}, done.get("by_note") or {}
+    keep = [i for i in result["applied_ids"] if i not in failed]
+    swap = {result["summaries"].get(i): i for i in list(failed) + list(by_note)}
+    changes = []
+    for c in result["changes"]:
+        i = swap.get(c)
+        if i is None:
+            changes.append(c)
+        elif i not in failed:
+            changes += by_note[i]
+    changes += [f"Not done, the note at {views.time_text(float(note_times.get(i) or 0))}: {why}" for i, why in failed.items()]
+    return {**result, "applied_ids": keep, "changes": changes}
 
 
 def clean_lesson(x) -> str:

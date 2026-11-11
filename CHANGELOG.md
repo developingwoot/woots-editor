@@ -8,6 +8,7 @@ What changed in each release, written for the people who use the app. Newest fir
 - Show the source: the fact check now keeps the words on each source page that back a claim. For a claim it found right, "Show the source" captures that page, scrolled to those words and highlighted, over the clip where you say it.
 - Transitions: a web page now slides in with a whoosh and slides out again; other B-roll stays a plain cut. Settings has a Transitions section (cut, dissolve, slide, slide up, whip, pop, flash), the web page panel can pick one for that page, and you can add your own presets in the youtube-edit skill's transitions.json. The sound comes from your sound effects folder.
 - Stingers: four short animations in your colours, font and channel name (brand sweep, stripes, circle, channel name) that cover the cut into and out of a cutaway. Make them once under Settings > Transitions (about a minute, on your computer); they are made again when your brand changes. Add your own templates in the youtube-graphics skill's stingers folder.
+- Notes can ask for a web page ("go to this address here"), a sound effect ("a negative sound when I say…") or another camera angle ("use the other shot with this clip's sound"): the app does them itself. Another angle is lined up with your take by its sound. When Claude cannot apply a note, the message now says why.
 - Notes can be about the whole video ("too long, be pickier").
 - New recordings can be read on the Footage screen without making a cut.
 

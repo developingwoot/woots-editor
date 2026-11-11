@@ -139,6 +139,18 @@ def _replace_take(b: dict, sp: dict, rel: str):
     b["said"], b["dur"], b["flags"] = sp.get("text", ""), sp["dur"], list(sp.get("flags", []))
 
 
+def put_web(b: dict, ch: dict):
+    """A captured web page ({file, dur, at, url, title, captured, transition}) as a B-roll insert over beat b, kept inside the beat."""
+    on = b.setdefault("on_screen", {"shot": "a-roll", "note": "", "broll": []})
+    room = max(0.5, float(b.get("dur") or 0) - 0.2)
+    dur = min(float(ch.get("dur") or 5), room)
+    at = min(max(0.0, float(ch.get("at") or 0)), max(0.0, float(b.get("dur") or 0) - dur))
+    on["broll"] = [x for x in on.get("broll", []) if x.get("file") != ch["file"]] + [
+        {"file": ch["file"], "in": 0.0, "dur": round(dur, 2), "at": round(at, 2), "why": f"From the web page {ch.get('title') or ch.get('url', '')}"[:160],
+         "source": {"url": ch.get("url", ""), "title": ch.get("title", ""), "captured": ch.get("captured", "")},
+         **({"transition": ch["transition"]} if ch.get("transition") else {})}]
+
+
 def apply_choices(work: str, name: str) -> dict:
     """The open exact choices become beat map edits. Returns {applied_ids, changes}: one plain sentence per choice."""
     data = beat_data(work, name)
@@ -166,16 +178,8 @@ def apply_choices(work: str, name: str) -> dict:
                 picked[ln] = sp["id"]
             changes.append(f"Swapped the clip at {at} for another take")
         elif n["kind"] == "web" and ch.get("file"):
-            at_text = at                                         # the note's time is already where the page starts
-            on = b.setdefault("on_screen", {"shot": "a-roll", "note": "", "broll": []})
-            room = max(0.5, float(b.get("dur") or 0) - 0.2)
-            dur = min(float(ch.get("dur") or 5), room)
-            at = min(max(0.0, float(ch.get("at") or 0)), max(0.0, float(b.get("dur") or 0) - dur))
-            on["broll"] = [x for x in on.get("broll", []) if x.get("file") != ch["file"]] + [
-                {"file": ch["file"], "in": 0.0, "dur": round(dur, 2), "at": round(at, 2), "why": f"From the web page {ch.get('title') or ch.get('url', '')}"[:160],
-                 "source": {"url": ch.get("url", ""), "title": ch.get("title", ""), "captured": ch.get("captured", "")},
-                 **({"transition": ch["transition"]} if ch.get("transition") else {})}]
-            changes.append(f"Put the web page {ch.get('host') or ch.get('url', '')} over the clip at {at_text}")
+            put_web(b, ch)
+            changes.append(f"Put the web page {ch.get('host') or ch.get('url', '')} over the clip at {at}")      # the note's time is already where the page starts
         elif n["kind"] == "trim" and b.get("aroll"):
             a = b["aroll"]
             lo, hi = float(a["span_in"]), float(a["span_out"])

@@ -602,6 +602,15 @@ def start_make_version(work, name, stage):
 
     def apply(path, res):
         ok, msg, r = makeversion.apply_answer(work, name, stage, path)
+        if ok and r.get("actions"):                       # web pages, sounds, other angles: the app does them now
+            import noteactions
+            times = {n["id"]: n.get("t", 0.0) for n in plain}
+            job["log"] += f"\nDoing {len(r['actions'])} edit{'s' if len(r['actions']) != 1 else ''} for the notes."
+            with _lock:
+                done = noteactions.run(work, name, r["actions"], times, env=tool_env(), log=lambda s: None)
+            r = makeversion.after_actions(r, done, times)
+            if not r["applied_ids"]:
+                return False, "Claude could not apply any of the notes: " + " ".join(r["changes"])
         if ok:
             result["applied_ids"] += r["applied_ids"]
             result["changes"] += r["changes"]
@@ -906,13 +915,7 @@ def start_web_broll(work, name, ref, url, style, find, seconds, at, transition="
 
     def run():
         try:
-            arg = json.dumps({"url": url, "out": str(WORK / work / "web-broll"), "style": style, "find": find, "seconds": seconds})
-            try:
-                p = subprocess.run([str(PY), str(TOOLS / "webcapture.py"), arg], cwd=TOOLS, env=tool_env(), capture_output=True, text=True, encoding="utf-8",
-                                   errors="replace", timeout=180, creationflags=platformx.NO_WINDOW)
-                got = json.loads((p.stdout or "").strip().splitlines()[-1]) if (p.stdout or "").strip() else {"ok": False, "error": (p.stderr or "")[-300:]}
-            except subprocess.TimeoutExpired:
-                got = {"ok": False, "error": "the page took too long to capture"}
+            got = webcapture.capture_apart(url, WORK / work / "web-broll", style, find, seconds, env=tool_env())
             if not got.get("ok"):
                 job["log"] += got.get("error") or "the page could not be captured"
                 job["ok"] = False
