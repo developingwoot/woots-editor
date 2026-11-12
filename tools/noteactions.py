@@ -13,6 +13,10 @@
         background music: audio.music on every clip in that stretch (to the end when `until` is empty)
   {"note": id, "do": "blur", "time": "0:31", "what": "the username on the printer screen"}
         a blur (blur.py) on the clip at that time with no box yet: the host draws it on the frame and it is followed through the clip
+  {"note": id, "do": "cut", "time": "2:05", "words": "or at least not right now"}
+        those words taken out of the clip at that time (or the one before or after), the rest of the take kept: also on a clip marked good
+  {"note": id, "do": "broll", "time": "10:41", "file": "<a recording from recordings.txt>", "from": 0, "seconds": 5, "speed": 1}
+        a recording laid over the picture of the clip at that time, its own sound not used (a timelapse, a shot from another day)
 
 `time` is minutes:seconds into the video as the host saw it (like the notes); the clip playing then is found from the beat map's times.
 run() does them and writes the beat map once, through projectstore; an action that cannot be done is reported, never half done.
@@ -25,7 +29,7 @@ from pathlib import Path
 import config
 import projectstore
 
-KINDS = ("web", "sfx", "angle", "text", "music", "blur")
+KINDS = ("web", "sfx", "angle", "text", "music", "blur", "cut", "broll")
 VIDEO_EXT = {".mp4", ".mov", ".mkv", ".m4v", ".avi", ".mts", ".webm"}
 NEAR_S = 60.0                  # an angle is looked for in the takes of the beats this close to the note
 
@@ -46,7 +50,11 @@ def parse(ans: dict, open_ids: set) -> list:
     for a in ans.get("edits") or []:
         if not isinstance(a, dict) or a.get("note") not in open_ids or a.get("do") not in KINDS:
             continue
-        if a["do"] in ("web", "sfx", "text", "blur") and seconds_of(a.get("time")) is None:
+        if a["do"] in ("web", "sfx", "text", "blur", "cut", "broll") and seconds_of(a.get("time")) is None:
+            continue
+        if a["do"] == "cut" and not str(a.get("words") or "").strip():
+            continue
+        if a["do"] == "broll" and not str(a.get("file") or "").strip():
             continue
         if a["do"] == "text" and not str(a.get("text") or "").strip():
             continue
@@ -150,6 +158,90 @@ def music_list() -> str:
     return "\n".join(rows)
 
 
+def _norm(w: str) -> str:
+    return re.sub(r"[^\w']+", "", str(w).lower())
+
+
+def cut_words(beats: list, t: float, words: str, times: dict | None = None) -> str:
+    """Take the words out of the clip at t (or the clip before or after it): the take keeps playing around them, like a jump cut. A clip the host marked good
+    can lose words this way: the host asked for it."""
+    want = [x for x in (_norm(w) for w in str(words).split()) if x]
+    if not want:
+        raise ValueError("no words to take out were given")
+    live = [b for b in beats if not b.get("skip") and b.get("aroll") and (not times or b["id"] in times)]
+    if not live:
+        raise ValueError("there are no clips in the plan")
+    here, _ = beat_at(beats, t, times)
+    k = next((i for i, b in enumerate(live) if b is here), 0)
+    for b in [live[k]] + live[max(0, k - 1):k] + live[k + 1:k + 2]:
+        a = b["aroll"]
+        keep = _kept(b)
+        ws = [w for w in a.get("words") or [] if any(k0 - 0.001 <= (w[1] + w[2]) / 2 <= k1 + 0.001 for k0, k1 in keep)]
+        nw = [_norm(w[0]) for w in ws]
+        hit = next((i for i in range(len(nw) - len(want) + 1) if nw[i:i + len(want)] == want), None)
+        if hit is None:
+            continue
+        first, last = ws[hit], ws[hit + len(want) - 1]
+        lo = (ws[hit - 1][2] + first[1]) / 2 if hit > 0 else min(k0 for k0, _ in keep)          # from the gap before the first word
+        hi = (last[2] + ws[hit + len(want)][1]) / 2 if hit + len(want) < len(ws) else max(k1 for _, k1 in keep)
+        new = []
+        for k0, k1 in keep:
+            for s0, s1 in ((k0, min(k1, lo)), (max(k0, hi), k1)):
+                if s1 - s0 >= 0.3:
+                    new.append([round(s0, 3), round(s1, 3)])
+        if not new:
+            raise ValueError("those words are the whole clip: take the clip out instead")
+        a["keep"] = new if len(new) > 1 else None
+        a["in"], a["out"] = new[0][0], new[-1][1]
+        a["dur"] = b["dur"] = round(sum(s1 - s0 for s0, s1 in new), 2)
+        return f"Took out “{' '.join(w[0] for w in ws[hit:hit + len(want)])}” at {_clock(_span(b, times)[0])}"
+    raise ValueError(f"the words “{words}” were not found in the clip at {_clock(t)}")
+
+
+def add_broll(work: str, name: str, beats: list, a: dict, times: dict | None = None) -> str:
+    """A recording of the footage folder shown over the clip at `time` (its own sound is not used): a timelapse, a shot from another day."""
+    import footageview
+    import shootplan
+    folder, _ = shootplan.footage_folder(work, name)
+    if not folder:
+        raise ValueError("the footage folder is not set")
+    want = str(a.get("file") or "").strip().strip('"')
+    p = Path(want) if Path(want).is_absolute() else Path(folder) / want
+    p = Path(os.path.abspath(str(p)))
+    if not p.is_file():                                     # only the file's name was given: look for it in the footage folder
+        got = [f for f in Path(folder).rglob("*") if f.is_file() and f.name.lower() == Path(want).name.lower()]
+        p = got[0] if len(got) == 1 else p
+    if p.suffix.lower() not in VIDEO_EXT or not p.is_file() or not config.inside(folder, p):
+        raise ValueError(f"the recording “{want}” was not found in this video's footage folder")
+    rel = os.path.relpath(str(p), str(folder))
+    length = footageview._durations(work, Path(folder), [rel]).get(rel)
+    t = seconds_of(a["time"])
+    b, at = beat_at(beats, t, times)
+    speed = min(8.0, max(0.25, float(a.get("speed") or 1.0)))
+    dur = max(1.0, min(float(a.get("seconds") or 4.0), 12.0))
+    dur = min(dur, max(1.0, float(b.get("dur") or 0)))
+    at = round(min(at, max(0.0, float(b.get("dur") or 0) - dur)), 2)
+    src = max(0.0, float(a.get("from") or 0))
+    if length:
+        src = min(src, max(0.0, float(length) - dur * speed))
+    on = b.setdefault("on_screen", {"shot": "a-roll", "note": "", "broll": []})
+    on["broll"] = list(on.get("broll") or []) + [{"file": rel.replace("\\", "/"), "in": round(src, 2), "dur": round(dur, 2), "at": at,
+                                                  "why": "A note asked for it", **({"speed": speed} if speed != 1.0 else {})}]
+    return f"Showed {p.name} over the clip at {_clock(_span(b, times)[0] + at)} for {dur:g} seconds" + (f" at {speed:g}x speed" if speed != 1.0 else "")
+
+
+def recordings_list(work: str, name: str) -> str:
+    """The recordings of the footage folder Claude can lay over the picture (recordings.txt): path | seconds."""
+    import footageview
+    import shootplan
+    folder, _ = shootplan.footage_folder(work, name)
+    if not folder or not Path(folder).is_dir():
+        return ""
+    rels = sorted(os.path.relpath(str(f), str(folder)).replace("\\", "/") for f in Path(folder).rglob("*") if f.is_file() and f.suffix.lower() in VIDEO_EXT)
+    lens = footageview._durations(work, Path(folder), rels)
+    return "\n".join(f"{r} | {round(lens[r])} s" if lens.get(r) else r for r in rels)
+
+
 def _kept(b: dict) -> list:
     a = b.get("aroll") or {}
     return a.get("keep") or ([[a["in"], a["out"]]] if "in" in a and "out" in a else [])
@@ -230,6 +322,10 @@ def run(work: str, name: str, actions: list, note_times: dict, env=None, log=pri
                 text = add_text(bm["beats"], seconds_of(a["time"]), str(a["text"]), "detail" if a.get("kind") == "detail" else "correction", times)
             elif a["do"] == "music":
                 text = add_music(bm["beats"], a, times)
+            elif a["do"] == "cut":
+                text = cut_words(bm["beats"], seconds_of(a["time"]), str(a["words"]), times)
+            elif a["do"] == "broll":
+                text = add_broll(work, name, bm["beats"], a, times)
             elif a["do"] == "blur":
                 import blur
                 e = blur.ask(bm["beats"], seconds_of(a["time"]), str(a.get("what") or ""), times)

@@ -194,6 +194,36 @@ def test_a_note_can_ask_for_a_blur_and_for_music(tmp_path, monkeypatch):
     assert "could not be used" in bad["failed"][3]
 
 
+def test_a_note_can_take_words_out_of_a_clip_marked_good():
+    beats = [{"id": "B01", "dur": 3.0, "aroll": {"rel": "a.mp4", "in": 0.0, "out": 3.0, "keep": None,
+                                               "words": [["Or,", 0.1, 0.3], ["at", 0.35, 0.5], ["least", 0.55, 0.8], ["not", 0.85, 1.0], ["now.", 1.05, 1.3],
+                                                         ["The", 1.6, 1.8], ["printer", 1.85, 2.4], ["works", 2.45, 2.9]]}, "on_screen": {"broll": []}},
+             {"id": "B02", "dur": 2.0, "aroll": {"rel": "a.mp4", "in": 5.0, "out": 7.0, "keep": None, "words": [["next", 5.1, 5.5]]}, "on_screen": {"broll": []}}]
+    times = {"B01": (0.0, 3.0), "B02": (3.0, 2.0)}
+    said = noteactions.cut_words(beats, 3.5, "or at least not now", times)              # the time is a little late: the clip before is looked at too
+    a = beats[0]["aroll"]
+    assert said == "Took out “Or, at least not now.” at 0:00" and (a["in"], a["out"], a["keep"]) == (1.45, 3.0, None) and beats[0]["dur"] == 1.55
+    beats[0]["aroll"] = {**a, "in": 0.0, "keep": None}
+    noteactions.cut_words(beats, 0.5, "least not", times)                                  # from the middle: two pieces
+    assert beats[0]["aroll"]["keep"] == [[0.0, 0.525], [1.025, 3.0]]
+    with pytest.raises(ValueError, match="not found"):
+        noteactions.cut_words(beats, 0.5, "hello there", times)
+
+
+def test_a_note_can_lay_a_silent_recording_over_a_clip():
+    r = blurs_project("broll note")
+    w, n = r["work"], r["name"]
+    times = {"B01": (0.0, 3.0), "B02": (3.0, 3.0)}
+    got = noteactions.parse({"edits": [{"note": 1, "do": "broll", "time": "0:04", "file": "take3.mp4", "seconds": 2, "speed": 4}]}, {1})
+    done = noteactions.run(w, n, got, {}, log=lambda s: None, times=times)
+    assert not done["failed"] and done["changes"] == ["Showed take3.mp4 over the clip at 0:04 for 2 seconds at 4x speed"]   # kept inside the 3 s clip
+    ins = beat(r, "B02")["on_screen"]["broll"][-1]
+    assert (ins["file"], ins["dur"], ins["at"], ins["speed"]) == ("take3.mp4", 2.0, 1.0, 4.0)
+    bad = noteactions.run(w, n, [{"note": 2, "do": "broll", "time": "0:04", "file": "../elsewhere.mp4"}], {}, log=lambda s: None, times=times)
+    assert "not found in this video's footage folder" in bad["failed"][2]
+    assert "take3.mp4" in noteactions.recordings_list(w, n)
+
+
 def test_claude_is_given_the_music_library(tmp_path, monkeypatch):
     import config
     import makeversion
@@ -204,4 +234,5 @@ def test_claude_is_given_the_music_library(tmp_path, monkeypatch):
     r = blurs_project("blur brief")
     prompt = makeversion.brief(r["work"], r["name"], "cut", tmp_path / "fd")
     assert (tmp_path / "fd" / "music.txt").read_text(encoding="utf-8") == "Calm Workshop"
-    assert '"do": "music"' in prompt and '"do": "blur"' in prompt
+    assert '"do": "music"' in prompt and '"do": "blur"' in prompt and '"do": "cut"' in prompt and '"do": "broll"' in prompt
+    assert "take1.mp4" in (tmp_path / "fd" / "recordings.txt").read_text(encoding="utf-8")
