@@ -4,6 +4,8 @@ What changed in each release, written for the people who use the app. Newest fir
 
 ## Unreleased
 
+- Fixed: the voice got louder and quieter for no reason. The last loudness step rode the volume up and down as it went (a 12 dB difference came out as 4 dB). The rough cut, the preview, the final and shorts with music now get one gain for the whole video, and a limiter that only catches the odd peak.
+
 - Fun moments can come more often (up to 3 a minute, 4 seconds apart; they were 1.5 a minute, 8 seconds apart), and teaching moments are spaced out: Claude keeps them at least 60 seconds apart, the one a newcomer needs more where two fall closer. Both are in the youtube-graphics skill's graphics.json.
 
 - The Preview screen has a "Make the preview" button for the first preview: it builds the graphics (the fun moments and teaching moments you ticked too) and puts the whole video together. Before, there was no way to start it from this screen, so ticked fun moments seemed to do nothing.

@@ -873,8 +873,7 @@ def stitch(work: str, name: str) -> dict:
         p1 = subprocess.run([exe, "-nostdin", "-hide_banner", "-i", str(raw), "-af", "loudnorm=I=-14:TP=-1.5:LRA=11:print_format=json", "-f", "null", "-"],
                             capture_output=True, text=True, env=ff)
         meas = json.loads(re.search(r"\{[^{}]*\"input_i\"[^{}]*\}", p1.stderr, re.S).group(0))
-        af = (f"loudnorm=I=-14:TP=-1.5:LRA=11:measured_I={meas['input_i']}:measured_TP={meas['input_tp']}:measured_LRA={meas['input_lra']}:"
-              f"measured_thresh={meas['input_thresh']}:offset={meas['target_offset']}:linear=true")
+        af = fr.steady_gain(meas)                                    # one gain for the whole preview, never riding the volume
         p2 = subprocess.run([exe, "-nostdin", "-y", "-v", "error", "-i", str(raw), "-af", af, "-ar", str(fr.SR), "-c:a", "pcm_s16le", str(norm)], capture_output=True, text=True, env=ff)
         if p2.returncode != 0:
             raise ValueError(p2.stderr)

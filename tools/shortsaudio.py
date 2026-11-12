@@ -110,9 +110,9 @@ def mix_into(video: Path, mixplan: dict, st: dict | None = None):
             raise RuntimeError("could not read the short's sound: " + r.stderr.strip()[-200:])
         voice, _ = sf.read(str(tmp / "voice.wav"), dtype="float32", always_2d=True)
         mixed, _ = audiomix.mix(voice, mixplan, st, tmp)
-        sf.write(str(tmp / "mixed.wav"), mixed, audiomix.SR, subtype="FLOAT")
+        sf.write(str(tmp / "mixed.wav"), audiomix.to_loudness(mixed), audiomix.SR, subtype="FLOAT")
         out = video.with_name(video.stem + ".mixed.mp4")         # on the same drive as the video, so the swap is one rename
-        r = audiomix.ff("-i", video, "-i", tmp / "mixed.wav", "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
+        r = audiomix.ff("-i", video, "-i", tmp / "mixed.wav", "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-af", audiomix.PEAK_LIMIT,
                         "-c:a", "aac", "-b:a", "256k", "-movflags", "+faststart", out)
         if r.returncode != 0:
             raise RuntimeError("could not put the sound back: " + r.stderr.strip()[-200:])

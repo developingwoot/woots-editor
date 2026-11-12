@@ -407,14 +407,21 @@ def build_speech(segs: list[dict], frames: list[int], cache: Path, voice: bool):
     return np.concatenate(out_pieces)
 
 
+def steady_gain(meas: dict, target: float = -14.0) -> str:
+    """The filter that brings the whole sound to `target` LUFS with ONE gain, and catches only the peaks. ffmpeg's loudnorm, even with linear=true,
+    switches to riding the volume up and down when the peaks or the loudness range are too big for the target (a quiet voice raised 10 dB),
+    and the host heard the voice get louder and quieter for no reason (2026-11-12)."""
+    import audiomix
+    gain = max(-20.0, min(20.0, target - float(meas["input_i"])))
+    return f"volume={gain:.2f}dB,{audiomix.PEAK_LIMIT}"
+
+
 def loudnorm(raw: Path, dst: Path) -> dict:
     import sectionrender
     p1 = subprocess.run([sectionrender.FFMPEG, "-nostdin", "-hide_banner", "-i", str(raw), "-af", "loudnorm=I=-14:TP=-1.5:LRA=11:print_format=json", "-f", "null", "-"],
                         capture_output=True, text=True).stderr
     meas = json.loads(p1[p1.rindex("{"): p1.rindex("}") + 1])
-    af = (f"loudnorm=I=-14:TP=-1.5:LRA=11:measured_I={meas['input_i']}:measured_TP={meas['input_tp']}:measured_LRA={meas['input_lra']}:"
-          f"measured_thresh={meas['input_thresh']}:offset={meas['target_offset']}:linear=true")
-    r = ff("-i", raw, "-af", af, "-ar", SR, "-c:a", "pcm_s16le", dst)
+    r = ff("-i", raw, "-af", steady_gain(meas), "-ar", SR, "-c:a", "pcm_s16le", dst)
     if r.returncode != 0:
         raise RuntimeError("loudness pass failed: " + r.stderr.strip()[-200:])
     return meas

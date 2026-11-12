@@ -25,6 +25,23 @@ def ff(*a):
     return subprocess.run([sectionrender.FFMPEG, "-nostdin", "-y", "-v", "error", *map(str, a)], capture_output=True, text=True)
 
 
+PEAK_LIMIT = "alimiter=limit=0.89:level=disabled"          # catches the odd peak only; never changes the level of the rest
+
+
+def to_loudness(a, target: float = -14.0):
+    """The whole sound brought to `target` LUFS by ONE gain. Not ffmpeg's one-pass loudnorm: that rides the volume up and down as it goes,
+    and the host heard the voice get louder and quieter for no reason (2026-11-12)."""
+    import pyloudnorm as pyln
+    np, _ = _np()
+    try:
+        lufs = pyln.Meter(SR).integrated_loudness(a)
+    except ValueError:                                     # shorter than one measuring block
+        return a
+    if not np.isfinite(lufs):
+        return a
+    return (a * 10 ** (max(-20.0, min(20.0, target - lufs)) / 20)).astype(np.float32)
+
+
 def decode(path: Path, cache: Path):
     np, sf = _np()
     key = hashlib.sha1(f"{path}|{path.stat().st_size}|{int(path.stat().st_mtime)}".encode()).hexdigest()[:12]
