@@ -265,7 +265,45 @@ def render(work: str, name: str) -> tuple[Path, list]:
             rows[-1]["dur"] = round(s["out_start"] + s["out_dur"] - rows[-1]["start"], 2)
         else:
             rows.append({"ref": ref, "start": s["out_start"], "dur": s["out_dur"]})
+    try:
+        print(add_music(work, name, d / "out" / "cut.mp4", rows, data["beats"]), flush=True)
+    except Exception as e:                                  # noqa: BLE001  (a rough cut without its music is still a rough cut)
+        print(f"MUSIC could not be mixed: {type(e).__name__}: {e}", flush=True)
     return d / "out" / "cut.mp4", rows
+
+
+def music_beds(beats: list, rows: list) -> list:
+    """The music beds on the rough cut's timeline: runs of clips one after the other with the same audio.music name. rows = the clips as rendered."""
+    by_id = {b["id"]: b for b in beats}
+    beds = []
+    for r in rows:
+        nm = (((by_id.get(r["ref"]) or {}).get("audio") or {}).get("music") or "").strip()
+        if nm and beds and beds[-1]["name"] == nm and abs(beds[-1]["end"] - r["start"]) < 0.35:
+            beds[-1]["end"] = round(r["start"] + r["dur"], 3)
+        elif nm:
+            beds.append({"name": nm, "start": round(r["start"], 3), "end": round(r["start"] + r["dur"], 3)})
+    return beds
+
+
+def add_music(work: str, name: str, video: Path, rows: list, beats: list) -> str:
+    """Mix the plan's music under the rough cut's sound, the way the preview and the final do (below the voice, ducked while the host talks)."""
+    import beatmap
+    import finalrender
+    import shortsaudio
+    st = beatmap.settings_of(work, name)
+    if not st.get("music_in_preview", True):
+        return "MUSIC off (setting music_in_preview)"
+    beds, missing = [], []
+    for bd in music_beds(beats, rows):
+        f, why = finalrender.resolve_music(bd["name"])
+        if f:
+            beds.append({"file": str(f), "start": bd["start"], "end": bd["end"], "name": bd["name"]})
+        else:
+            missing.append(f"{bd['name']}: {why}")
+    if not beds:
+        return "MUSIC none in the plan" + (f" (not found: {'; '.join(missing)})" if missing else "")
+    shortsaudio.mix_into(video, {"beds": beds, "sfx": []}, st)
+    return f"MUSIC {len(beds)} bed(s) mixed in" + (f"; not found: {'; '.join(missing)}" if missing else "")
 
 
 # ----------------------------------------------------------------------------- find more takes (searches all the footage)

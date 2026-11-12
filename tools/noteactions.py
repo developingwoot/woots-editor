@@ -144,7 +144,7 @@ def add_music(beats: list, a: dict, times: dict | None = None) -> str:
     for b in got:
         b.setdefault("audio", {})["music"] = f.stem
     end = max(_span(b, times)[0] + _span(b, times)[1] for b in got)
-    return f"Put the music {f.stem} under {_clock(min(_span(b, times)[0] for b in got))} to {_clock(end)} (heard from the preview on: the rough cut has no music)"
+    return f"Put the music {f.stem} under {_clock(min(_span(b, times)[0] for b in got))} to {_clock(end)}"
 
 
 def music_list() -> str:

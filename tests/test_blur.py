@@ -224,6 +224,37 @@ def test_a_note_can_lay_a_silent_recording_over_a_clip():
     assert "take3.mp4" in noteactions.recordings_list(w, n)
 
 
+def test_the_music_beds_follow_the_clips_of_the_rough_cut():
+    beats = [{"id": "B01", "audio": {"music": "Calm"}}, {"id": "B02", "audio": {"music": "Calm"}}, {"id": "B03"}, {"id": "B04", "audio": {"music": "Calm"}}]
+    rows = [{"ref": "B01", "start": 0.0, "dur": 3.0}, {"ref": "B02", "start": 3.0, "dur": 2.0}, {"ref": "B03", "start": 5.0, "dur": 1.0}, {"ref": "B04", "start": 6.0, "dur": 2.0}]
+    assert cutview.music_beds(beats, rows) == [{"name": "Calm", "start": 0.0, "end": 5.0}, {"name": "Calm", "start": 6.0, "end": 8.0}]
+
+
+@needs_ffmpeg
+def test_the_rough_cut_has_the_music_of_the_plan(tmp_path, monkeypatch):
+    import config
+    import finalrender
+    import shortsaudio
+    music = tmp_path / "Music"
+    music.mkdir()
+    subprocess.run([sectionrender.FFMPEG, "-v", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=330:duration=20", "-ac", "2", "-ar", "48000", str(music / "Calm Workshop.wav")], check=True)
+    monkeypatch.setattr(config, "MUSIC_DIR", music)
+    monkeypatch.setattr(finalrender, "MUSIC_DIR", music)
+    r = make_project.build(cut=True, title="cut music")
+    bm = plan(r)
+    for b in bm["beats"]:
+        if b["id"] in ("B01", "B02"):
+            b.setdefault("audio", {})["music"] = "Calm Workshop"
+    (r["dir"] / f"{r['name']}.beatmap.json").write_text(json.dumps(bm), encoding="utf-8")
+    mixed = []
+    real = shortsaudio.mix_into
+    monkeypatch.setattr(shortsaudio, "mix_into", lambda v, p, st=None: (mixed.append(p), real(v, p, st)))
+    video, rows = cutview.render(r["work"], r["name"])
+    assert [(b["name"], b["start"], b["end"]) for b in mixed[0]["beds"]] == [("Calm Workshop", 0.0, 6.0)] and video.is_file()
+    probe = subprocess.run([sectionrender.FFPROBE, "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_name", "-of", "csv=p=0", str(video)], capture_output=True, text=True)
+    assert probe.stdout.strip() == "aac"
+
+
 def test_claude_is_given_the_music_library(tmp_path, monkeypatch):
     import config
     import makeversion
