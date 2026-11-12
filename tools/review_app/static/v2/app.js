@@ -9,6 +9,9 @@ import { watch as watchUndo } from './undo.js';
 const routes = [[/^#?\/?$/, home], [/^#\/settings$/, settings], [/^#\/shorts$/, shorts], [/^#\/shorts\/([^/]+)$/, { render: shorts.renderStandalone }], [/^#\/v\/([^/]+)\/([\w-]+)$/, video]];
 
 async function show() {
+  for (const v of $('#screen').querySelectorAll('video')) {   // the screen is drawn again: its players stop downloading (see review.js releasePlayer)
+    try { v.pause(); v.removeAttribute('src'); v.load(); } catch { /* gone */ }
+  }
   for (const [re, screen] of routes) {
     const m = re.exec(location.hash);
     if (m) {
@@ -27,10 +30,20 @@ let shownFailure = null;                               // id of the failed job w
 let timer = null;
 const pollSoon = () => { clearTimeout(timer); pollJob(); };
 
+async function jobState() {                            // never waits more than 8 s: a check that hangs would leave the bar as it was for good
+  const stop = new AbortController();
+  const t = setTimeout(() => stop.abort(), 8000);
+  try {
+    const r = await fetch('/api/v2/job', { signal: stop.signal, cache: 'no-store' });
+    if (!r.ok) throw new Error('job check failed');
+    return await r.json();
+  } finally { clearTimeout(t); }
+}
+
 async function pollJob() {
   const bar = $('#jobBar');
   try {
-    const { job, last } = await api('/api/v2/job');
+    const { job, last } = await jobState();
     if (handled === undefined) handled = last && last.state !== 'running' ? last.id : null;
     if (job) {
       bar.hidden = false;
@@ -54,6 +67,7 @@ async function pollJob() {
       if (!failed) shownFailure = null;
     }
   } catch { bar.hidden = true; }
+  clearTimeout(timer);                                 // one poll loop, however often pollSoon is called
   timer = setTimeout(pollJob, 2000);
 }
 

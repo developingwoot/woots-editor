@@ -184,6 +184,19 @@ def test_a_box_drawn_on_the_paused_cut_is_followed_and_shown_over_the_player(scr
     assert clutter(visible_text(page)) == []
 
 
+def test_a_redrawn_screen_stops_the_old_player_and_a_hung_job_check_is_tried_again(screen):
+    page, _ = open_cut(screen, "ui cut release")
+    expect(page.locator("#player")).to_have_attribute("src", __import__("re").compile("cut-v1"))
+    page.evaluate("() => { window._old = document.getElementById('player'); window._old.dataset.old = '1'; }")
+    page.evaluate("() => dispatchEvent(new HashChangeEvent('hashchange'))")                 # what a finished job does: the screen is drawn again
+    expect(page.locator("#player:not([data-old])")).to_have_count(1)
+    assert page.evaluate("() => window._old.getAttribute('src')") is None                   # the old one stopped downloading
+    asked = []
+    page.route("**/api/v2/job", lambda route: asked.append(1) if len(asked) == 0 else (asked.append(1), route.continue_()))   # the first check never answers
+    page.wait_for_timeout(12000)
+    assert len(asked) >= 2                                                                  # it gave up after 8 s and asked again
+
+
 def test_search_all_footage_adds_takes_for_a_clip_with_none(screen):
     page, _ = open_cut(screen, "ui cut search")
     page.locator("#strip .clip").nth(3).click()            # the last clip has no other take

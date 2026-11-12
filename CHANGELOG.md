@@ -4,6 +4,8 @@ What changed in each release, written for the people who use the app. Newest fir
 
 ## Unreleased
 
+- Fixed: after a few rough cuts in a row the bar at the top could stay on "Making the rough cut" when the cut was done. Each old cut's player kept downloading its video in the background and took up the browser's connections to the app; old players now stop, and the bar's check gives up after 8 seconds and asks again.
+
 - Blur on the rough cut: pause on the first frame where a name, an address or a screen shows, draw a box over it, and the app follows it through the clip (the camera can move). The box shows over the player so you can check it; where it drifts, pause there and use "Fix from here". Choose a blur or a black box, and "Ends here" stops it early. The rough cut, the preview and the final all hide it. A note can ask for one too ("blur my username here"); you then place the box.
 - Frame by frame: the comma and full stop keys (or the buttons under the player) step one frame back or on, and the time under the player shows the frame.
 - Notes can take a few words out of a clip ("cut 'or at least not right now' at 2:05"), even a clip you marked good, and can lay any recording from the footage folder over the picture ("put the timelapse here", sped up if you like): its own sound is not needed.

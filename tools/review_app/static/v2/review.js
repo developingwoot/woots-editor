@@ -13,7 +13,17 @@ let keyHandlerBox = null;                              // while a blur box is be
 const FPS = 30;                                        // the rough cut and the preview are rendered at 30 frames a second (sections.baseline_edit)
 let reopen = null;                                     // a clip whose Replace panel to open again after a background search
 document.addEventListener('keydown', e => { if (keyHandler) keyHandler(e); });
-export function leave() { keyHandler = null; keyHandlerBox = null; }
+export function leave() {
+  keyHandler = null; keyHandlerBox = null;
+  const p = document.getElementById('player');
+  if (p) releasePlayer(p);
+}
+
+// A player taken off the page keeps downloading its video until it is told to stop. The browser opens only six connections to the app, so a few old cuts
+// still loading used them all and every other request waited (the job bar stayed on "Making the rough cut" after the cut was done).
+function releasePlayer(v) {
+  try { v.pause(); v.removeAttribute('src'); v.load(); } catch { /* already gone */ }
+}
 
 export async function render(root, key, stage, setBusy) {
   let version = null;
@@ -50,6 +60,7 @@ export async function render(root, key, stage, setBusy) {
     const playing = same && !prev.paused;
     const scroller = document.scrollingElement;
     const scrollY = scroller ? scroller.scrollTop : 0;
+    if (prev && !same) releasePlayer(prev);
     const video = same ? prev : h('video', { id: 'player', src: v.video, controls: true, preload: 'metadata' });
     const strip = h('div', { class: 'strip', id: 'strip' });
     const panel = h('div', { class: 'clipPanel', id: 'clipPanel', hidden: true });
