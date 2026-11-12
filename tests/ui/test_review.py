@@ -197,6 +197,21 @@ def test_a_redrawn_screen_stops_the_old_player_and_a_hung_job_check_is_tried_aga
     assert len(asked) >= 2                                                                  # it gave up after 8 s and asked again
 
 
+def test_the_first_preview_is_made_from_the_preview_screen(screen):
+    import views
+    page, r = open_cut(screen, "ui first preview")
+    page.goto(page.url.replace("/rough-cut", "/preview"))
+    expect(page.locator("#makeBtn")).to_have_text("Make the preview")
+    expect(page.locator("#makeBtn")).to_be_enabled()
+    assert "Builds the graphics" in page.inner_text("#stepBody")
+    page.click("#makeBtn")
+    expect(page.locator("#player")).to_be_visible(timeout=60000)
+    expect(page.locator("#versionMenu")).to_have_value("1")
+    assert clutter(visible_text(page)) == []
+    fresh = make_project.build(cut=True, title="ui no cut no preview")                       # no rough cut yet: the button says so
+    assert views.review(fresh["work"], fresh["name"], "preview")["button"]["detail"] == "Make the rough cut first"
+
+
 def test_search_all_footage_adds_takes_for_a_clip_with_none(screen):
     page, _ = open_cut(screen, "ui cut search")
     page.locator("#strip .clip").nth(3).click()            # the last clip has no other take

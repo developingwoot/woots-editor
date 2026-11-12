@@ -294,6 +294,13 @@ def review(work: str, name: str, stage: str, version: int | None = None, running
         can = (WORK_OF(work) / f"{name}.beatmap.json").exists()
         out["button"] = {"label": "Make the rough cut", "enabled": can and not running, "first": True,
                          "detail": "" if can else "There is no plan to cut from yet", "estimate": cut_estimate(_unread(work, name)) if can else ""}
+    elif stage == "preview" and not vs:
+        can = bool(reviewnotes.versions(work, name, "cut"))
+        n_gfx = len(graphics_list(work, name)) if can else 0
+        out["button"] = {"label": "Make the preview", "enabled": can and not running, "first": True,
+                         "detail": ("Builds the graphics (your fun moments too) and puts the whole video together." + (f" {n_gfx} graphic{'s' if n_gfx != 1 else ''} to build." if n_gfx else ""))
+                         if can else "Make the rough cut first",
+                         "estimate": minutes_text(_PIPELINES["preview"][2]) if can else ""}
     else:
         out["button"] = {"label": f"Make {word} {nxt} from my notes", "enabled": bool(cur) and bool(parts) and not running, "first": False,
                          "detail": ", ".join(parts) if parts else "Add a note first",

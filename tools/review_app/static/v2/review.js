@@ -48,8 +48,8 @@ export async function render(root, key, stage, setBusy) {
     if (!data.has_video) {
       root.replaceChildren(h('div', { class: 'card empty', id: 'stepBody' },
         h('p', {}, stage === 'preview' ? 'No preview yet.' : 'No rough cut yet.'),
-        h('p', { class: 'muted' }, stage === 'cut' ? (data.button.enabled ? 'Claude can cut your clips together from the plan.' : data.button.detail) : 'It shows up here as soon as Claude has made one.'),
-        stage === 'cut' ? makeButton(data.button) : null,
+        h('p', { class: 'muted' }, stage === 'cut' ? (data.button.enabled ? 'Claude can cut your clips together from the plan.' : data.button.detail) : data.button.detail),
+        makeButton(data.button),
         data.button.estimate && data.button.enabled ? h('p', { class: 'muted small' }, data.button.estimate) : null));
       return;
     }

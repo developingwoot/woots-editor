@@ -230,9 +230,12 @@ def fake_stitch(work: str, name: str):
     import shutil
     import watchnotes
     src = watchnotes.preview_file(work, name)
+    if not src.exists():                                    # the first preview: the latest rough cut stands in
+        vs = reviewnotes.versions(work, name, "cut")
+        src = WORK / work / vs[-1]["file"] if vs else src
     if not src.exists():
         raise ValueError("there is no preview to start from")
-    dst = src.with_name(f"{name}.preview-half.fake{int(time.time() * 1000)}.mp4")
+    dst = WORK / work / f"{name}.preview-half.fake{int(time.time() * 1000)}.mp4"
     shutil.copyfile(src, dst)
     st = read_json(WORK / work / f"{name}.stitch.json", {}) or {}
     st["file"] = dst.name

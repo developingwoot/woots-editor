@@ -145,7 +145,7 @@ def test_v2_notes_make_and_stop_refuse_bad_requests(base):
         return urllib.request.urlopen(req, timeout=10)
     with pytest.raises(urllib.error.HTTPError) as e:
         post("/api/v2/make", {"key": key, "stage": "preview"})
-    assert e.value.code == 400 and "add a note first" in e.value.read().decode()
+    assert e.value.code == 400 and "make the rough cut first" in e.value.read().decode()        # the first preview needs a rough cut, not a note
     with pytest.raises(urllib.error.HTTPError) as e:
         post("/api/v2/notes", {"key": key, "stage": "preview", "op": "add", "text": " ", "t": 1})
     assert e.value.code == 400 and "write the note first" in e.value.read().decode()
