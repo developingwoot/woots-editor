@@ -96,7 +96,7 @@ def add_sfx(beats: list, t: float, sound: str, times: dict | None = None) -> str
     b, at = beat_at(beats, t, times)
     au = b.setdefault("audio", {})
     au["sfx"] = list(au.get("sfx") or []) + [f"{Path(f).stem} @ {at}"]
-    return f"Added the sound {Path(f).stem} at {_clock(t)} (heard from the preview on: the rough cut has no sound effects)"
+    return f"Added the sound {Path(f).stem} at {_clock(t)}"
 
 
 def add_text(beats: list, t: float, text: str, kind: str = "correction", times: dict | None = None) -> str:

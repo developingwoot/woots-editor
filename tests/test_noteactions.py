@@ -54,7 +54,7 @@ def test_a_sound_effect_goes_on_the_clip_at_that_time():
         done = noteactions.run(r["work"], r["name"], [{"note": n["id"], "do": "sfx", "time": t, "sound": "wrong buzzer"},
                                                       {"note": 77, "do": "sfx", "time": t, "sound": "applause"}], {}, log=lambda s: None)
         assert beat(r, "B02")["audio"]["sfx"] == ["Wrong_Buzzer @ 0.5"]
-        assert "Wrong_Buzzer" in done["by_note"][n["id"]][0] and "preview" in done["by_note"][n["id"]][0]
+        assert done["by_note"][n["id"]][0] == f"Added the sound Wrong_Buzzer at {noteactions._clock(t)}"      # heard in the rough cut too now
         assert "applause" in done["failed"][77]
     finally:
         (sfx / "Wrong_Buzzer.wav").unlink()

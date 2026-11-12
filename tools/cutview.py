@@ -219,13 +219,12 @@ def _clock(t: float) -> str:
 
 
 # ----------------------------------------------------------------------------- the render
-def edit_for(data: dict, folder: str) -> dict:
-    """The section.edit.json of the whole video with clips only: no graphics, no sound effects (music is never part of a section render).
-    On-screen text cards stay: they are quick to draw and the host checks their wording here."""
+def edit_for(data: dict, folder: str, built: dict | None = None) -> dict:
+    """The section.edit.json of the whole video: clips, B-roll, on-screen text, blurs, sound effects (transition whooshes too), and the graphics that are
+    built already and still match the plan (built = sections.load_built). A graphic not built yet is left out: the rough cut never waits for one.
+    Music is mixed in afterwards (add_music)."""
     import sections
-    edit = sections.baseline_edit(data["beats"], folder, built={})
-    edit["overlays"], edit["sfx"] = [o for o in edit["overlays"] if o.get("card")], []
-    return edit
+    return sections.baseline_edit(data["beats"], folder, built=built or {})
 
 
 def free_output(p: Path):
@@ -244,7 +243,8 @@ def render(work: str, name: str) -> tuple[Path, list]:
     folder, _ = shootplan.footage_folder(work, name)
     if not folder:
         raise ValueError("the footage folder is not set")
-    edit = edit_for(data, str(folder))
+    import sections
+    edit = edit_for(data, str(folder), sections.load_built(work, name))
     import loudness
     loudness.set_gains(work, name, edit, str(folder))
     if not edit["segments"]:

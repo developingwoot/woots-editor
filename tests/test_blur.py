@@ -255,6 +255,26 @@ def test_the_rough_cut_has_the_music_of_the_plan(tmp_path, monkeypatch):
     assert probe.stdout.strip() == "aac"
 
 
+def test_the_rough_cut_has_the_sound_effects_and_the_graphics_built_already(tmp_path, monkeypatch):
+    import config
+    import finalrender
+    sfx = tmp_path / "SFX"
+    sfx.mkdir()
+    (sfx / "Ding.wav").write_bytes(b"x")
+    monkeypatch.setattr(config, "SFX_DIR", sfx)
+    monkeypatch.setattr(finalrender, "SFX_DIR", sfx)
+    mov = tmp_path / "g.mov"
+    mov.write_bytes(b"x")
+    beats = [{"id": "B01", "dur": 3.0, "aroll": {"rel": "a.mp4", "in": 0.0, "out": 3.0}, "on_screen": {"shot": "a-roll", "broll": []}, "audio": {"sfx": ["Ding @ 1.0"]},
+              "graphic": {"kind": "callout", "idea": "the nozzle", "dur": 2.0, "at": 0.5}},
+             {"id": "B02", "dur": 3.0, "aroll": {"rel": "a.mp4", "in": 3.0, "out": 6.0}, "on_screen": {"shot": "a-roll", "broll": []},
+              "graphic": {"kind": "callout", "idea": "not built yet", "dur": 2.0}}]
+    built = {"B01": {"file": str(mov), "sig": sections.gsig(beats[0]["graphic"])}, "B02": {"file": str(mov), "sig": "an old design"}}
+    edit = cutview.edit_for({"beats": beats}, "F:/footage", built)
+    assert [(o["seg"], o["file"]) for o in edit["overlays"]] == [("B01", str(mov))]                # the one built for this design; the other is left out
+    assert [(x["seg"], Path(x["file"]).name) for x in edit["sfx"]] == [("B01", "Ding.wav")]
+
+
 def test_claude_is_given_the_music_library(tmp_path, monkeypatch):
     import config
     import makeversion
