@@ -256,7 +256,7 @@ def review(work: str, name: str, stage: str, version: int | None = None, running
     key = key_of(work, name)
     notes = reviewnotes.notes(work, name, stage)
     open_n = [n for n in notes if n.get("status") != "done"]
-    pending = {n["clip"]: n["kind"] for n in open_n if n.get("choice") is not None and n.get("clip") and n.get("kind") not in ("web", "idea")}
+    pending = {n["clip"]: n["kind"] for n in open_n if n.get("choice") is not None and n.get("clip") and n.get("kind") not in ("web", "idea", "blur")}
     web = {n["clip"]: n["choice"] for n in open_n if n.get("kind") == "web" and n.get("clip")}
     from pathlib import Path
     label = lambda n: reviewnotes.label(stage, n)           # noqa: E731
@@ -316,6 +316,8 @@ def review(work: str, name: str, stage: str, version: int | None = None, running
             out["moments"].append({"id": m["id"], "when": time_text(t), "t": t, "kind": m["kind"], "text": m["text"], "why": m["why"], "status": m["status"]})
         out["moments"].sort(key=lambda m: m["t"])
         out["ideas"] = idea_rows(work, name, starts)
+        import blur
+        out["blurs"] = blur.rows(_beat_list(work, name), real) if real else []
     return out
 
 

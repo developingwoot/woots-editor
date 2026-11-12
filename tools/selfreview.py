@@ -243,7 +243,7 @@ def timeline(work: str, name: str) -> dict:
     stitch = read_json(WORK / work / f"{name}.stitch.json")
     if not stitch:
         raise ValueError("no stitched preview yet: stitch the sections in the Build tab first")
-    segs, overlays, brolls, joins = [], [], [], []
+    segs, overlays, brolls, joins, blurs = [], [], [], [], []
     for sec in stitch["sections"]:
         sb = WORK / work / "sections" / name / sec["id"]
         rj, ej = read_json(sb / "out" / "render.json"), read_json(sb / "section.edit.json")
@@ -256,9 +256,10 @@ def timeline(work: str, name: str) -> dict:
             overlays.append({**o, "section": sec["id"], "seg_info": by_id.get(o["seg"])})
         for b in ej.get("broll", []):
             brolls.append({**b, "section": sec["id"], "seg_info": by_id.get(b["seg"])})
+        blurs += [{**x, "section": sec["id"]} for x in ej.get("blurs", [])]
     for a, b in zip(segs, segs[1:]):
         joins.append({"t": round(b["start"], 3), "from": a["id"], "to": b["id"]})
-    return {"stitch": stitch, "segments": segs, "overlays": overlays, "broll": brolls, "joins": joins,
+    return {"stitch": stitch, "segments": segs, "overlays": overlays, "broll": brolls, "joins": joins, "blurs": blurs,
             "size": (read_json(WORK / work / "sections" / name / stitch["sections"][0]["id"] / "section.edit.json") or {}).get("size", [960, 540])}
 
 

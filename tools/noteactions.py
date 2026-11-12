@@ -9,6 +9,10 @@
   {"note": id, "do": "angle", "file": "<the other recording named in the note>"}
         the other camera's picture over the host's take, the take's sound kept: the recording is found in the takes near the note by its sound
         (anglesync.py) and its picture goes over every kept stretch of the cut it covers
+  {"note": id, "do": "music", "from": "0:00", "until": "1:30" or "", "track": "<a name from music.txt>"}
+        background music: audio.music on every clip in that stretch (to the end when `until` is empty)
+  {"note": id, "do": "blur", "time": "0:31", "what": "the username on the printer screen"}
+        a blur (blur.py) on the clip at that time with no box yet: the host draws it on the frame and it is followed through the clip
 
 `time` is minutes:seconds into the video as the host saw it (like the notes); the clip playing then is found from the beat map's times.
 run() does them and writes the beat map once, through projectstore; an action that cannot be done is reported, never half done.
@@ -21,7 +25,7 @@ from pathlib import Path
 import config
 import projectstore
 
-KINDS = ("web", "sfx", "angle", "text")
+KINDS = ("web", "sfx", "angle", "text", "music", "blur")
 VIDEO_EXT = {".mp4", ".mov", ".mkv", ".m4v", ".avi", ".mts", ".webm"}
 NEAR_S = 60.0                  # an angle is looked for in the takes of the beats this close to the note
 
@@ -42,7 +46,7 @@ def parse(ans: dict, open_ids: set) -> list:
     for a in ans.get("edits") or []:
         if not isinstance(a, dict) or a.get("note") not in open_ids or a.get("do") not in KINDS:
             continue
-        if a["do"] in ("web", "sfx", "text") and seconds_of(a.get("time")) is None:
+        if a["do"] in ("web", "sfx", "text", "blur") and seconds_of(a.get("time")) is None:
             continue
         if a["do"] == "text" and not str(a.get("text") or "").strip():
             continue
@@ -51,6 +55,8 @@ def parse(ans: dict, open_ids: set) -> list:
         if a["do"] == "sfx" and not str(a.get("sound") or "").strip():
             continue
         if a["do"] == "angle" and not str(a.get("file") or "").strip():
+            continue
+        if a["do"] == "music" and not str(a.get("track") or "").strip():
             continue
         out.append(a)
     return out
@@ -112,6 +118,36 @@ def add_web(work: str, beats: list, a: dict, env=None, times: dict | None = None
                         "captured": time.strftime("%Y-%m-%d")})
     host = urlsplit(url).hostname or url
     return f"Put the web page {host} over the clip at {_clock(seconds_of(a['time']))}" + ("" if not find or got.get("found") else " (the words to highlight were not on the page)")
+
+
+def add_music(beats: list, a: dict, times: dict | None = None) -> str:
+    """A music bed (audio.music on each clip from `from` to `until`; builder.music_beds turns a run of them into one bed). `until` empty = to the end."""
+    import finalrender
+    f, why = finalrender.resolve_music(str(a.get("track") or ""))
+    if not f:
+        raise ValueError(f"the music '{a.get('track')}' could not be used ({why})")
+    t0 = seconds_of(a.get("from")) or 0.0
+    t1 = seconds_of(a.get("until"))
+    t1 = float("inf") if t1 is None else t1
+    live = [b for b in beats if not b.get("skip") and (b.get("aroll") or b.get("vo")) and (not times or b["id"] in times)]
+    got = [b for b in live if _span(b, times)[0] < t1 and _span(b, times)[0] + _span(b, times)[1] > t0]
+    if not got:
+        raise ValueError("no clip plays in that stretch")
+    for b in got:
+        b.setdefault("audio", {})["music"] = f.stem
+    end = max(_span(b, times)[0] + _span(b, times)[1] for b in got)
+    return f"Put the music {f.stem} under {_clock(min(_span(b, times)[0] for b in got))} to {_clock(end)} (heard from the preview on: the rough cut has no music)"
+
+
+def music_list() -> str:
+    """The tracks Claude can choose from (music.txt): name | tempo | length, tracks with vocals left out."""
+    import shortsaudio
+    cat = shortsaudio.catalog()
+    rows = []
+    for t in shortsaudio.tracks():
+        c = cat.get(Path(t["file"]).name.lower(), {})
+        rows.append(" | ".join(x for x in (t["name"], f"{t['bpm']} bpm" if t.get("bpm") else "", f"{round(c['duration'])} s" if c.get("duration") else "", t["note"]) if x))
+    return "\n".join(rows)
 
 
 def _kept(b: dict) -> list:
@@ -192,6 +228,12 @@ def run(work: str, name: str, actions: list, note_times: dict, env=None, log=pri
                 text = add_web(work, bm["beats"], a, env, times)
             elif a["do"] == "text":
                 text = add_text(bm["beats"], seconds_of(a["time"]), str(a["text"]), "detail" if a.get("kind") == "detail" else "correction", times)
+            elif a["do"] == "music":
+                text = add_music(bm["beats"], a, times)
+            elif a["do"] == "blur":
+                import blur
+                e = blur.ask(bm["beats"], seconds_of(a["time"]), str(a.get("what") or ""), times)
+                text = f"A blur box for {e['what'] or 'the part of the picture'} at {_clock(seconds_of(a['time']))}: place it over the frame (the Blur list under the player)"
             else:
                 text = add_angle(work, name, bm["beats"], str(a["file"]), float(note_times.get(a["note"]) or 0), find, length_of, times)
             changes.append(text)

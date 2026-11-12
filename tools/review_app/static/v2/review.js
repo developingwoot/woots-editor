@@ -9,9 +9,11 @@ const PENDING = { replace: 'Another take', remove: 'Out', trim: 'Trimmed' };
 const IDEA_KIND = { footage: 'Your footage', web: 'Web page', film: 'Film it', correction: 'Correction', detail: 'Detail' };
 
 let keyHandler = null;
+let keyHandlerBox = null;                              // while a blur box is being drawn: Esc stops
+const FPS = 30;                                        // the rough cut and the preview are rendered at 30 frames a second (sections.baseline_edit)
 let reopen = null;                                     // a clip whose Replace panel to open again after a background search
 document.addEventListener('keydown', e => { if (keyHandler) keyHandler(e); });
-export function leave() { keyHandler = null; }
+export function leave() { keyHandler = null; keyHandlerBox = null; }
 
 export async function render(root, key, stage, setBusy) {
   let version = null;
@@ -199,6 +201,90 @@ export async function render(root, key, stage, setBusy) {
         h('div', { class: 'muted small' }, 'Misspoke? Pause where it happens and type the right words: they show on screen for a few seconds in the next cut.'));
     }
 
+    // Blur (blur.py): pause on the first frame where a name or a screen shows, draw a box over it; the app follows it through the clip.
+    // The boxes show over the player while it plays, so a box that drifts is seen; pause there and draw it again to fix the rest of the path.
+    const layer = h('div', { class: 'blurLayer', id: 'blurLayer' });
+    const blurs = data.blurs || [];
+    const contentRect = () => {                          // where the picture is inside the player (it is letterboxed to keep its shape)
+      const W = video.clientWidth, H = video.clientHeight, vw = video.videoWidth || 16, vh = video.videoHeight || 9;
+      const s = Math.min(W / vw, H / vh);
+      return { x: (W - vw * s) / 2, y: (H - vh * s) / 2, w: vw * s, h: vh * s };
+    };
+    const boxAt = (tr, t) => {
+      if (!tr.length || t < tr[0][0] - 0.05 || t > tr[tr.length - 1][0] + 0.05) return null;
+      for (let i = 1; i < tr.length; i++) if (t <= tr[i][0]) {
+        const a = tr[i - 1], b = tr[i], f = (t - a[0]) / ((b[0] - a[0]) || 1e-9);
+        return [1, 2, 3, 4].map(j => a[j] + (b[j] - a[j]) * f);
+      }
+      return tr[tr.length - 1].slice(1);
+    };
+    const showBoxes = () => {
+      if (layer.classList.contains('drawing')) return;
+      const r = contentRect(), t = video.currentTime;
+      layer.replaceChildren(...blurs.filter(b => b.placed && t >= b.start - 0.02 && t <= b.end + 0.02).map(b => {
+        const x = boxAt(b.track, t);
+        return x ? h('div', { class: 'blurBox ' + b.style, 'data-id': b.id, style: `left:${r.x + x[0] * r.w}px;top:${r.y + x[1] * r.h}px;width:${x[2] * r.w}px;height:${x[3] * r.h}px` }) : null;
+      }).filter(Boolean));
+    };
+    video._showBoxes = showBoxes;                        // the player outlives this redraw: its frame loop always draws on the newest layer
+    video.onplay = () => {                               // one frame loop per play: an older one stops at its next frame
+      if (!video.requestVideoFrameCallback) return;
+      const gen = video._gen = (video._gen || 0) + 1;
+      const tick = () => { if (gen !== video._gen || video.paused) return; video._showBoxes(); video.requestVideoFrameCallback(tick); };
+      video.requestVideoFrameCallback(tick);
+    };
+    video.onseeked = showBoxes;
+    video.onloadedmetadata = showBoxes;
+    const blurSay = h('div', { class: 'muted small', id: 'blurSay' });
+    const drawBox = (label, send) => {                    // the player pauses and the next drag on it is the box
+      video.pause();
+      layer.classList.add('drawing');
+      layer.replaceChildren();
+      blurSay.textContent = `${label}: drag a box over it on the picture. Esc stops.`;
+      let a = null, el = null;
+      const pos = e => { const r = layer.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+      const stop = () => { layer.classList.remove('drawing'); layer.onmousedown = layer.onmousemove = layer.onmouseup = null; keyHandlerBox = null; showBoxes(); };
+      keyHandlerBox = e => { if (e.key === 'Escape') { stop(); blurSay.textContent = ''; return true; } return false; };
+      layer.onmousedown = e => { e.preventDefault(); a = pos(e); el = h('div', { class: 'blurBox new' }); layer.replaceChildren(el); };
+      layer.onmousemove = e => {
+        if (!a) return;
+        const b = pos(e);
+        Object.assign(el.style, { left: `${Math.min(a[0], b[0])}px`, top: `${Math.min(a[1], b[1])}px`, width: `${Math.abs(b[0] - a[0])}px`, height: `${Math.abs(b[1] - a[1])}px` });
+      };
+      layer.onmouseup = async e => {
+        if (!a) return;
+        const b = pos(e), r = contentRect();
+        const box = [(Math.min(a[0], b[0]) - r.x) / r.w, (Math.min(a[1], b[1]) - r.y) / r.h, Math.abs(b[0] - a[0]) / r.w, Math.abs(b[1] - a[1]) / r.h];
+        a = null;
+        if (box[2] < 0.01 || box[3] < 0.01) { el.remove(); return; }
+        stop();
+        blurSay.textContent = 'Following the box through the clip…';
+        try { await draw(await send(box)); } catch (err) { blurSay.textContent = ''; say(err.message); }
+      };
+    };
+    const blurPost = body => post('/api/v2/blur', body);
+    function blurCard() {
+      const what = h('input', { type: 'text', id: 'blurWhat', placeholder: 'What it hides (optional), e.g. my username', maxlength: 80, autocomplete: 'off', class: 'fbInput', onkeydown: e => e.stopPropagation() });
+      const style = h('select', { id: 'blurStyle' }, h('option', { value: 'blur' }, 'Blur'), h('option', { value: 'block' }, 'Black box'));
+      const addBtn = h('button', { class: 'quiet', id: 'blurAdd', onclick: () => drawBox('The blur starts at this frame',
+        box => blurPost({ op: 'add', t: video.currentTime, box, style: style.value, what: what.value.trim() })) }, 'Draw a box at the playhead');
+      const row = b => h('li', { class: b.placed ? '' : 'todo', 'data-id': b.id },
+        h('a', { class: 'when', href: '#', onclick: e => { e.preventDefault(); video.currentTime = b.start + 0.001; } }, `${fmt(b.start)}–${fmt(b.end)}`),
+        h('span', { class: 'ntext' }, b.what || (b.style === 'block' ? 'Black box' : 'Blur'), b.placed ? null : h('span', { class: 'muted small' }, ' · not placed yet')),
+        h('select', { class: 'blurRowStyle', onchange: async e => { try { await draw(await blurPost({ op: 'style', id: b.id, style: e.target.value })); } catch (err) { say(err.message); } } },
+          h('option', { value: 'blur', selected: b.style === 'blur' }, 'Blur'), h('option', { value: 'block', selected: b.style === 'block' }, 'Black box')),
+        b.placed
+          ? h('button', { class: 'quiet', title: 'The box is off here: draw it again from this frame on', onclick: () => drawBox('Draw the box again from this frame', box => blurPost({ op: 'fix', id: b.id, t: video.currentTime, box })) }, 'Fix from here')
+          : h('button', { class: 'quiet', onclick: () => { video.currentTime = b.start + 0.001; drawBox('Place the box', box => blurPost({ op: 'fix', id: b.id, t: video.currentTime, box })); } }, 'Place the box'),
+        b.placed ? h('button', { class: 'quiet', title: 'The blur stops at the playhead', onclick: async () => { try { await draw(await blurPost({ op: 'end', id: b.id, t: video.currentTime })); } catch (err) { say(err.message); } } }, 'Ends here') : null,
+        h('button', { class: 'quiet', title: 'Delete this blur', onclick: async () => { try { await draw(await blurPost({ op: 'delete', id: b.id })); } catch (err) { say(err.message); } } }, '✕'));
+      return h('div', { class: 'card teach', id: 'blurs' },
+        h('div', { class: 'rhead' }, h('b', {}, 'Blur')),
+        blurs.length ? h('ul', { class: 'moments blurList' }, ...blurs.map(row)) : null,
+        h('div', { class: 'row ownText' }, what, style, addBtn), blurSay,
+        h('div', { class: 'muted small' }, 'Pause on the first frame where it shows (comma and full stop step one frame), then draw a box over it. The box follows it to the end of the clip; it shows over the player so you can check it.'));
+    }
+
     for (const c of data.clips) {
       const cell = h('div', { class: 'clip' + (c.pending ? ' pending' : '') + (c.ref === selected ? ' selected' : ''), style: `flex: ${Math.max(c.share, 0.04)} 1 0`,
         'data-start': c.start, 'data-dur': c.dur, 'data-ref': c.ref || '', title: c.at },
@@ -218,10 +304,23 @@ export async function render(root, key, stage, setBusy) {
       }, { once: true });
     });
 
+    const clock = h('span', { class: 'muted small frameClock', id: 'frameClock' });
+    const showClock = () => { const t = video.currentTime || 0; clock.textContent = `${fmt(t)} · frame ${Math.floor((t % 1) * FPS) + 1} of ${FPS}`; };
     video.ontimeupdate = () => {                         // a property, not a listener: the player is reused by the next redraw, with that redraw's strip
       const t = video.currentTime;
       for (const el of strip.children) el.classList.toggle('playing', t >= +el.dataset.start && t < +el.dataset.start + +el.dataset.dur);
+      showClock();
+      if (video.paused || !video.requestVideoFrameCallback) showBoxes();
     };
+    const step = n => {                                  // one frame on or back: lands in the middle of the frame, so the picture shown is that frame
+      video.pause();
+      const f = Math.max(0, Math.round((video.currentTime || 0) * FPS - 0.5) + n);
+      video.currentTime = (f + 0.5) / FPS;
+    };
+    const frames = h('div', { class: 'row frameStep' },
+      h('button', { class: 'quiet', id: 'frameBack', title: 'One frame back (comma)', onclick: () => step(-1) }, '◀ 1 frame'),
+      h('button', { class: 'quiet', id: 'frameOn', title: 'One frame on (full stop)', onclick: () => step(1) }, '1 frame ▶'), clock);
+    showClock();
 
     const verMenu = h('select', { id: 'versionMenu', onchange: async e => { version = +e.target.value; await draw(await load()); } },
       ...data.versions.map(x => h('option', { value: x.n, selected: x.current }, x.label + (x.latest ? ' (latest)' : ''))));
@@ -259,12 +358,13 @@ export async function render(root, key, stage, setBusy) {
 
     const ideas = stage === 'cut' ? ideasCard(data.ideas || [], video) : null;
     const marks = stage === 'cut' && v.latest && total ? marksCard(key, video, total) : null;
+    const blurBox = stage === 'cut' && v.latest ? blurCard() : null;
     const b = data.button;
     root.replaceChildren(h('div', { class: 'review' },
-      h('div', { class: 'left' }, video, strip, marks && marks.overlay, panel,
+      h('div', { class: 'left' }, h('div', { class: 'playerWrap' }, video, stage === 'cut' && v.latest ? layer : null), frames, strip, marks && marks.overlay, panel,
         h('div', { class: 'muted small' }, stage === 'cut'
-          ? 'Click a clip to keep, replace, trim or remove it. Space plays, arrows jump 5 seconds, N adds a note.'
-          : 'Space plays, arrows jump 5 seconds, N adds a note. Shift and drag over the clips to note a range.'), marks && marks.card, ideas, teach, fun, stage === 'preview' ? musicCard(key) : null, stage === 'preview' ? factCheckCard(key) : null),
+          ? 'Click a clip to keep, replace, trim or remove it. Space plays, arrows jump 5 seconds, comma and full stop step one frame, N adds a note.'
+          : 'Space plays, arrows jump 5 seconds, comma and full stop step one frame, N adds a note. Shift and drag over the clips to note a range.'), marks && marks.card, blurBox, ideas, teach, fun, stage === 'preview' ? musicCard(key) : null, stage === 'preview' ? factCheckCard(key) : null),
       h('aside', { class: 'right card' },
         h('div', { class: 'rhead' }, h('b', {}, 'Notes'), verMenu),
         v.changes.length ? h('details', { class: 'changes' }, h('summary', {}, `What changed in ${v.label}`), ...(v.suggestions.length ? [h('div', { class: 'suggest', id: 'suggestions' }, h('b', {}, 'Claude suggests'),
@@ -286,9 +386,13 @@ export async function render(root, key, stage, setBusy) {
     }
     if (reopen) { selected = reopen; reopen = null; const c = data.clips.find(x => x.ref === selected); if (c) { await openPanel(c); document.getElementById('actReplace').click(); } }
     else if (selected) { const c = data.clips.find(x => x.ref === selected); if (c) openPanel(c); }
+    showBoxes();
     keyHandler = (e) => {
-      if (e.target.matches('input, textarea, [contenteditable]')) return;
-      if (e.key === ' ') { e.preventDefault(); video.paused ? video.play() : video.pause(); }
+      if (keyHandlerBox && keyHandlerBox(e)) return;
+      if (e.target.matches('input, textarea, select, [contenteditable]')) return;
+      if (e.key === ',') { e.preventDefault(); step(-1); }
+      else if (e.key === '.') { e.preventDefault(); step(1); }
+      else if (e.key === ' ') { e.preventDefault(); video.paused ? video.play() : video.pause(); }
       else if (e.key === 'ArrowRight') video.currentTime += 5;
       else if (e.key === 'ArrowLeft') video.currentTime -= 5;
       else if (e.key.toLowerCase() === 'n') { e.preventDefault(); video.pause(); noteBox.focus(); }

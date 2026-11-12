@@ -89,6 +89,17 @@ button.main.small { padding: 5px 12px; font-size: 13px; }
 .ideaText { font: inherit; padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; width: min(100%, 420px); }
 .ownText { margin-top: 12px; gap: 8px; }
 .ownText input { flex: 1; min-width: 0; }
+.playerWrap { position: relative; }
+.blurLayer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.blurLayer.drawing { pointer-events: auto; cursor: crosshair; background: rgba(0, 0, 0, .15); }
+.blurBox { position: absolute; border: 2px dashed #ffd23f; box-sizing: border-box; border-radius: 3px; }
+.blurBox.block { border-style: solid; background: rgba(0, 0, 0, .55); }
+.blurBox.blur { backdrop-filter: blur(6px); }
+.blurBox.new { border: 2px solid #ffd23f; background: rgba(255, 210, 63, .12); }
+.frameStep { gap: 6px; align-items: center; margin: 6px 0; }
+.frameClock { font-variant-numeric: tabular-nums; }
+.blurList li.todo .ntext { font-style: italic; }
+.blurRowStyle { font: inherit; }
 .finalTop { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
 .finalTop video { width: 100%; max-width: 960px; aspect-ratio: 16 / 9; background: #000; border-radius: var(--radius); }
 .warnings { margin: 0; padding-left: 20px; color: var(--bad); }

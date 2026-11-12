@@ -4,6 +4,10 @@ What changed in each release, written for the people who use the app. Newest fir
 
 ## Unreleased
 
+- Blur on the rough cut: pause on the first frame where a name, an address or a screen shows, draw a box over it, and the app follows it through the clip (the camera can move). The box shows over the player so you can check it; where it drifts, pause there and use "Fix from here". Choose a blur or a black box, and "Ends here" stops it early. The rough cut, the preview and the final all hide it. A note can ask for one too ("blur my username here"); you then place the box.
+- Frame by frame: the comma and full stop keys (or the buttons under the player) step one frame back or on, and the time under the player shows the frame.
+- Notes can ask for background music ("put some calm music under the intro"): Claude now gets your Music folder and picks a track; the preview and the final mix it under your voice.
+
 - B-roll from a web page: on any clip of the rough cut, paste a page's address (and the words to highlight) and the page is captured as a short clip over that clip, scrolling to the words or as a still with a slow zoom. Only public pages; the address goes into the description's credits.
 - Show the source: the fact check now keeps the words on each source page that back a claim. For a claim it found right, "Show the source" captures that page, scrolled to those words and highlighted, over the clip where you say it.
 - Transitions: a web page now slides in with a whoosh and slides out again; other B-roll stays a plain cut. Settings has a Transitions section (cut, dissolve, slide, slide up, whip, pop, flash), the web page panel can pick one for that page, and you can add your own presets in the youtube-edit skill's transitions.json. The sound comes from your sound effects folder.

@@ -124,7 +124,7 @@ def set_choice(work: str, name: str, ref: str, kind: str, text: str, t: float, c
         raise ValueError("unknown choice")
     with reviewnotes._lock:
         j = reviewnotes.load(work, name)
-        same = (lambda n: n.get("kind") == "web") if kind in ("web", "noweb") else (lambda n: n.get("kind") not in ("web", "idea"))     # a web picture and the ideas (ideas.py) sit beside the clip's other choice
+        same = (lambda n: n.get("kind") == "web") if kind in ("web", "noweb") else (lambda n: n.get("kind") not in ("web", "idea", "blur"))     # a web picture, the ideas (ideas.py) and blurs (blur.py) sit beside the clip's other choice
         j[STAGE] = [n for n in j[STAGE] if not (n.get("clip") == ref and n.get("choice") is not None and n.get("status") != "done" and same(n))]
         if kind not in ("keep", "noweb"):
             nid = 1 + max([n["id"] for n in j[STAGE]] + [0])
@@ -180,6 +180,8 @@ def apply_choices(work: str, name: str) -> dict:
         elif n["kind"] == "web" and ch.get("file"):
             put_web(b, ch)
             changes.append(f"Put the web page {ch.get('host') or ch.get('url', '')} over the clip at {at}")      # the note's time is already where the page starts
+        elif n["kind"] == "blur":
+            changes.append(ch.get("said") or n["text"])                     # blur.py changed the plan already; the cut shows it
         elif n["kind"] == "idea":
             import ideas
             said = ideas.apply_choice(work, name, b, ch)                     # B-roll from the footage or on-screen text the host said yes to

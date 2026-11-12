@@ -335,8 +335,9 @@ class _Transitions:
 def baseline_edit(beats: list[dict], folder: str, built: dict | None = None, size=(960, 540), fps=30) -> dict:
     """The mechanical section.edit.json for these beats (see sectionrender.py for the format). Graphics that are
     built (see built_path) become overlays; the rest are listed in `notes` for the agent."""
+    import blur
     built = built or {}
-    segs, broll, overlays, notes, sfx = [], [], [], [], []
+    segs, broll, overlays, notes, sfx, blurs = [], [], [], [], [], []
     trans = _Transitions(sfx)
     for b in beats:
         if b.get("skip"):
@@ -363,6 +364,7 @@ def baseline_edit(beats: list[dict], folder: str, built: dict | None = None, siz
             elif g:
                 notes.append(f"{b['id']}: graphic '{g.get('idea', '')[:40]}' is not built yet")
             overlays.extend(_text_overlays(b, notes))
+            blurs.extend(blur.edit_rows(b, []))
             sfx.extend(_sfx_for(b, g, built, notes))
             continue
         if not a:
@@ -392,8 +394,9 @@ def baseline_edit(beats: list[dict], folder: str, built: dict | None = None, siz
         elif g:
             notes.append(f"{b['id']}: graphic '{g.get('idea', '')[:40]}' is not built yet")
         overlays.extend(_text_overlays(b, notes))
+        blurs.extend(blur.edit_rows(b, _pieces(b)))
         sfx.extend(_sfx_for(b, g, built, notes))
-    return {"size": list(size), "fps": fps, "snap": True, "segments": segs, "broll": broll, "overlays": overlays, "sfx": sfx, "notes": notes}
+    return {"size": list(size), "fps": fps, "snap": True, "segments": segs, "broll": broll, "overlays": overlays, "blurs": blurs, "sfx": sfx, "notes": notes}
 
 
 def main():

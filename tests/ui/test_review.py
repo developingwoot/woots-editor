@@ -153,6 +153,37 @@ def test_ideas_for_broll_and_on_screen_text_are_answered_on_the_card(screen):
     assert clutter(visible_text(page)) == []
 
 
+def test_a_box_drawn_on_the_paused_cut_is_followed_and_shown_over_the_player(screen):
+    page, r = open_cut(screen, "ui cut blur")
+    page.evaluate("document.getElementById('player').currentTime = 1")
+    page.wait_for_function("document.getElementById('player').currentTime >= 0.9")
+    page.click("#frameOn")                                                 # one frame on: frame 31 of 30 a second
+    page.wait_for_function("Math.abs(document.getElementById('player').currentTime - 31.5 / 30) < 0.002")
+    page.keyboard.press(",")
+    page.wait_for_function("Math.abs(document.getElementById('player').currentTime - 30.5 / 30) < 0.002")
+    assert page.inner_text("#frameClock") == "0:01 · frame 1 of 30"
+    page.fill("#blurWhat", "the label")
+    page.click("#blurAdd")
+    expect(page.locator("#blurLayer.drawing")).to_have_count(1)
+    box = page.locator("#blurLayer").bounding_box()
+    page.mouse.move(box["x"] + box["width"] * 0.3, box["y"] + box["height"] * 0.3)
+    page.mouse.down()
+    page.mouse.move(box["x"] + box["width"] * 0.5, box["y"] + box["height"] * 0.5, steps=4)
+    page.mouse.up()
+    expect(page.locator("#blurs li")).to_have_count(1, timeout=30000)
+    assert "the label" in page.locator("#blurs").inner_text() and "Blur the label at 0:01" in page.locator("#notes").inner_text()
+    expect(page.locator("#blurLayer .blurBox")).to_have_count(1)                  # the box over the picture at the playhead
+    expect(page.locator("#makeBtn")).to_be_enabled()
+    page.locator("#blurs .blurRowStyle").select_option("block")
+    expect(page.locator("#blurLayer .blurBox.block")).to_have_count(1)
+    b = {x["id"]: x for x in __import__("json").loads((r["dir"] / f"{r['name']}.beatmap.json").read_text(encoding="utf-8"))["beats"]}
+    e = next(x for bb in b.values() for x in (bb.get("on_screen") or {}).get("blur") or [])
+    assert e["style"] == "block" and e["track"][0][1] == pytest.approx(0.3, abs=0.03) and len(e["track"]) > 2
+    page.locator("#blurs li button", has_text="✕").click()
+    expect(page.locator("#blurs li")).to_have_count(0)
+    assert clutter(visible_text(page)) == []
+
+
 def test_search_all_footage_adds_takes_for_a_clip_with_none(screen):
     page, _ = open_cut(screen, "ui cut search")
     page.locator("#strip .clip").nth(3).click()            # the last clip has no other take

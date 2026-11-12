@@ -9,7 +9,8 @@ section.edit.json:
    "broll":    [{"seg": "B03", "file": "<video>", "in": 2.0, "dur": 4.0, "at": 0.5,      # cutaway over the segment, muted
                  "t_in": {"kind": "slide", "dur": 0.35, "from": "right"}, "t_out": {...}}],   # optional: how it comes in and goes out (transitions.py)
    "overlays": [{"seg": "B01", "file": "<mov/mp4 with alpha>", "at": 0.0, "dur": 3.0},     # a rendered graphic over the segment
-                {"seg": "B02", "file": "<png>", "at": 1.0, "dur": 4.0, "still": true, "fade_in": true, "fade_out": true}]}   # an on-screen text card (textcards.py)
+                {"seg": "B02", "file": "<png>", "at": 1.0, "dur": 4.0, "still": true, "fade_in": true, "fade_out": true}],   # an on-screen text card (textcards.py)
+   "blurs":    [{"seg": "B04", "at": 2.0, "dur": 5.0, "style": "blur|block", "track": [[0.0, x, y, w, h], ...]}]}   # a part of the picture hidden (blur.py)
 
 * Segments play in the order listed, each re-encoded (H.264, 30 fps, AAC 48 kHz) and joined by stream copy.
 * `snap`: every cut point moves to the quietest 5 ms inside +-0.12 s of the nominal time (Parakeet word times can be
@@ -192,7 +193,7 @@ def card_fades(ov: dict, fade: float = 0.2) -> str:
             (f"fade=t=out:st={max(0.0, d - f):.3f}:d={f:.3f}:alpha=1," if ov.get("fade_out") else ""))
 
 
-def render_segment(edit: dict, seg: dict, a_in: float, a_out: float, out: Path, brolls: list, overlays: list, gain_db: float = 0.0, sfx: list = ()):
+def render_segment(edit: dict, seg: dict, a_in: float, a_out: float, out: Path, brolls: list, overlays: list, gain_db: float = 0.0, sfx: list = (), blurs: list = ()):
     W, H = edit["size"]
     fps = edit.get("fps", 30)
     D = max(0.1, a_out - a_in)
@@ -233,6 +234,10 @@ def render_segment(edit: dict, seg: dict, a_in: float, a_out: float, out: Path, 
                       f"{transitions.in_filters(tr, W, H)}null[b{i}]")
         chains.append(f"[{last}][b{i}]overlay=enable='between(t,{at:.3f},{at + dur:.3f})'{transitions.overlay_xy(tr)}:eof_action=pass[vb{i}]")
         last, k = f"vb{i}", k + 1
+    if blurs:                                                                                                      # a name or a screen blurred: over the picture and its B-roll, under text and graphics
+        import blur
+        more, last = blur.chains(blurs, last, W, H)
+        chains += more
     for i, ov in enumerate(overlays):
         at = float(ov.get("at", 0.0))
         chains.append(f"[{k}:v]format=rgba,fps={fps},scale={W}:{H},{card_fades(ov)}setpts=PTS-STARTPTS+{at}/TB[o{i}]")
@@ -263,9 +268,15 @@ def render_segment(edit: dict, seg: dict, a_in: float, a_out: float, out: Path, 
             parts.append(f"[sx{j}]")
             k += 1
         chains.append("".join(parts) + f"amix=inputs={len(parts)}:normalize=0:duration=first[aout]" if len(parts) > 1 else "[abase]anull[aout]")
+    graph = ";".join(chains)
+    fc = ["-filter_complex", graph]
+    if len(graph) > 8000:                                   # a long blur path: the graph goes in a file (Windows limits a command line to 32K characters)
+        gp = out.with_suffix(".graph.txt")
+        gp.write_text(graph, encoding="utf-8")
+        fc = ["-/filter_complex", str(gp)]
     for nv in (True, False):
         # The sound goes to its own WAV (no AAC priming padding per piece; render() cuts it to the picture's exact length and encodes once, the creator 2026-10-29: lips off the voice)
-        cmd = [FFMPEG, "-nostdin", "-y", "-v", "error", *args, "-filter_complex", ";".join(chains), "-map", "[vout]",
+        cmd = [FFMPEG, "-nostdin", "-y", "-v", "error", *args, *fc, "-map", "[vout]",
                *encoder(nv, edit.get("quality", "half")), "-r", str(fps), "-an", "-t", f"{D:.3f}", str(out),
                *(["-map", "[aout]", "-c:a", "pcm_s16le", "-t", f"{D:.3f}", str(out.with_suffix(".wav"))] if with_audio else [])]
         r = subprocess.run(cmd, capture_output=True, text=True)
@@ -312,7 +323,8 @@ def render(edit_path: Path, out_dir: Path | None = None, out_name: str = "previe
                 gain = max(-12.0, min(12.0, LEVEL_TARGET - lufs))
         part = tmp / f"seg_{i:03d}.mp4"
         sfx = [x for x in edit.get("sfx", []) if x["seg"] == seg["id"] and Path(x["file"]).exists()]
-        render_segment(edit, seg, s_in, s_out, part, brolls, overlays, gain, sfx)
+        blurs = [x for x in edit.get("blurs", []) if x["seg"] == seg["id"] and x.get("track")]
+        render_segment(edit, seg, s_in, s_out, part, brolls, overlays, gain, sfx, blurs)
         d = video_seconds(part, float(edit.get("fps", 30)))
         log.append({"id": seg["id"], "src": seg["src"], "in": s_in, "out": s_out, "nominal_in": a_in, "nominal_out": a_out,
                     "out_start": round(t0, 3), "out_dur": round(d, 3), "broll": len(brolls), "overlays": len(overlays), "zoom": seg.get("zoom", 1.0),

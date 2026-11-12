@@ -1885,6 +1885,16 @@ class Handler(BaseHTTPRequestHandler):
                 with _lock:
                     ideas.add_own(work, name, float(b.get("t") or 0), str(b.get("text") or ""), str(b.get("kind") or "correction"))
                 return self.send_json(views.review(work, name, "cut", running=bool(_busy())))
+            if u.path == "/api/v2/blur":                                      # a box drawn on the paused rough cut, followed through the clip (blur.py)
+                import blur
+                work, name = views.split_key(b["key"])
+                box = b.get("box")
+                if box is not None and (not isinstance(box, list) or len(box) != 4):
+                    raise ValueError("the box was not readable")
+                with _lock:
+                    blur.do(work, name, str(b.get("op") or ""), b.get("id"), None if b.get("t") is None else float(b["t"]), box,
+                            str(b.get("style") or "blur"), str(b.get("what") or ""))
+                return self.send_json(views.review(work, name, "cut", running=bool(_busy())))
             if u.path == "/api/v2/moments/find":
                 work, name = views.split_key(b["key"])
                 return self.send_json({"id": start_find_moments(work, name)["id"]})

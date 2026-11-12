@@ -505,7 +505,8 @@ def run(work: str, name: str) -> dict:
              **({"audio_src": g["audio_src"], "audio_in": g.get("audio_in", 0)} if g.get("audio_src") else {}), **({"mute": True} if g.get("mute") else {})} for g in T["segments"]]
     edit = {"size": SIZE, "fps": FPS, "snap": False, "audio": False, "quality": "final", "segments": segs,
             "broll": [{k: b[k] for k in ("seg", "file", "in", "dur", "at", "stabilize", "rotate", "zoom", "pan", "speed", "t_in", "t_out") if k in b} for b in T["broll"]],
-            "overlays": [{k: o[k] for k in ("seg", "file", "at", "dur", "in", "still", "fade_in", "fade_out") if k in o} for o in T["overlays"]]}
+            "overlays": [{k: o[k] for k in ("seg", "file", "at", "dur", "in", "still", "fade_in", "fade_out") if k in o} for o in T["overlays"]],
+            "blurs": [{k: x[k] for k in ("seg", "at", "dur", "style", "track")} for x in T.get("blurs", [])]}
     ep = fd / "final.edit.json"
     write_json(ep, edit)
     info = sectionrender.render(ep, fd / "video", "video-only.mp4")

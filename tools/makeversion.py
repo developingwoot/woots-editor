@@ -111,6 +111,7 @@ def brief(work: str, name: str, stage: str, fd: Path) -> str:
         (fd / "beats.json").write_text(json.dumps(rows, indent=1, ensure_ascii=False), encoding="utf-8")
     import noteactions
     (fd / "sounds.txt").write_text(noteactions.sounds_list() or "(the host has no sound effects yet)", encoding="utf-8")
+    (fd / "music.txt").write_text(noteactions.music_list() or "(the host has no music yet)", encoding="utf-8")
     return (
         f"The host watched the {'rough cut' if stage == 'cut' else 'preview'} of the host's video and left notes (notes.json, times are minutes:seconds into the video).\n"
         "A note whose time is \"whole video\" is about the video as a whole (for example: too long, cut more, be pickier). Apply it across the plan: set `skip` on the weakest beats (never a beat the host marked good), "
@@ -125,6 +126,10 @@ def brief(work: str, name: str, stage: str, fd: Path) -> str:
         ' A correction fixes something the host misspoke and starts with an asterisk ("*0.4 mm nozzle, not 0.6"); a detail adds a short fact (a price, a model number).\n'
         ' - another camera angle with the take\'s own sound: {"note": <id>, "do": "angle", "file": "<the recording the note names, exactly as written>"}.'
         " The app lines it up with the take by its sound and shows its picture wherever it covers the cut.\n"
+        ' - background music: {"note": <id>, "do": "music", "from": "0:00", "until": "<m:ss, or empty for to the end>", "track": "<one name from music.txt that fits the note and the video>"}.'
+        " The app mixes it under the host's voice; music.txt is the host's music library (name | tempo | length).\n"
+        ' - blur a part of the picture (a name, an address, a screen): {"note": <id>, "do": "blur", "time": "0:31", "what": "<what to hide, in a few words>"}.'
+        " The app puts a box on that clip for the host to place over it on the frame; the box then follows it through the clip.\n"
         "For each note, decide whether `skip_beats`, `edits` or a change to the beat map makes the video match what the host asked. A note that needs an edit is applied: put it under `applied`.\n"
         "Write answer.json in this folder:\n"
         '{"applied": [{"id": <note id>, "summary": "<one plain sentence about what you changed, no ids or file names>"}],\n'
