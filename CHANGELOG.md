@@ -4,6 +4,8 @@ What changed in each release, written for the people who use the app. Newest fir
 
 ## Unreleased
 
+- Fun moments can come more often (up to 3 a minute, 4 seconds apart; they were 1.5 a minute, 8 seconds apart), and teaching moments are spaced out: Claude keeps them at least 60 seconds apart, the one a newcomer needs more where two fall closer. Both are in the youtube-graphics skill's graphics.json.
+
 - The Preview screen has a "Make the preview" button for the first preview: it builds the graphics (the fun moments and teaching moments you ticked too) and puts the whole video together. Before, there was no way to start it from this screen, so ticked fun moments seemed to do nothing.
 
 - Fixed: after a few rough cuts in a row the bar at the top could stay on "Making the rough cut" when the cut was done. Each old cut's player kept downloading its video in the background and took up the browser's connections to the app; old players now stop, and the bar's check gives up after 8 seconds and asks again.

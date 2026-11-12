@@ -123,8 +123,20 @@ def test_teaching_moments_seed_once_answer_and_find_more(tmp_path):
     p = tmp_path / "teaching.json"
     p.write_text(json.dumps({"moments": [{"beat": "B02", "term": "retraction", "why": "newcomers do not know it"}, {"beat": "ZZ", "term": "bad"}]}),
                  encoding="utf-8")
-    ok, msg = teaching.import_found(w, n, p)
-    assert ok and msg == "Claude found 1 more teaching moment." and [m["term"] for m in teaching.load(w, n)] == ["pressure advance", "retraction"]
+    ok, msg = teaching.import_found(w, n, p)                                     # B02 is seconds from the teaching voice-over: too close (teaching_gap_s 60)
+    assert not ok and msg == "Claude found nothing to add."
+    import os
+    import skillrules
+    mine = Path(os.environ["WOOTS_SKILLS_DIR"]) / "youtube-graphics" / "graphics.json"
+    mine.parent.mkdir(parents=True, exist_ok=True)
+    mine.write_text(json.dumps({"teaching_gap_s": 1}), encoding="utf-8")         # the host's own copy of the skill wins
+    try:
+        assert skillrules.graphics()["teaching_gap_s"] == 1.0 and skillrules.graphics()["moment_gap_s"] == 4.0
+        assert "at least 1 seconds apart" in teaching.find_prompt(w, n, tmp_path / "fd")
+        ok, msg = teaching.import_found(w, n, p)
+        assert ok and msg == "Claude found 1 more teaching moment." and [m["term"] for m in teaching.load(w, n)] == ["pressure advance", "retraction"]
+    finally:
+        mine.unlink()
 
 
 @needs_ffmpeg

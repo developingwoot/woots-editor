@@ -104,11 +104,19 @@ def test_teaching_moments_can_be_ticked(screen):
 
 
 def test_claude_can_suggest_more_teaching_moments(screen):
-    page, _ = open_cut(screen, "ui cut find teaching")
-    page.click("#findTeach")
-    expect(page.locator("#teaching li")).to_have_count(2, timeout=30000)
-    assert "retraction" in page.locator("#teaching").inner_text()
-    assert clutter(visible_text(page)) == []
+    import json
+    import os
+    mine = Path(os.environ["WOOTS_SKILLS_DIR"]) / "youtube-graphics" / "graphics.json"
+    mine.parent.mkdir(parents=True, exist_ok=True)
+    mine.write_text(json.dumps({"teaching_gap_s": 1}), encoding="utf-8")         # the test video is seconds long: the usual 60 s gap leaves room for one
+    try:
+        page, _ = open_cut(screen, "ui cut find teaching")
+        page.click("#findTeach")
+        expect(page.locator("#teaching li")).to_have_count(2, timeout=30000)
+        assert "retraction" in page.locator("#teaching").inner_text()
+        assert clutter(visible_text(page)) == []
+    finally:
+        mine.unlink()
 
 
 def test_claude_can_suggest_fun_moments_and_a_tick_accepts_one(screen):

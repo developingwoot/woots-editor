@@ -66,15 +66,31 @@ def accepted(work: str, name: str) -> list:
     return [m for m in load(work, name) if m["status"] == "yes"]
 
 
+def _starts(work: str, name: str) -> dict:
+    """{beat id: where the clip starts}: in the latest rough cut when there is one (the plan's own times are estimates)."""
+    import makeversion
+    real = makeversion.clip_times(work, name, "cut")
+    return {k: v[0] for k, v in real.items()} if real else {b["id"]: float(b.get("start") or 0) for b in _beats(work, name)}
+
+
+def _gap() -> float:
+    import skillrules
+    return float(skillrules.graphics()["teaching_gap_s"])
+
+
 def find_prompt(work: str, name: str, fd: Path) -> str:
-    """Claude reads the transcript text of each clip (beats.json) and suggests terms a first-time viewer needs explained."""
+    """Claude reads the transcript text of each clip (beats.json) and suggests terms a first-time viewer needs explained, spaced at least teaching_gap_s apart."""
+    import views
     fd.mkdir(parents=True, exist_ok=True)
-    rows = [{"beat": b["id"], "said": b.get("said", "")} for b in _beats(work, name) if b.get("said") and not b.get("skip")]
+    starts = _starts(work, name)
+    rows = [{"beat": b["id"], "starts_at": views.time_text(starts[b["id"]]), "said": b.get("said", "")}
+            for b in _beats(work, name) if b.get("said") and not b.get("skip") and b["id"] in starts]
     (fd / "beats.json").write_text(json.dumps(rows, indent=1), encoding="utf-8")
-    known = [m["term"] for m in load(work, name)]
+    known = [{"term": m["term"], "at": views.time_text(starts.get(m["beat"], 0.0))} for m in load(work, name) if m["status"] != "no"]
     (fd / "known.json").write_text(json.dumps(known), encoding="utf-8")
-    return ("beats.json is what the host says in each clip of the host's video. A first-time viewer does not know technical terms. "
-            "Find up to 6 terms or ideas that need a short explanation (skip the ones in known.json). Write teaching.json here:\n"
+    return ("beats.json is what the host says in each clip of the host's video (starts_at = minutes:seconds into the video). A first-time viewer does not know technical terms. "
+            f"Find up to 6 terms or ideas that need a short explanation (skip the ones in known.json). Teaching moments are spaced out: at least {_gap():g} seconds apart, "
+            "and that far from the ones in known.json; where two fall closer, keep the one a newcomer needs more. Write teaching.json here:\n"
             '{"moments": [{"beat": "<beat id from beats.json>", "term": "<the term>", "why": "<one plain sentence: why a newcomer needs it>"}]}\n'
             "Write nowhere else.")
 
@@ -86,11 +102,18 @@ def import_found(work: str, name: str, p: Path) -> tuple[bool, str]:
         return False, "Claude's answer could not be read."
     beats = {b["id"] for b in _beats(work, name)}
     moments = load(work, name)
+    starts, gap = _starts(work, name), _gap()
+    taken = [starts[m["beat"]] for m in moments if m["status"] != "no" and m["beat"] in starts]
     n = 0
     for f in found:
         if isinstance(f, dict) and f.get("beat") in beats and str(f.get("term", "")).strip():
+            t = starts.get(f["beat"])
+            if t is not None and any(abs(t - x) < gap for x in taken):           # too close to another teaching moment
+                continue
             moments.append({"id": f"m{len(moments) + 1}", "beat": f["beat"], "term": str(f["term"]).strip()[:80],
                             "why": str(f.get("why", "")).strip()[:200], "source": "claude", "status": "suggested"})
+            if t is not None:
+                taken.append(t)
             n += 1
     if n:
         save(work, name, moments)

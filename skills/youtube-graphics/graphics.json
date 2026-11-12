@@ -1,1 +1,1 @@
-{"moments_per_min_max": 1.5, "moment_gap_s": 8, "moment_max_s": 1.5}
+{"moments_per_min_max": 3.0, "moment_gap_s": 4, "moment_max_s": 1.5, "teaching_gap_s": 60}
