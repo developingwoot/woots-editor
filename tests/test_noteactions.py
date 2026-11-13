@@ -182,3 +182,20 @@ def test_two_recordings_are_lined_up_by_their_sound(tmp_path):
     start, score = anglesync.locate(phone, main, 10, 40)
     assert abs(start - 22.5) < 0.02 and score >= anglesync.MIN_SCORE
     assert anglesync.locate(phone, main, 0, 15)[1] < anglesync.MIN_SCORE                       # a stretch it did not film
+
+
+def test_a_note_can_take_off_or_change_a_caption_that_is_already_there():
+    """Claude said it could not remove 'It's screwed down.' or shorten the micro SD caption: no edit could touch existing text."""
+    beats = [{"id": "B1", "start": 0, "dur": 10, "aroll": {"keep": [[0, 10]]}, "on_screen": {"text": [
+        {"text": "It's screwed down.", "kind": "detail", "at": 1.0, "dur": 3.0},
+        {"text": "Micro SD slot", "kind": "detail", "at": 5.0, "dur": 4.0}]}}]
+    ans = {"edits": [{"note": 1, "do": "text_remove", "time": "0:02", "find": "screwed down"},
+                     {"note": 2, "do": "text_edit", "time": "0:06", "find": "micro sd", "seconds": 2.9},
+                     {"note": 2, "do": "text_edit", "time": "0:06"}]}
+    assert [a["do"] for a in noteactions.parse(ans, {1, 2})] == ["text_remove", "text_edit"]    # an edit that changes nothing is dropped
+    assert noteactions.remove_text(beats, 2.0, "screwed down").startswith("Took")
+    assert [r["text"] for r in beats[0]["on_screen"]["text"]] == ["Micro SD slot"]
+    noteactions.edit_text(beats, 6.0, "micro sd", "Micro SD", 2.9)
+    assert beats[0]["on_screen"]["text"][0] == {"text": "Micro SD", "kind": "detail", "at": 5.0, "dur": 2.9}
+    with pytest.raises(ValueError):
+        noteactions.remove_text(beats, 6.0, "nothing like this")

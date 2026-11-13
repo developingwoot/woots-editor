@@ -29,7 +29,7 @@ from pathlib import Path
 import config
 import projectstore
 
-KINDS = ("web", "sfx", "angle", "text", "music", "blur", "cut", "broll")
+KINDS = ("web", "sfx", "angle", "text", "music", "blur", "cut", "broll", "text_remove", "text_edit")
 VIDEO_EXT = {".mp4", ".mov", ".mkv", ".m4v", ".avi", ".mts", ".webm"}
 NEAR_S = 60.0                  # an angle is looked for in the takes of the beats this close to the note
 
@@ -50,7 +50,9 @@ def parse(ans: dict, open_ids: set) -> list:
     for a in ans.get("edits") or []:
         if not isinstance(a, dict) or a.get("note") not in open_ids or a.get("do") not in KINDS:
             continue
-        if a["do"] in ("web", "sfx", "text", "blur", "cut", "broll") and seconds_of(a.get("time")) is None:
+        if a["do"] in ("web", "sfx", "text", "blur", "cut", "broll", "text_remove", "text_edit") and seconds_of(a.get("time")) is None:
+            continue
+        if a["do"] == "text_edit" and not (str(a.get("text") or "").strip() or isinstance(a.get("seconds"), (int, float))):
             continue
         if a["do"] == "cut" and not str(a.get("words") or "").strip():
             continue
@@ -110,6 +112,50 @@ def add_text(beats: list, t: float, text: str, kind: str = "correction", times: 
     on = b.setdefault("on_screen", {"shot": "a-roll", "note": "", "broll": []})
     on["text"] = [x for x in on.get("text") or [] if x.get("text") != e["text"]] + [e]
     return f"Showed “{e['text']}” on screen at {_clock(t)}"
+
+
+def _find_text(beats: list, t: float, find: str, times: dict | None = None):
+    """(beat, row) of the on-screen text a note means: the row whose words contain `find`, in the clip at t first, then in the clips nearest to it;
+    without `find`, the only row (or the one on screen at t) in the clip at t."""
+    b0, at = beat_at(beats, t, times)
+    live = [b for b in beats if not b.get("skip") and b.get("on_screen", {}).get("text")]
+    live.sort(key=lambda b: (b is not b0, abs(_span(b, times)[0] - t) if (not times or b["id"] in times) else 1e9))
+    want = _norm(find) if find else ""
+    for b in live:
+        rows = b["on_screen"]["text"]
+        if want:
+            hit = [r for r in rows if want in _norm(r.get("text", ""))]
+            if hit:
+                return b, hit[0]
+        elif b is b0:
+            on = [r for r in rows if r.get("at", 0) <= at < r.get("at", 0) + r.get("dur", 0)]
+            if on or len(rows) == 1:
+                return b, (on or rows)[0]
+    raise ValueError(f"no on-screen text matching '{find}' was found" if want else "there is no on-screen text there")
+
+
+def remove_text(beats: list, t: float, find: str = "", times: dict | None = None) -> str:
+    """Take an existing on-screen text (caption) out of the plan."""
+    b, row = _find_text(beats, t, find, times)
+    b["on_screen"]["text"] = [r for r in b["on_screen"]["text"] if r is not row]
+    return f"Took “{row.get('text', '')}” off the screen"
+
+
+def edit_text(beats: list, t: float, find: str = "", text: str = "", seconds: float | None = None, times: dict | None = None) -> str:
+    """Change an existing on-screen text: its words, and/or how long it stays (kept inside the clip)."""
+    import textcards
+    b, row = _find_text(beats, t, find, times)
+    said = []
+    if str(text or "").strip():
+        row["text"] = textcards.clean(text)
+        said.append(f"now says “{row['text']}”")
+    if seconds is not None:
+        room = float(b.get("dur") or 0) - float(row.get("at") or 0)
+        row["dur"] = round(max(0.5, min(float(seconds), room) if room > 0 else float(seconds)), 2)
+        said.append(f"stays {row['dur']} seconds")
+    if not said:
+        raise ValueError("there was nothing to change about the text")
+    return f"The on-screen text {' and '.join(said)}"
 
 
 def add_web(work: str, beats: list, a: dict, env=None, times: dict | None = None) -> str:
@@ -320,6 +366,12 @@ def run(work: str, name: str, actions: list, note_times: dict, env=None, log=pri
                 text = add_web(work, bm["beats"], a, env, times)
             elif a["do"] == "text":
                 text = add_text(bm["beats"], seconds_of(a["time"]), str(a["text"]), "detail" if a.get("kind") == "detail" else "correction", times)
+            elif a["do"] == "text_remove":
+                text = remove_text(bm["beats"], seconds_of(a["time"]), str(a.get("find") or ""), times)
+            elif a["do"] == "text_edit":
+                sec = a.get("seconds")
+                text = edit_text(bm["beats"], seconds_of(a["time"]), str(a.get("find") or ""), str(a.get("text") or ""),
+                                 float(sec) if isinstance(sec, (int, float)) and not isinstance(sec, bool) else None, times)
             elif a["do"] == "music":
                 text = add_music(bm["beats"], a, times)
             elif a["do"] == "cut":

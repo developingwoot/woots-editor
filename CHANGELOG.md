@@ -4,6 +4,8 @@ What changed in each release, written for the people who use the app. Newest fir
 
 ## Unreleased
 
+- Added: a note can now take an on-screen text that is already there off the screen, or change its words or how long it stays (before, Claude could only add new text and had to give up on notes like "remove that caption" or "shorten it").
+
 - Fixed: a change in how the app draws (the caption and blur fixes) did not reach a preview whose sections were already built: only a changed plan rebuilt a section. Sections with a caption, graphic or blur over a trimmed clip are now rebuilt once by "Make preview N again".
 
 - Fixed: in the preview and the final a blur or black box could let the unblurred picture show for a frame at a jump cut, a couple of times. It now carries straight through the cuts, like captions do. The rough cut was not affected.

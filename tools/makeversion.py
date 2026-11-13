@@ -125,6 +125,9 @@ def brief(work: str, name: str, stage: str, fd: Path) -> str:
         ' - a sound effect: {"note": <id>, "do": "sfx", "time": "0:31", "sound": "<one name from sounds.txt that fits what the note asks for>"}.\n'
         ' - on-screen text: {"note": <id>, "do": "text", "time": "0:31", "text": "<the words on screen, at most about 8>", "kind": "correction|detail"}.'
         ' A correction fixes something the host misspoke and starts with an asterisk ("*0.4 mm nozzle, not 0.6"); a detail adds a short fact (a price, a model number).\n'
+        ' - take an on-screen text that is already there off the screen: {"note": <id>, "do": "text_remove", "time": "0:31", "find": "<a few of its words, as in the beat map\'s on_screen.text>"}.\n'
+        ' - change an on-screen text that is already there (shorter or longer, other words): {"note": <id>, "do": "text_edit", "time": "0:31", "find": "<a few of its current words>", "text": "<the new words, or empty to keep them>", "seconds": <how long it stays, or leave out>}.'
+        " Use these two for existing text; never send the beat map for it.\n"
         ' - another camera angle with the take\'s own sound: {"note": <id>, "do": "angle", "file": "<the recording the note names, exactly as written>"}.'
         " The app lines it up with the take by its sound and shows its picture wherever it covers the cut.\n"
         ' - background music: {"note": <id>, "do": "music", "from": "0:00", "until": "<m:ss, or empty for to the end>", "track": "<one name from music.txt that fits the note and the video>"}.'
