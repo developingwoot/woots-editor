@@ -223,14 +223,18 @@ def edit_rows(b: dict, pieces: list) -> list:
         at, dur = float(e.get("at") or 0), float(e.get("dur") or 0)
         if dur <= 0.05:
             continue
+        mine = []
         for sid, s0, ln in pieces or [(b["id"], 0.0, float("inf"))]:
             a0, a1 = max(at, s0), min(at + dur, s0 + ln)
             if a1 - a0 <= 0.05:
                 continue
             inside = [p for p in tr if a0 - at < p[0] < a1 - at]
             path = [[0.0, *box_at(tr, a0 - at)], *[[p[0] - (a0 - at), *p[1:]] for p in inside], [a1 - a0, *box_at(tr, a1 - at)]]
-            out.append({"seg": sid, "at": round(a0 - s0, 3), "dur": round(a1 - a0, 3), "style": e.get("style", "blur"),
-                        "track": [[round(v, 4) for v in p] for p in simplify(path)]})
+            mine.append({"seg": sid, "at": round(a0 - s0, 3), "dur": round(a1 - a0, 3), "style": e.get("style", "blur"),
+                         "track": [[round(v, 4) for v in p] for p in simplify(path)]})
+        for k, row in enumerate(mine):                         # the renderer joins the pieces with no gap: a piece that goes on into the next fills to the cut (sectionrender.fill_cut)
+            row["cont"], row["more"] = k > 0, k < len(mine) - 1
+        out += mine
     return out
 
 

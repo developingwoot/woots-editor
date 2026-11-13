@@ -4,6 +4,8 @@ What changed in each release, written for the people who use the app. Newest fir
 
 ## Unreleased
 
+- Fixed: in the preview and the final a blur or black box could let the unblurred picture show for a frame at a jump cut, a couple of times. It now carries straight through the cuts, like captions do. The rough cut was not affected.
+
 - Fixed: in the final, the whoosh of a web page (or any sound effect) could play on long after the page was gone, over and over, when its sound file was long (one swish file is 22 seconds). The rough cut and the preview cut a sound at the end of its clip; the final now does too.
 
 - Fixed: the music stopped part-way through the preview and the final. A beat you trimmed plays as several pieces, and only the first piece found the beat's music, so the song ended after it and the next beat started it again (or nothing did). The song now runs under every piece.

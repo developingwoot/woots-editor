@@ -204,6 +204,15 @@ def fill_cut(ov: dict, D: float) -> dict:
     return {**ov, "at": round(at, 3), "dur": round(dur, 3)}
 
 
+def fill_cut_blur(bl: dict, D: float) -> dict:
+    """fill_cut for a blur: when it starts earlier, the path's times move with it (the box holds its first place until the path begins)."""
+    o = fill_cut(bl, D)
+    d = float(bl["at"]) - o["at"]
+    if d:
+        o["track"] = [[round(p[0] + d, 4), *p[1:]] for p in bl["track"]]
+    return o
+
+
 def render_segment(edit: dict, seg: dict, a_in: float, a_out: float, out: Path, brolls: list, overlays: list, gain_db: float = 0.0, sfx: list = (), blurs: list = ()):
     W, H = edit["size"]
     fps = edit.get("fps", 30)
@@ -212,6 +221,7 @@ def render_segment(edit: dict, seg: dict, a_in: float, a_out: float, out: Path, 
     cx, cy = float(seg.get("cx", 0.5)), float(seg.get("cy", 0.4))
     brolls = [{**b, "dur": D - float(b.get("at", 0.5))} if 0 < D - float(b.get("at", 0.5)) - float(b["dur"]) <= 0.25 else b for b in brolls]   # a B-roll that ends a few frames short of its piece (the cut point snapped later than the beat length) would leave one frame of the A-roll at the end: let it run to the end
     overlays = [fill_cut(o, D) for o in overlays]
+    blurs = [fill_cut_blur(x, D) for x in blurs]
     args = ["-ss", f"{a_in:.3f}", "-t", f"{D:.3f}", "-i", seg["src"]]
     va = seg.get("audio_src")                               # a voice-over beat: the picture is a B-roll clip, the sound is the voice-over take
     if va:
