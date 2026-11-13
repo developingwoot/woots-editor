@@ -89,7 +89,7 @@ def test_render_makes_a_cut_with_one_row_per_clip_and_versions_it():
     v = makeversion.finish_cut(w, n, video, rows, {})
     assert v["n"] == 1 and v["changes"] == ["The first cut"] and v["clips"][0]["ref"] == "B01"
     view = views.review(w, n, "cut")
-    assert view["version"]["label"] == "Cut 1" and view["button"]["label"] == "Make cut 2 from my notes" and view["button"]["enabled"] is False
+    assert view["version"]["label"] == "Cut 1" and view["button"]["label"] == "Make cut 2 again" and view["button"]["enabled"] is True      # no notes: the same plan is made again
     assert [t["term"] for t in view["teaching"]] == ["pressure advance"]
 
 

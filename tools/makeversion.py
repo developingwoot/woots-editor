@@ -222,7 +222,7 @@ def finish(work: str, name: str, stage: str, result: dict) -> dict:
     src = preview_file(work, name)
     if not src:
         raise ValueError("there is no new video to keep")
-    return reviewnotes.add_version(work, name, stage, src, result["changes"], clips_of(work, name), result["applied_ids"], lesson=result.get("lesson", ""))
+    return reviewnotes.add_version(work, name, stage, src, result["changes"] or ["Made again, nothing changed"], clips_of(work, name), result["applied_ids"], lesson=result.get("lesson", ""))
 
 
 def fake_stitch(work: str, name: str):

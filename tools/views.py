@@ -302,9 +302,9 @@ def review(work: str, name: str, stage: str, version: int | None = None, running
                          if can else "Make the rough cut first",
                          "estimate": minutes_text(_PIPELINES["preview"][2]) if can else ""}
     else:
-        out["button"] = {"label": f"Make {word} {nxt} from my notes", "enabled": bool(cur) and bool(parts) and not running, "first": False,
-                         "detail": ", ".join(parts) if parts else "Add a note first",
-                         "estimate": minutes_text(_PIPELINES["cut" if stage == "cut" else "preview"][2]) if parts else ""}
+        out["button"] = {"label": f"Make {word} {nxt} from my notes" if parts else f"Make {word} {nxt} again", "enabled": bool(cur) and not running, "first": False,
+                         "detail": ", ".join(parts) if parts else "No new notes: the plan as it is now is made again",     # after a change to the app, or to see the plan's edits
+                         "estimate": minutes_text(_PIPELINES["cut" if stage == "cut" else "preview"][2])}
     if stage == "preview":
         out["graphics"] = graphics_list(work, name)
     if stage == "cut":

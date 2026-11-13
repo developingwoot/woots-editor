@@ -4,6 +4,8 @@ What changed in each release, written for the people who use the app. Newest fir
 
 ## Unreleased
 
+- A new rough cut or preview can be made with no notes: the button reads "Make cut 2 again" and makes the plan as it is now. Before, it asked for a note first, and typing "render the rough cut" as a note failed because notes are for changes.
+
 - Fixed: a caption or graphic that runs across jump cuts blinked off for a frame at each cut. The cut points are snapped to the speech, so a piece could end a few frames after the caption's share of it. Captions, on-screen text and built graphics now carry straight through, in the rough cut, the preview and the final.
 
 - The voice is now evened out over time. The recording itself drifts by up to 10 dB over tens of seconds (you lean in, speak softer); the app no longer adds swings of its own, but it left yours. A slow, speech-only level curve (about 8 seconds, never more than 8 dB, nothing inside a sentence) now brings those stretches closer: on the Bambu recording the spread of the speech level fell from 2.6 to 1.2 dB. The rough cut, the preview and the final use it. Make a new rough cut to hear it.

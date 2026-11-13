@@ -21,8 +21,8 @@ def test_review_screen_loads_and_passes_the_clutter_check(screen):
     page, _ = open_preview(screen, "ui review load")
     expect(page.locator("#player")).to_be_visible()
     assert page.locator(".clip").count() == 3
-    expect(page.locator("#makeBtn")).to_be_disabled()
-    assert "Add a note first" in visible_text(page)
+    expect(page.locator("#makeBtn")).to_have_text("Make preview 2 again")
+    assert "No new notes" in visible_text(page)
     assert clutter(visible_text(page)) == []
 
 
@@ -43,7 +43,7 @@ def test_note_at_the_playhead_then_make_preview_2_with_what_changed(screen, base
     page.click(".changes summary")
     assert "Moved the shirt" in page.locator(".changes").inner_text()
     assert "done in Preview 2" in page.locator("#notes").inner_text()
-    expect(page.locator("#makeBtn")).to_be_disabled()
+    expect(page.locator("#makeBtn")).to_have_text("Make preview 3 again")
     page.select_option("#versionMenu", "1")
     expect(page.locator("#versionMenu")).to_have_value("1")
     assert clutter(visible_text(page)) == []
@@ -131,7 +131,7 @@ def test_claude_can_suggest_fun_moments_and_a_tick_accepts_one(screen):
 
 def test_ideas_for_broll_and_on_screen_text_are_answered_on_the_card(screen):
     page, r = open_cut(screen, "ui cut ideas")
-    expect(page.locator("#makeBtn")).to_be_disabled()
+    expect(page.locator("#makeBtn")).to_have_text("Make cut 2 again")
     page.click("#findIdeas")
     expect(page.locator("#ideas li")).to_have_count(2, timeout=30000)
     row = page.locator('#ideas li[data-kind="correction"]')

@@ -97,7 +97,7 @@ def test_review_view_has_video_strip_notes_and_button():
     v = views.review(w, n, "preview")
     assert v["version"]["label"] == "Preview 1" and v["version"]["video"].startswith("/media/")
     assert [round(c["share"], 2) for c in v["clips"]] == [0.33, 0.33, 0.33]
-    assert v["button"]["enabled"] is False and v["button"]["detail"] == "Add a note first"
+    assert v["button"]["enabled"] is True and v["button"]["label"] == "Make preview 2 again" and v["button"]["detail"].startswith("No new notes")
     rn.add(w, n, "preview", "check this", 4)
     rn.add(w, n, "preview", "and this", 6, 7)
     v = views.review(w, n, "preview")

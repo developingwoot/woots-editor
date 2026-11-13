@@ -596,8 +596,6 @@ def start_make_version(work, name, stage):
         raise ValueError("make the rough cut first")
     plain = [] if first_preview else makeversion.plain_notes(work, name, stage)     # the first preview is built from the plan as it is
     exact = [n for n in reviewnotes.open_notes(work, name, stage) if n not in plain] if not first_preview else []
-    if not (plain or exact or first_cut or first_preview):
-        raise ValueError("add a note first")
     job = _job(stage, ["apply the notes", "make the video", "keep it"])
     job.update(work=work, name=name, stage=stage)
     fd = WORK / work / "v2-run" / stage
