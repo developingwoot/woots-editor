@@ -187,7 +187,8 @@ def transition_sounds(brolls: list, kit: dict | None = None) -> list:
             f = transitions.sound_file(role, n.get(role, 0), kit)
             if f:
                 n[role] = n.get(role, 0) + 1
-                out.append({"name": f"{role} (transition)", "beat": b["seg"], "t": round(float(start) + at, 3), "file": f, "why": ""})
+                out.append({"name": f"{role} (transition)", "beat": b["seg"], "t": round(float(start) + at, 3), "file": f, "why": "",
+                        "max": round(max(0.0, float(b["seg_info"].get("dur") or 0.0) - at), 3)})
     return out
 
 
@@ -234,7 +235,7 @@ def audio_plan(work: str, name: str) -> dict:
                     missing.append({"kind": "sfx", "name": txt, "beat": sg["id"], "why": f"could not read the time {at!r} (use '@ 1.2' or '@graphic')"})
                     continue
             f, why = resolve_sfx(nm)
-            row = {"name": nm, "beat": sg["id"], "t": round(sg["start"] + off, 3), "file": str(f) if f else None, "why": why}
+            row = {"name": nm, "beat": sg["id"], "t": round(sg["start"] + off, 3), "file": str(f) if f else None, "why": why, "max": round(max(0.0, sg["dur"] - off), 3)}
             (sfx if f else missing).append(row if f else {"kind": "sfx", **row})
     sfx.extend(transition_sounds(T["broll"]))
     for bed in beds:

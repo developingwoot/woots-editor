@@ -4,6 +4,8 @@ What changed in each release, written for the people who use the app. Newest fir
 
 ## Unreleased
 
+- Fixed: in the final, the whoosh of a web page (or any sound effect) could play on long after the page was gone, over and over, when its sound file was long (one swish file is 22 seconds). The rough cut and the preview cut a sound at the end of its clip; the final now does too.
+
 - Fixed: the music stopped part-way through the preview and the final. A beat you trimmed plays as several pieces, and only the first piece found the beat's music, so the song ended after it and the next beat started it again (or nothing did). The song now runs under every piece.
 
 - Fixed: the Preview and Rough cut screens failed to load ("expected bytes") when a version had been recorded with no video, as the live-editor trial does. Such versions are now left out, and the next one is numbered after them.

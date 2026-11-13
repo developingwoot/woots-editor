@@ -109,6 +109,12 @@ def mix(speech, plan: dict, st: dict, cache: Path):
         clip = decode(Path(s["file"]), cache)
         peak = np.abs(clip).max() or 1.0
         clip = clip * (speech_peak / peak) * 10 ** (-12 / 20)          # -4 dB under the speech peak was too loud (the creator, 2026-10-25)
+        if s.get("max") is not None:                                   # the effect belongs to one piece: it stops where that piece ends (as in the preview), not when its file does
+            keep = max(0, int(float(s["max"]) * SR))
+            clip = clip[:keep].copy()
+            fade = min(len(clip), int(0.03 * SR))
+            if fade:
+                clip[-fade:] *= np.linspace(1, 0, fade, dtype=np.float32)[:, None]
         a = int(s["t"] * SR)
         e = min(n, a + len(clip))
         if a < n:
