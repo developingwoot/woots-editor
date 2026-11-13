@@ -92,6 +92,15 @@ def graphic_built(g: dict, bid: str, built: dict) -> bool:
     return bool(e) and Path(e["file"]).exists() and e.get("sig") == gsig(g)
 
 
+RENDER_REV = 2      # raise it when sectionrender draws something differently, so the sections it affects are built again (a section is rebuilt only when its sig changes)
+
+
+def render_rev(beats: list) -> str:
+    """"" for most sections; the renderer's revision for one that has a caption, a graphic or a blur over a trimmed beat (RENDER_REV 2: they carry through jump cuts with no gap)."""
+    hit = any(_pieces(b) and (((b.get("on_screen") or {}).get("text")) or ((b.get("on_screen") or {}).get("blur")) or live_graphic(b)) for b in beats)
+    return f"|r{RENDER_REV}" if hit else ""
+
+
 def beat_sig(b: dict) -> str:
     key = {k: b.get(k) for k in ("aroll", "on_screen", "graphic", "audio", "skip", "missing", "said")}
     if key["aroll"]:
@@ -184,7 +193,7 @@ def plan(work: str, name: str, write: bool = True) -> dict:
                      "dur": round(sum(b["dur"] for b in g), 1), "graphics": len(gfx), "unbuilt_graphics": len(unbuilt),
                      "needs_agent": bool(unbuilt) or bool(asked), "why": why, "asked": [{"beat": n.get("beat"), "t": n.get("t"), "text": n["text"]} for n in asked],
                      "sig": hashlib.sha1(("".join(beat_sig(b) for b in g) + "".join(f"{n['id']}:{n['text']}" for n in mine)
-                                          + tsig(g)).encode()).hexdigest()[:12]})
+                                          + tsig(g) + render_rev(g)).encode()).hexdigest()[:12]})
     data = {"generated": time.strftime("%Y-%m-%dT%H:%M:%S"), "beatmap_version": bm.get("version", 1),
             "beatmap_sha": hashlib.sha256(bmp.read_bytes()).hexdigest()[:16], "sections": secs}
     if write:

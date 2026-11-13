@@ -74,3 +74,10 @@ def test_a_blur_over_three_pieces_covers_every_frame_of_them(tmp_path):
     first = black.index(True)
     last = max(i for i, m in enumerate(black) if m)
     assert last - first > 90 and all(black[first:last - 2])
+
+
+def test_only_sections_with_something_over_a_trimmed_beat_are_built_again_after_a_renderer_change():
+    trimmed = {"id": "B1", "aroll": {"keep": [[0, 1], [2, 3]]}, "on_screen": {"text": [{"text": "x"}]}}
+    plain = {"id": "B2", "aroll": {"keep": [[0, 1]]}, "on_screen": {"text": [{"text": "x"}]}}
+    bare = {"id": "B3", "aroll": {"keep": [[0, 1], [2, 3]]}, "on_screen": {}}
+    assert sections.render_rev([trimmed]).startswith("|r") and sections.render_rev([plain]) == "" and sections.render_rev([bare]) == ""
