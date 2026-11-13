@@ -127,7 +127,8 @@ def delete(work: str, name: str, stage: str, nid: int) -> None:
 
 
 def versions(work: str, name: str, stage: str) -> list:
-    return load(work, name)["versions"][_stage(stage)]
+    """The versions that have a video. A version recorded with no video (a plan-only version, from the live-editor trial) is skipped here: this screen plays videos."""
+    return [v for v in load(work, name)["versions"][_stage(stage)] if v.get("file")]
 
 
 def mark_lesson_added(work: str, name: str, stage: str, n: int) -> None:

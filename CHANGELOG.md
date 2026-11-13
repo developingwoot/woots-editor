@@ -4,6 +4,8 @@ What changed in each release, written for the people who use the app. Newest fir
 
 ## Unreleased
 
+- Fixed: the Preview and Rough cut screens failed to load ("expected bytes") when a version had been recorded with no video, as the live-editor trial does. Such versions are now left out, and the next one is numbered after them.
+
 - A new rough cut or preview can be made with no notes: the button reads "Make cut 2 again" and makes the plan as it is now. Before, it asked for a note first, and typing "render the rough cut" as a note failed because notes are for changes.
 
 - Fixed: a caption or graphic that runs across jump cuts blinked off for a frame at each cut. The cut points are snapped to the speech, so a piece could end a few frames after the caption's share of it. Captions, on-screen text and built graphics now carry straight through, in the rough cut, the preview and the final.

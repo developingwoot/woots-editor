@@ -105,3 +105,16 @@ def test_review_view_has_video_strip_notes_and_button():
     assert [x["when"] for x in v["notes"]] == ["0:04", "0:06–0:07"]
     assert views.review(w, n, "preview", running=True)["button"]["enabled"] is False
     assert views.frame_path(w, v["version"]["video"].rsplit("/", 1)[1], 1.0).stat().st_size > 100
+
+
+def test_a_version_with_no_video_does_not_break_the_screen():
+    """The live-editor trial recorded plan-only versions (file None): the review screen skipped nothing and crashed. They are left out, and the next number goes on after them."""
+    w, n, d = video("rn plan only", preview=True)
+    makeversion.ensure_baseline(w, n, "preview")
+    j = rn.load(w, n)
+    j["versions"]["preview"].append({"n": 2, "file": None, "made": "", "changes": ["Took out a line"], "clips": [], "marker": "preview2", "suggestions": [], "lesson": "", "lesson_added": False})
+    rn.save(w, n, j)
+    assert [v["n"] for v in rn.versions(w, n, "preview")] == [1]
+    v = views.review(w, n, "preview")
+    assert v["version"]["label"] == "Preview 1" and v["button"]["label"] == "Make preview 2 again"
+    assert 1 + max(x["n"] for x in rn.load(w, n)["versions"]["preview"]) == 3
