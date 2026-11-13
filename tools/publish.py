@@ -4,7 +4,7 @@
   {"titles": [..], "title": "the chosen one", "description": "...", "tags": [..], "thumbnail_prompts": [..], "thumbnail_text": [..],
    "thumb": {"t": 12.0, "text": "THE WORST DESIGN"}}
 Claude writes the titles, the hook and summary, the credits it can find in the script, the tags and the thumbnail prompts (it does not generate
-images). The chapters are never Claude's: they come from the final render's cuts (finalrender.chapters) and are put into the description by code.
+images). The chapter times are the final render's cuts (name_chapters moves Claude's times onto them); the section names are the fallback.
 """
 import json
 import time
@@ -91,6 +91,52 @@ def chapter_lines(work: str, name: str) -> list:
         return []
 
 
+def chapter_points(work: str, name: str) -> list:
+    """Where a chapter can start: the start of each clip in the final video ({t, time, said}); empty when there is no stitched video yet."""
+    try:
+        import selfreview
+        import views
+        T = selfreview.timeline(work, name)
+        bm = json.loads((WORK / work / f"{name}.beatmap.json").read_text(encoding="utf-8-sig"))
+    except Exception:                       # noqa: BLE001
+        return []
+    said = {b["id"]: _clean(b.get("said"), 200) for b in bm.get("beats", [])}
+    out, seen = [], set()
+    for sg in T["segments"]:
+        base = str(sg["id"]).split(".")[0]
+        if base not in seen:
+            seen.add(base)
+            out.append({"t": round(float(sg["start"]), 1), "time": views.time_text(sg["start"]), "said": said.get(base, "")})
+    return out
+
+
+def name_chapters(claimed, points: list, total: float) -> list:
+    """Claude's chapters [{time, title}] put on real cuts: each time moves to the nearest clip start, chapters under 10 s apart or past the end are dropped,
+    the first is 0:00. [] when fewer than 3 are left (the caller then keeps the section names)."""
+    import views
+    if not points:
+        return []
+    found = []
+    for x in claimed if isinstance(claimed, list) else []:
+        if not isinstance(x, dict):
+            continue
+        import noteactions
+        t, title = noteactions.seconds_of(x.get("time")), _clean(x.get("title"), 60)
+        if t is None or len(title) < 3:
+            continue
+        found.append((min(points, key=lambda p: abs(p["t"] - t))["t"], title))
+    out = []
+    for t, title in sorted(found):
+        if out and (t - out[-1][0] < 10 or t == out[-1][0]):
+            continue
+        out.append((t, title))
+    if out:
+        out[0] = (0.0, out[0][1])
+    if len(out) > 1 and total and total - out[-1][0] < 10:
+        out.pop()
+    return [f"{views.time_text(t)} {title}" for t, title in out] if len(out) >= 3 else []
+
+
 def web_credits(work: str, name: str) -> list:
     """Web pages shown in the video (B-roll captured from a page): one credit line each, the page's title and address."""
     try:
@@ -119,6 +165,13 @@ def build_description(hook: str, summary: str, chapters: list, credits: list) ->
     return "\n\n".join(p for p in parts if p)
 
 
+def _total(work: str, name: str) -> float:
+    try:
+        return float(json.loads((WORK / work / f"{name}.stitch.json").read_text(encoding="utf-8-sig")).get("dur") or 0)
+    except (OSError, ValueError):
+        return 0.0
+
+
 def said_lines(work: str, name: str) -> list:
     """What is said in the newest cut or final, sentence by sentence with its time, from the beat map."""
     try:
@@ -137,6 +190,7 @@ def brief(work: str, name: str, fd: Path, note: str = "") -> str:
         script = ""
     (fd / "script.md").write_text(script[:20000], encoding="utf-8")
     (fd / "said.json").write_text(json.dumps(said_lines(work, name), indent=1, ensure_ascii=False), encoding="utf-8")
+    (fd / "chapter_points.json").write_text(json.dumps(chapter_points(work, name), indent=1, ensure_ascii=False), encoding="utf-8")
     (fd / "current.json").write_text(json.dumps(load(work, name), indent=1), encoding="utf-8")
     skillrules.copy_into(fd, "publish")
     n = skillrules.publish()
@@ -152,10 +206,11 @@ def brief(work: str, name: str, fd: Path, note: str = "") -> str:
         ' "hook": "the first line of the description: the viewer-first line, with the keywords, under ' + str(n["hook_max_chars"]) + ' characters",\n'
         ' "summary": "two or three plain sentences about what the video shows",\n'
         ' "credits": ["Name - video title - link, ONLY for creators the script names; never invent a person or a link"],\n'
+        ' "chapters": [{"time": "m:ss, one of the times in chapter_points.json", "title": "what THIS part is about, 2 to 6 plain words from what is said, not the section name"}, "... 6 to 12 chapters, the first at 0:00, each at least 30 seconds long"],\n'
         ' "tags": ["up to ' + str(n["tags_max"]) + ' specific search phrases, not single generic words"],\n'
         ' "pinned_comment": "one question for the viewers that invites a real answer",\n'
         ' "thumbnail_prompts": ["2 or 3 prompts for an image tool: real photos of the host' + channel.thumbnail_style() + ', legible at 168x94"]}\n'
-        "No placeholders such as @YourChannel or [FILL]. Do not write chapters (the app adds them). Write nowhere else.")
+        "No placeholders such as @YourChannel or [FILL]. Chapters: chapter_points.json lists every place a chapter can start with the words said there. Name each chapter from what is said (the product, the step, the problem), never repeat one title, never use the section name. Write nowhere else.")
 
 
 def apply_answer(work: str, name: str, p: Path) -> tuple[bool, str]:
@@ -186,7 +241,7 @@ def apply_answer(work: str, name: str, p: Path) -> tuple[bool, str]:
     if d["title"] and d["title"] not in titles:
         d["titles"].append(d["title"])                     # a title the creator chose or typed is never thrown away
     d["title_why"] = {t: w for t, w in why.items() if t in titles}
-    d["description"] = build_description(_clean(a.get("hook"), n["hook_max_chars"]), a.get("summary"), chapter_lines(work, name), [str(c) for c in a.get("credits") or []] + web_credits(work, name))
+    d["description"] = build_description(_clean(a.get("hook"), n["hook_max_chars"]), a.get("summary"), (name_chapters(a.get("chapters"), chapter_points(work, name), _total(work, name)) or chapter_lines(work, name)), [str(c) for c in a.get("credits") or []] + web_credits(work, name))
     d["tags"] = clean_tags([str(t) for t in a.get("tags") or []], n["tags_max"])
     d["pinned_comment"] = _clean(a.get("pinned_comment"), 300)
     d["thumbnail_prompts"] = [x for x in (_clean(x, 400) for x in a.get("thumbnail_prompts") or []) if x][:3]

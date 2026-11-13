@@ -63,7 +63,7 @@ def test_claude_answer_is_validated_and_chapters_come_from_code(tmp_path, monkey
 def test_brief_carries_the_note_and_the_outline(tmp_path):
     r = make_project.build(clips=False, title="pub brief")
     prompt = publish.brief(r["work"], r["name"], tmp_path / "fd", "make the title shorter")
-    assert "make the title shorter" in prompt and "publish.json" in prompt and "Do not write chapters" in prompt
+    assert "make the title shorter" in prompt and "publish.json" in prompt and "chapter_points.json" in prompt
     assert (tmp_path / "fd" / "script.md").read_text(encoding="utf-8").strip()
 
 
@@ -190,3 +190,11 @@ def test_the_brief_hands_over_the_skill_files_and_what_is_said(tmp_path):
     got = {f.name for f in (tmp_path / "fd").iterdir()}
     assert {"SKILL.md", "metadata.md", "hook-library.md", "said.json", "script.md"} <= got
     assert "under 60 characters" in prompt and "pinned_comment" in prompt and "said.json" in prompt
+
+
+def test_chapters_named_by_claude_land_on_real_cuts_and_fall_back_when_unusable():
+    pts = [{"t": t, "time": "", "said": ""} for t in (0, 20, 50, 80, 100, 130)]
+    got = publish.name_chapters([{"time": "0:03", "title": "Unboxing the box"}, {"time": "0:21", "title": "Two screws"},
+                                 {"time": "0:25", "title": "too close"}, {"time": "1:21", "title": "Cardboard spools"}, {"time": "2:09", "title": "End"}], pts, 140)
+    assert got == ["0:00 Unboxing the box", "0:20 Two screws", "1:20 Cardboard spools", "2:10 End"]
+    assert publish.name_chapters([{"time": "0:00", "title": "Only one"}], pts, 140) == [] and publish.name_chapters("junk", pts, 140) == [] and publish.name_chapters([], [], 0) == []

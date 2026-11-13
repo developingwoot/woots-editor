@@ -4,6 +4,8 @@ What changed in each release, written for the people who use the app. Newest fir
 
 ## Unreleased
 
+- Fixed: chapter names in the description all repeated the section title. Claude now names the chapters from what is said (it is given every place a chapter can start with the words said there); the times are moved onto real cuts, at least 10 seconds apart, and the section names are used only if Claude gives fewer than 3 usable chapters.
+
 - Added: a note can now take an on-screen text that is already there off the screen, or change its words or how long it stays (before, Claude could only add new text and had to give up on notes like "remove that caption" or "shorten it").
 
 - Fixed: a change in how the app draws (the caption and blur fixes) did not reach a preview whose sections were already built: only a changed plan rebuilt a section. Sections with a caption, graphic or blur over a trimmed clip are now rebuilt once by "Make preview N again".
