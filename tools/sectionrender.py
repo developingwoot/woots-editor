@@ -193,6 +193,17 @@ def card_fades(ov: dict, fade: float = 0.2) -> str:
             (f"fade=t=out:st={max(0.0, d - f):.3f}:d={f:.3f}:alpha=1," if ov.get("fade_out") else ""))
 
 
+def fill_cut(ov: dict, D: float) -> dict:
+    """A caption or graphic that carries on across a jump cut must not blink there. The cut points are snapped, so the piece of the segment can be a few frames
+    longer than the overlay's share of it: a piece that came from the one before starts at 0, and one that goes on into the next runs to the end of its segment."""
+    at, dur = float(ov.get("at") or 0.0), float(ov["dur"])
+    if ov.get("cont") and 0 < at <= 0.3:
+        at, dur = 0.0, dur + at
+    if ov.get("more") and 0 < D - (at + dur) <= 0.3:
+        dur = D - at + 0.1                                            # a little over: the piece is cut to whole frames and its last frame must have the card too
+    return {**ov, "at": round(at, 3), "dur": round(dur, 3)}
+
+
 def render_segment(edit: dict, seg: dict, a_in: float, a_out: float, out: Path, brolls: list, overlays: list, gain_db: float = 0.0, sfx: list = (), blurs: list = ()):
     W, H = edit["size"]
     fps = edit.get("fps", 30)
@@ -200,6 +211,7 @@ def render_segment(edit: dict, seg: dict, a_in: float, a_out: float, out: Path, 
     z = float(seg.get("zoom") or 1.0)
     cx, cy = float(seg.get("cx", 0.5)), float(seg.get("cy", 0.4))
     brolls = [{**b, "dur": D - float(b.get("at", 0.5))} if 0 < D - float(b.get("at", 0.5)) - float(b["dur"]) <= 0.25 else b for b in brolls]   # a B-roll that ends a few frames short of its piece (the cut point snapped later than the beat length) would leave one frame of the A-roll at the end: let it run to the end
+    overlays = [fill_cut(o, D) for o in overlays]
     args = ["-ss", f"{a_in:.3f}", "-t", f"{D:.3f}", "-i", seg["src"]]
     va = seg.get("audio_src")                               # a voice-over beat: the picture is a B-roll clip, the sound is the voice-over take
     if va:

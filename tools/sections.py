@@ -264,6 +264,8 @@ def _spread_overlay(b: dict, file: str, at: float, dur: float) -> list:
         a0, a1 = max(at, s0), min(at + dur, s0 + ln)
         if a1 - a0 > 0.05:
             out.append({"seg": sid, "file": file, "at": round(a0 - s0, 3), "in": round(max(0.0, s0 - at), 3), "dur": round(a1 - a0, 3)})
+    for k, o in enumerate(out):                                       # the renderer joins the pieces with no gap: a piece that goes on into the next one fills to the cut
+        o["cont"], o["more"] = k > 0, k < len(out) - 1
     return out or [{"seg": b["id"], "file": file, "at": at, "dur": dur}]
 
 
