@@ -360,7 +360,11 @@ def build_speech(segs: list[dict], frames: list[int], cache: Path, voice: bool):
     cached = {}
     for src, (a, b) in ranges.items():
         lo = max(0.0, a - pad)
-        cached[src] = (lo, source_speech(src, lo, b + 1.0, cache, voice))
+        sp = source_speech(src, lo, b + 1.0, cache, voice)
+        if voice and len(sp) > SR * 4:                                                              # the voice's slow ups and downs, evened (loudness.deviation)
+            import loudness
+            sp = loudness.apply_curve(sp, SR, loudness.deviation(sp.mean(axis=1), SR))
+        cached[src] = (lo, sp)
     n_fade = int(FADE * SR)
     ramp = np.linspace(0.0, 1.0, n_fade, dtype=np.float32)[:, None]
     pieces = []

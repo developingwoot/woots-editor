@@ -251,7 +251,11 @@ def render_segment(edit: dict, seg: dict, a_in: float, a_out: float, out: Path, 
     chains.append(f"[{last}]format=yuv420p[vout]")
     with_audio = edit.get("audio", True)                    # the final render builds its sound separately (voice chain, music, SFX)
     if with_audio:
-        vol = f",volume={gain_db:.2f}dB,alimiter=limit=0.95" if abs(gain_db) > 0.4 else ""
+        g1 = seg.get("gain_to_db")
+        if g1 is not None and abs(float(g1) - gain_db) > 0.3 and D > 0.5:                                         # the voice's slow level curve: the gain glides from the piece's start to its end
+            vol = f",asetpts=PTS-STARTPTS,volume='pow(10,({gain_db:.2f}+({float(g1) - gain_db:.2f})*t/{D:.3f})/20)':eval=frame,alimiter=limit=0.95"
+        else:
+            vol = f",volume={gain_db:.2f}dB,alimiter=limit=0.95" if abs(gain_db) > 0.4 else ""
         if va:
             chains.append(f"[1:a]aresample=48000,aformat=channel_layouts=stereo,afade=t=in:st=0:d=0.008,afade=t=out:st={max(0, D - 0.008):.3f}:d=0.008{vol}[abase]")
         elif has_audio(seg["src"]) and not seg.get("mute"):

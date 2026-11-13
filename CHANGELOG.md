@@ -4,6 +4,8 @@ What changed in each release, written for the people who use the app. Newest fir
 
 ## Unreleased
 
+- The voice is now evened out over time. The recording itself drifts by up to 10 dB over tens of seconds (you lean in, speak softer); the app no longer adds swings of its own, but it left yours. A slow, speech-only level curve (about 8 seconds, never more than 8 dB, nothing inside a sentence) now brings those stretches closer: on the Bambu recording the spread of the speech level fell from 2.6 to 1.2 dB. The rough cut, the preview and the final use it. Make a new rough cut to hear it.
+
 - Fixed: the voice got louder and quieter for no reason. The last loudness step rode the volume up and down as it went (a 12 dB difference came out as 4 dB). The rough cut, the preview, the final and shorts with music now get one gain for the whole video, and a limiter that only catches the odd peak.
 
 - Fun moments can come more often (up to 3 a minute, 4 seconds apart; they were 1.5 a minute, 8 seconds apart), and teaching moments are spaced out: Claude keeps them at least 60 seconds apart, the one a newcomer needs more where two fall closer. Both are in the youtube-graphics skill's graphics.json.
