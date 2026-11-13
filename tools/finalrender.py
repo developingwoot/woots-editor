@@ -201,7 +201,7 @@ def audio_plan(work: str, name: str) -> dict:
     cur = None
     for sg in T["segments"]:
         b = beats.get(sg["id"], {})
-        m = ((b.get("audio") or {}).get("music") or "").strip()
+        m = (((beats.get(sg["id"].split(".")[0]) or {}).get("audio") or {}).get("music") or "").strip()      # a trimmed beat's later pieces (B07.2, B07.3) keep the beat's music
         if m and cur and cur["name"] == m and abs(cur["end"] - sg["start"]) < 0.05:
             cur["end"] = sg["start"] + sg["dur"]
             cur["beats"].append(sg["id"])
