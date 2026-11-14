@@ -301,3 +301,69 @@ def test_a_plan_with_no_talking_recording_says_which_were_left_out_and_why():
     msg = recut.empty_reason({"beats": 0, "left_out": [{"rel": "sub/a.mkv", "why": "too little speech to be a talking recording"}]})
     assert msg.startswith("None of the recordings has enough talking") and "a.mkv: too little speech" in msg and "sub/" not in msg
     assert "microphone" in recut.empty_reason({"beats": 0, "left_out": []})
+
+
+def _quiet_video(title, samples, extra_clips=None, extra_analysis=None):
+    """A talking recording of 600 s: words at 0-20 s and 100-120 s (the beats), quiet in between; the frame library's samples as given."""
+    import json
+    import beatmap
+    import brolllib
+    import config
+    import workflow
+    r = workflow.create(title)
+    w, n = r["work"], r["name"]
+    words = [[f"w{i}", float(t), float(t) + 0.5] for i, t in enumerate(list(range(0, 20)) + list(range(100, 120)))]
+    beat = lambda bid, a, z, said: {"id": bid, "said": said, "dur": 20.0, "skip": False,
+                                    "aroll": {"rel": "talk.mkv", "in": a, "out": z, "keep": [[a, z]]}, "on_screen": {"broll": []}}
+    data = {"beats": [beat("B01", 0.0, 20.0, "open the box"), beat("B02", 100.0, 120.0, "the machine engraves the logo")]}
+    beatmap.path_of(w, n).write_text(json.dumps(data), encoding="utf-8")
+    analysis = {"talk.mkv": {"dur": 600.0, "words": 500, "list": words}, **(extra_analysis or {})}
+    (config.WORK / w / f"{n}.footage.json").write_text(json.dumps({"analysis": analysis}), encoding="utf-8")
+    brolllib.paths(w, n)[1].write_text(json.dumps({"clips": {"talk.mkv": {"dur": 600.0, "samples": samples}, **(extra_clips or {})}}), encoding="utf-8")
+    return w, n
+
+
+def _brolls(w, n):
+    import json
+    import beatmap
+    return {b["id"]: b["on_screen"]["broll"] for b in json.loads(beatmap.path_of(w, n).read_text(encoding="utf-8"))["beats"]}
+
+
+def test_quiet_stretches_leave_out_the_beats_and_every_word():
+    words = [["a", 10.0, 11.0], ["b", 50.0, 51.0]]
+    assert recut.quiet_stretches(words, 100.0, [[0.0, 5.0]], 3.0, 0.5) == [[5.0, 9.5], [11.5, 49.5], [51.5, 100.0]]
+    assert recut.quiet_stretches(words, 60.0, [], 20.0, 0.5) == [[11.5, 49.5]]
+
+
+def test_a_frame_of_the_host_facing_the_camera_is_not_work():
+    assert recut.shows_work({"subject": "XTOOL device", "hands": False})
+    assert recut.shows_work({"subject": "man unboxing", "hands": True})
+    assert not recut.shows_work({"subject": "man with beard", "hands": False})
+
+
+def test_a_long_beat_gets_what_was_done_right_after_it_in_its_own_recording():
+    work = lambda t: {"t": t, "kind": "real footage", "subject": "white box", "hands": True, "sharp": True}
+    w, n = _quiet_video("quiet after", [work(30.0), work(130.0)])
+    assert recut.cover_from_quiet(w, n) == 2
+    got = _brolls(w, n)
+    assert got["B01"][0]["file"] == "talk.mkv" and 20.0 < got["B01"][0]["in"] < 22.0          # just after its last word, clear of it
+    assert got["B02"][0]["in"] > 120.0 and got["B01"][0]["dur"] >= recut.MIN_PIECE_S
+    assert recut.cover_from_quiet(w, n) == 0                                                  # a beat with a cutaway is left alone
+
+
+def test_quiet_footage_of_the_host_just_facing_the_camera_or_not_looked_at_is_not_used():
+    face = lambda t: {"t": t, "kind": "real footage", "subject": "man with beard", "hands": False, "sharp": True}
+    w, n = _quiet_video("quiet face", [face(30.0), face(130.0)])
+    assert recut.cover_from_quiet(w, n) == 0
+    w, n = _quiet_video("quiet unseen", [])
+    assert recut.cover_from_quiet(w, n) == 0
+
+
+def test_a_silent_recording_goes_over_the_beat_whose_words_are_like_what_it_shows():
+    face = lambda t: {"t": t, "kind": "real footage", "subject": "man with beard", "hands": False, "sharp": True}
+    run = {"dur": 300.0, "samples": [{"t": 40.0, "kind": "real footage", "subject": "laser", "what": "the machine engraves a logo on wood", "hands": False, "sharp": True}]}
+    w, n = _quiet_video("silent run", [face(30.0), face(130.0)], {"run.mkv": run}, {"run.mkv": {"dur": 300.0, "words": 3, "list": [["hi", 1.0, 1.5]]}})
+    assert recut.cover_from_quiet(w, n) == 0
+    assert recut.cover_from_silent(w, n) == 1
+    got = _brolls(w, n)
+    assert got["B01"] == [] and got["B02"][0]["file"] == "run.mkv" and got["B02"][0]["in"] == 40.0

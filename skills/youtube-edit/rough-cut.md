@@ -19,6 +19,10 @@ The app builds the first cut from your recordings. It reads `rough-cut.json` (ev
 - **Beats.** A beat (one idea on screen) runs `beat_min_s` to `beat_max_s`. A longer stretch needs a change of picture.
 - **Repeats.** The same phrase of `repeat_phrase_words` words within `repeat_phrase_within_s` seconds is a stumble or a retake: keep one.
 - **Cutaways.** B-roll covers at most `broll_max_s` seconds at a time and only when the picture shows what is being said.
+  When the host talks while working (an unboxing, a build), the best picture for a sentence is what they did around it: a long beat with no cutaway gets the
+  quiet footage of its own recording nearest to it (between its sentences, else just after, else just before, within `quiet_near_s` seconds), never a stretch
+  where something is said and never the host just facing the camera. A recording with almost nothing said (the machine running) goes over the remaining beats
+  whose words are like what its frames show, in recording order.
 - **Transitions.** A cutaway comes in and goes out with a preset from `transitions.json` (a web page slides in with a whoosh, other B-roll is a plain cut, unless Settings say otherwise).
   To give one insert its own, put `"transition": "<preset id>"` on that insert in `on_screen.broll`. Use moves sparingly: a whoosh on every cutaway soon feels cheap.
 - **On-screen text.** A slip of the tongue is fixed with a short correction on screen instead of a retake: `on_screen.text` of the beat,

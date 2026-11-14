@@ -819,6 +819,8 @@ def start_rough_cut(work, name):
                 recut.place_broll(work, name, shotmatch.load(work, name), shotmatch.plan(work, name))
                 recut.cover_with_footage(work, name)
                 recut.cover_by_name(work, name)
+                recut.cover_from_quiet(work, name)
+                recut.cover_from_silent(work, name)
                 wrong = recut.audit_cutaways(work, name)
             lack = framing.missing(work, name, clipmap.read_json(beatmap.path_of(work, name), {"beats": []}))
             if lack:
