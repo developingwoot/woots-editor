@@ -21,7 +21,7 @@
   "punch_flat_s": 30,
   "hook_total_s": 30,
   "broll_min_beat_s": 12,
-  "quiet_near_s": 90,
+  "quiet_near_s": 20,
   "retake_share": 0.6,
   "repeat_sentence_far_share": 0.7,
   "splice_min_words": 4,

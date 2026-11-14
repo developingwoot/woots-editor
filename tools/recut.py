@@ -676,7 +676,7 @@ def cover_by_name(work: str, name: str) -> int:
 # ----------------------------------------------------------------------------- b-roll from the quiet stretches of the same recording
 QUIET_MIN_S = 4.0            # a quiet stretch shorter than this is a pause, not something being done
 QUIET_PAD_S = 0.6            # kept clear of any word (a word cut out must not be heard or seen being said)
-QUIET_NEAR_S = 90.0          # how far from what is said the quiet footage may be (set from the skill)
+QUIET_NEAR_S = 20.0          # how far from the very words it plays over the quiet footage may be (set from the skill)
 SAMPLE_REACH_S = 20.0        # frame-library samples this close to a piece judge what it shows
 PERSON = re.compile(r"\b(man|woman|person|people|host|guy|face|beard|presenter|speaker)\b", re.I)
 
@@ -705,17 +705,80 @@ def _good_footage(samples: list, a: float, b: float) -> bool:
     return bool(near) and all(shows_work(s) for s in near) and any(s.get("sharp", True) for s in near)
 
 
-def _cover_beats(data: dict, work: str, name: str) -> list:
+QUIET_WHY = "what you were doing around these words"
+POINTING = re.compile(r"\b(these|those|this one|that one|right here|right there|over here|down here|up here|in here|you can see|as you can see|look at|take a look|here we have|here is|here's|here are)\b", re.I)
+
+
+def covered_source(beat: dict, at: float, dur: float) -> list:
+    """[[a, b], ...] in the recording: the talking that plays while a cutaway of `dur` s starting `at` s into the beat is on screen."""
+    ar = beat["aroll"]
+    out, t = [], 0.0
+    for a, b in ar.get("keep") or [[ar["in"], ar["out"]]]:
+        lo, hi = max(at, t), min(at + dur, t + (b - a))
+        if hi > lo:
+            out.append([round(a + lo - t, 2), round(a + hi - t, 2)])
+        t += b - a
+    return out
+
+
+def _talking_picture(beat: dict, at: float, dur: float, samples: list) -> tuple:
+    """(pointing words are said under this window, the frame-library looks at the talking picture under it)."""
+    spans = covered_source(beat, at, dur)
+    said = " ".join(w[0] for w in beat["aroll"].get("words") or [] if any(a - 0.05 <= w[1] < b for a, b in spans))
+    near = [s for s in samples if any(a - SAMPLE_REACH_S <= float(s["t"]) <= b + SAMPLE_REACH_S for a, b in spans)]
+    return bool(POINTING.search(said)), near
+
+
+def is_demonstration(beat: dict, at: float, dur: float, samples: list) -> bool:
+    """The talking picture under this window already is the picture: the host points at something ('these rods right here'), or the frames show
+    hands at work or the screen being talked over. A cutaway there hides what is being shown. (A frame of the thing alone on the table is not
+    a demonstration: a cutaway placed for another reason may stay there.)"""
+    pointing, near = _talking_picture(beat, at, dur, samples)
+    return pointing or any(s.get("hands") or s.get("kind") == "screen recording" for s in near)
+
+
+def face_only(beat: dict, at: float, dur: float, samples: list) -> bool:
+    """The talking picture under this window is known to be the host facing the camera, with nothing pointed at: a cutaway may cover it."""
+    pointing, near = _talking_picture(beat, at, dur, samples)
+    return bool(near) and not pointing and not any(shows_work(s) for s in near)
+
+
+def _open_beats(data: dict, work: str, name: str) -> list:
     locked = locks.beat_ids(work, name, data)
-    return [b for b in data["beats"] if b.get("aroll") and not b.get("skip") and not b.get("vo") and not str(b.get("id", "")).startswith("H") and b["id"] not in locked
-            and not b.setdefault("on_screen", {}).setdefault("broll", []) and b["dur"] >= BROLL_MIN_BEAT_S]
+    return [b for b in data["beats"] if b.get("aroll") and not b.get("skip") and not b.get("vo") and not str(b.get("id", "")).startswith("H") and b["id"] not in locked]
+
+
+def _cover_beats(data: dict, work: str, name: str) -> list:
+    return [b for b in _open_beats(data, work, name) if not b.setdefault("on_screen", {}).setdefault("broll", []) and b["dur"] >= BROLL_MIN_BEAT_S]
+
+
+def uncover_demonstrations(work: str, name: str) -> list:
+    """Takes out every automatic cutaway that lies over a demonstration (is_demonstration): the host's own hands on the rods are the picture for
+    'we need to grease these rods', not other footage (the host 2026-11-14). Cutaways placed by hand or by a note stay. Returns what it took out."""
+    bp = beatmap.path_of(work, name)
+    data = clipmap.read_json(bp, None)
+    jp = brolllib.paths(work, name)[1]
+    if not data or not jp.exists():
+        return []
+    clips = json.loads(jp.read_text(encoding="utf-8")).get("clips", {})
+    out = []
+    for b in _open_beats(data, work, name):
+        was = (b.get("on_screen") or {}).get("broll") or []
+        samples = (clips.get(b["aroll"]["rel"]) or {}).get("samples", [])
+        keep = [x for x in was if not (x.get("auto") and is_demonstration(b, float(x.get("at") or 0), float(x.get("dur") or 0), samples))]
+        if len(keep) != len(was):
+            out += [{"beat": b["id"], "file": x["file"]} for x in was if x not in keep]
+            b["on_screen"]["broll"] = keep
+    if out:
+        clipmap.write_json(bp, data)
+    return out
 
 
 def cover_from_quiet(work: str, name: str) -> int:
-    """Talking while working (an unboxing, a build): what is done between sentences is the best picture for them. Each long beat with no cutaway gets the
-    quiet footage of its own recording nearest to it (between its sentences, else just after, else just before, within QUIET_NEAR_S), never a stretch
-    where something is said, never the host just facing the camera (the frame library says what each part shows; a part it has not looked at is not used).
-    Each moment is used once. Returns how many it added."""
+    """What the host does between sentences is a picture for them, but only where the talking picture is the host facing the camera (face_only): where it
+    already shows the work, it stays. A long beat with no cutaway gets quiet footage of its own recording from within QUIET_NEAR_S of the very words it
+    plays over (not of the beat: a beat joins sentences minutes apart), never a stretch where something is said, never the host just facing the camera
+    (a part the frame library has not looked at is not used). Each moment is used once. Its own earlier cutaways are placed again. Returns how many it added."""
     bp = beatmap.path_of(work, name)
     data = clipmap.read_json(bp, None)
     jp = brolllib.paths(work, name)[1]
@@ -724,6 +787,9 @@ def cover_from_quiet(work: str, name: str) -> int:
         return 0
     clips = json.loads(jp.read_text(encoding="utf-8")).get("clips", {})
     analysis = cfg.get("analysis") or {}
+    for b in _open_beats(data, work, name):
+        on = b.setdefault("on_screen", {}).setdefault("broll", [])
+        on[:] = [x for x in on if not (x.get("auto") and x.get("why") == QUIET_WHY)]
     used: dict = {}
     for b in data["beats"]:
         if b.get("aroll"):
@@ -733,34 +799,41 @@ def cover_from_quiet(work: str, name: str) -> int:
     added = 0
     for b in _cover_beats(data, work, name):
         rel = b["aroll"]["rel"]
-        lo, hi = float(b["aroll"]["in"]), float(b["aroll"]["out"])
-        at = COVER_AFTER_S if b["dur"] >= MIN_PIECE_S + COVER_AFTER_S + 1 else 0.0
-        want = min(BROLL_MAX, b["dur"] - at)
-        if want < MIN_PIECE_S:
-            continue
-        options = []
-        for i, (a, z) in enumerate(free.get(rel, [])):
-            if z - a < MIN_PIECE_S:
+        samples = (clips.get(rel) or {}).get("samples", [])
+        first = COVER_AFTER_S if b["dur"] >= MIN_PIECE_S + COVER_AFTER_S + 1 else 0.0
+        starts, t = [first], 0.0
+        for a, z in b["aroll"].get("keep") or []:                    # also from each join on: the cutaway then hides the jump
+            if t > first:
+                starts.append(round(t, 2))
+            t += z - a
+        done = False
+        for at in starts:
+            want = min(BROLL_MAX, b["dur"] - at)
+            if done or want < MIN_PIECE_S:
+                break
+            if not face_only(b, at, want, samples):
                 continue
-            if a >= lo and z <= hi:
-                far, start = 0.0, a                                  # between its own sentences
-            elif a >= hi - 0.01:
-                far, start = a - hi, a                               # just after
-            elif z <= lo + 0.01:
-                far, start = 1.5 * (lo - z), max(a, z - want)        # just before: the end of it, the moment nearest the words
-            else:
-                continue
-            if far <= QUIET_NEAR_S:
-                options.append((far, i, start))
-        for far, i, start in sorted(options):
-            a, z = free[rel][i]
-            dur = round(min(want, z - start), 2)
-            if dur < MIN_PIECE_S or not _good_footage(clips[rel].get("samples", []), start, start + dur):
-                continue
-            b["on_screen"]["broll"].append({"file": rel, "in": round(start, 2), "dur": dur, "at": at, "why": "what you were doing around these words", "auto": True})
-            free[rel][i:i + 1] = [r for r in ([a, start], [start + dur, z]) if r[1] - r[0] >= 0.01]
-            added += 1
-            break
+            spans = covered_source(b, at, want)
+            options = []
+            for i, (a, z) in enumerate(free.get(rel, [])):
+                if z - a < MIN_PIECE_S:
+                    continue
+                after = min((a - s1 for s0, s1 in spans if a >= s1 - 0.01), default=None)        # the quiet starts after these words
+                before = min((s0 - z for s0, s1 in spans if z <= s0 + 0.01), default=None)       # or ends before them
+                if after is not None and after <= QUIET_NEAR_S:
+                    options.append((after, i, a))
+                elif before is not None and before <= QUIET_NEAR_S:
+                    options.append((1.5 * before, i, max(a, z - want)))                           # the end of it, the moment nearest the words
+            for far, i, start in sorted(options):
+                a, z = free[rel][i]
+                dur = round(min(want, z - start), 2)
+                if dur < MIN_PIECE_S or not _good_footage(samples, start, start + dur):
+                    continue
+                b["on_screen"]["broll"].append({"file": rel, "in": round(start, 2), "dur": dur, "at": at, "why": QUIET_WHY, "auto": True})
+                free[rel][i:i + 1] = [r for r in ([a, start], [start + dur, z]) if r[1] - r[0] >= 0.01]
+                added += 1
+                done = True
+                break
     clipmap.write_json(bp, data)
     return added
 
@@ -809,7 +882,7 @@ def cover_from_silent(work: str, name: str) -> int:
         p = pool[scored[0][1]]
         at = COVER_AFTER_S if b["dur"] >= MIN_PIECE_S + COVER_AFTER_S + 1 else 0.0
         dur = round(min(BROLL_MAX, b["dur"] - at, p["room"]), 2)
-        if dur < MIN_PIECE_S:
+        if dur < MIN_PIECE_S or is_demonstration(b, at, dur, (clips.get(b["aroll"]["rel"]) or {}).get("samples", [])):       # the host is showing it: that is the picture
             continue
         b["on_screen"]["broll"].append({"file": p["rel"], "in": p["t"], "dur": dur, "at": at, "why": p["what"][:120], "auto": True})
         last[p["rel"]] = p["t"] + dur

@@ -5,6 +5,7 @@ starter set never reaches a user who has their own copy: the program falls back 
 given the user's copy) never read the rule. This module finds that and adds it, changing nothing else in the user's file:
 
   numbers  a key of a starter numbers file (rough-cut.json, publish.json, graphics.json, shorts.json) that the user's copy of that file lacks.
+           Also a number the app itself changed later (`numbers_were` of an update: {file: {key: old value}}) while the copy still has that old value.
   rules    an entry of `skills/updates.json` ({id, date, file, section, text, about}) whose text is not in the user's copy of `file`. Every rule added to a
            starter skill file after its first version gets an entry there, with the same words as in the starter file (a test checks that).
 
@@ -48,7 +49,25 @@ def missing_numbers() -> list:
         if mine is None or starter is None:
             continue
         out += [{"file": rel, "key": k, "value": v} for k, v in starter.items() if k not in mine]
+    for u in updates():                                   # a number the app set and later changed: the copy still has the old value, untouched by the user
+        for rel, olds in (u.get("numbers_were") or {}).items():
+            mine, starter = _json(skillrules.SKILLS / rel), _json(skillrules.STARTER / rel)
+            if mine is None or starter is None:
+                continue
+            out += [{"file": rel, "key": k, "value": starter[k], "was": old} for k, old in olds.items()
+                    if k in starter and mine.get(k) == old and starter[k] != old and not any(o["file"] == rel and o["key"] == k for o in out)]
     return out
+
+
+def replace_rule(text: str, olds: list, rule: str):
+    """`text` with the bullet that says one of `olds` (an earlier wording of the rule) now saying `rule`; None when no such bullet is there."""
+    lines = text.split("\n")
+    want = {_flat(o) for o in olds}
+    for i, ln in enumerate(lines):
+        if ln.lstrip().startswith("- ") and _flat(ln.lstrip()[2:]) in want:
+            lines[i] = ln[:len(ln) - len(ln.lstrip())] + f"- {rule}"
+            return "\n".join(lines)
+    return None
 
 
 def missing_rules() -> list:
@@ -73,7 +92,7 @@ def pending() -> dict:
     rules, nums = missing_rules(), missing_numbers()
     return {"count": len(rules) + len(nums),
             "rules": [{"file": u["file"], "about": u.get("about") or u["text"][:80], "text": u["text"]} for u in rules],
-            "numbers": [{"file": n["file"], "key": n["key"], "value": n["value"]} for n in nums]}
+            "numbers": [{"file": n["file"], "key": n["key"], "value": n["value"], **({"was": n["was"]} if "was" in n else {})} for n in nums]}
 
 
 def add_rule(text: str, section: str, rule: str) -> str:
@@ -117,7 +136,7 @@ def apply() -> dict:
         text = p.read_text(encoding="utf-8-sig")
         for u in rules:
             if u["file"] == rel:
-                text = add_rule(text, u.get("section", ""), u["text"])
+                text = replace_rule(text, u.get("was") or [], u["text"]) or add_rule(text, u.get("section", ""), u["text"])
         p.write_text(text, encoding="utf-8")
         touched.append(rel)
     return {"rules": len(rules), "numbers": len(nums), "files": touched}

@@ -70,7 +70,7 @@ function skillNote(u, root) {
     h('p', { class: 'muted' }, 'The app already cuts by them, but your own copy of the skills does not say so, and Claude reads your copy. Adding them changes nothing you wrote; the old file is kept next to it as .bak.'),
     h('details', {}, h('summary', {}, 'What would be added'),
       h('ul', {}, ...u.rules.map(r => h('li', {}, `${r.about} (${r.file})`)),
-        ...u.numbers.map(x => h('li', {}, `${x.key}: ${x.value} (${x.file})`)))),
+        ...u.numbers.map(x => h('li', {}, `${x.key}: ${x.value}${x.was === undefined ? '' : ` (was ${x.was})`} (${x.file})`)))),
     h('div', { class: 'row' }, h('button', { class: 'main', id: 'skillUpdatesAdd', onclick: add }, 'Add them to my skills')));
 }
 

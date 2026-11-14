@@ -819,6 +819,7 @@ def start_rough_cut(work, name):
                 recut.place_broll(work, name, shotmatch.load(work, name), shotmatch.plan(work, name))
                 recut.cover_with_footage(work, name)
                 recut.cover_by_name(work, name)
+                shown = recut.uncover_demonstrations(work, name)          # the host's own hands on the thing are the picture: nothing covers them
                 recut.cover_from_quiet(work, name)
                 recut.cover_from_silent(work, name)
                 wrong = recut.audit_cutaways(work, name)
@@ -857,6 +858,8 @@ def start_rough_cut(work, name):
                 changes.append(f"Suggestion, not done: move \"{s['text'][:70]}\" before \"{s['before'][:50]}\" - {s['why']}")
             if zoomed:
                 changes.append(f"{zoomed} punch-in zoom{'' if zoomed == 1 else 's'} on the talking head, eyes kept on one line")
+            if shown:
+                changes.append(f"{len(shown)} cutaway{'' if len(shown) == 1 else 's'} left out where you are showing the thing yourself")
             if wrong:
                 changes.append(f"{len(wrong)} cutaway{'' if len(wrong) == 1 else 's'} of another program taken out")
             if found["nothing"]:

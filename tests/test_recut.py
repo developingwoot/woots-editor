@@ -341,14 +341,42 @@ def test_a_frame_of_the_host_facing_the_camera_is_not_work():
     assert not recut.shows_work({"subject": "man with beard", "hands": False})
 
 
-def test_a_long_beat_gets_what_was_done_right_after_it_in_its_own_recording():
-    work = lambda t: {"t": t, "kind": "real footage", "subject": "white box", "hands": True, "sharp": True}
-    w, n = _quiet_video("quiet after", [work(30.0), work(130.0)])
+_FACE = lambda t: {"t": t, "kind": "real footage", "subject": "man with beard", "hands": False, "sharp": True}
+_WORK = lambda t: {"t": t, "kind": "real footage", "subject": "white box", "hands": True, "sharp": True}
+
+
+def test_a_talking_head_gets_what_was_done_right_after_its_words_in_its_own_recording(monkeypatch):
+    monkeypatch.setattr(recut, "SAMPLE_REACH_S", 5.0)                                        # the looks at the talking and at the quiet footage are told apart
+    w, n = _quiet_video("quiet after", [_FACE(5.0), _WORK(24.0), _FACE(105.0), _WORK(124.0)])
     assert recut.cover_from_quiet(w, n) == 2
     got = _brolls(w, n)
     assert got["B01"][0]["file"] == "talk.mkv" and 20.0 < got["B01"][0]["in"] < 22.0          # just after its last word, clear of it
     assert got["B02"][0]["in"] > 120.0 and got["B01"][0]["dur"] >= recut.MIN_PIECE_S
-    assert recut.cover_from_quiet(w, n) == 0                                                  # a beat with a cutaway is left alone
+    assert recut.cover_from_quiet(w, n) == 2 and len(_brolls(w, n)["B01"]) == 1               # run again: its own cutaways are placed again, not doubled
+    monkeypatch.setattr(recut, "QUIET_NEAR_S", 5.0)                                          # the quiet footage is 9 s from the words it would play over
+    assert recut.cover_from_quiet(w, n) == 0 and _brolls(w, n)["B01"] == []
+
+
+def test_nothing_covers_the_host_showing_the_thing_or_pointing_at_it():
+    import json
+    import beatmap
+    w, n = _quiet_video("quiet demo", [_WORK(2.0), _WORK(40.0), _FACE(102.0), _WORK(140.0)])
+    bp = beatmap.path_of(w, n)
+    data = json.loads(bp.read_text(encoding="utf-8"))
+    data["beats"][1]["aroll"]["words"] = [["we", 104.0, 104.3], ["grease", 104.4, 104.8], ["these", 105.0, 105.3], ["rods", 105.4, 105.8]]
+    data["beats"][0]["on_screen"]["broll"] = [{"file": "other.mkv", "in": 0.0, "dur": 8.0, "at": 3.0, "why": "a shot idea", "auto": True},
+                                              {"file": "mine.mkv", "in": 0.0, "dur": 4.0, "at": 12.0, "why": "A note asked for it"}]
+    bp.write_text(json.dumps(data), encoding="utf-8")
+    assert recut.uncover_demonstrations(w, n) == [{"beat": "B01", "file": "other.mkv"}]       # the automatic one over the hands goes, the one a note placed stays
+    assert [x["file"] for x in _brolls(w, n)["B01"]] == ["mine.mkv"]
+    assert recut.cover_from_quiet(w, n) == 0                                                  # B01 shows the work, B02 says "these rods"
+    assert _brolls(w, n)["B02"] == []
+
+
+def test_covered_source_follows_the_joins_of_a_beat():
+    beat = {"aroll": {"in": 10.0, "out": 215.0, "keep": [[10.0, 15.0], [200.0, 215.0]]}}
+    assert recut.covered_source(beat, 3.0, 8.0) == [[13.0, 15.0], [200.0, 206.0]]
+    assert recut.covered_source(beat, 0.0, 4.0) == [[10.0, 14.0]]
 
 
 def test_quiet_footage_of_the_host_just_facing_the_camera_or_not_looked_at_is_not_used():

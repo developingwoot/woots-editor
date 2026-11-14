@@ -77,3 +77,20 @@ def test_the_home_screen_is_told(tmp_path, monkeypatch):
     import views
     _own_copy(tmp_path, monkeypatch)
     assert views.home()["skill_updates"]["count"] > 0
+
+
+def test_a_rule_reworded_later_replaces_its_old_wording_and_a_number_the_app_changed_follows(tmp_path, monkeypatch):
+    d = _own_copy(tmp_path, monkeypatch, {"min_piece_s": 5.0, "quiet_near_s": 90})
+    u = next(x for x in skillupdates.updates() if x.get("was"))
+    (d / "rough-cut.md").write_text(MINE.replace("1. **Shots.** My own rule.", "1. **Shots.** My own rule.\n- " + u["was"][0]), encoding="utf-8")
+    near = [x for x in skillupdates.pending()["numbers"] if x["key"] == "quiet_near_s"]
+    assert near and near[0]["was"] == 90 and near[0]["value"] != 90
+    skillupdates.apply()
+    text = (d / "rough-cut.md").read_text(encoding="utf-8")
+    assert u["was"][0] not in text and text.count(u["text"]) == 1 and text.index("My own rule") < text.index(u["text"]) < text.index("## Lessons")
+    assert json.loads((d / "rough-cut.json").read_text(encoding="utf-8"))["quiet_near_s"] == near[0]["value"]
+
+
+def test_a_number_the_user_set_themselves_is_not_changed(tmp_path, monkeypatch):
+    _own_copy(tmp_path, monkeypatch, {"quiet_near_s": 45})
+    assert not [x for x in skillupdates.pending()["numbers"] if x["key"] == "quiet_near_s"]

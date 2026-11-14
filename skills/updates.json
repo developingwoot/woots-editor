@@ -28,7 +28,11 @@
     "date": "2026-11-14",
     "file": "youtube-edit/rough-cut.md",
     "section": "Rules",
-    "about": "What you do between sentences becomes B-roll",
-    "text": "When the host talks while working (an unboxing, a build), the best picture for a sentence is what they did around it: a long beat with no cutaway gets the quiet footage of its own recording nearest to it (between its sentences, else just after, else just before, within `quiet_near_s` seconds), never a stretch where something is said and never the host just facing the camera. A recording with almost nothing said (the machine running) goes over the remaining beats whose words are like what its frames show, in recording order."
+    "about": "Nothing covers what you are showing; quiet footage only over a talking head, close to its words",
+    "text": "When the host shows something while talking, their own hands on the thing are the picture: no automatic cutaway goes over a sentence that points at something (\"these rods right here\", \"you can see\") or whose talking picture already shows hands at work or the screen being talked over. Only where the talking picture is the host facing the camera does a long beat get quiet footage of its own recording, taken from within `quiet_near_s` seconds of the very words it plays over (not of the beat, which joins sentences minutes apart) and never from a stretch where something is said. A recording with almost nothing said (the machine running) goes over such beats when their words are like what its frames show, in recording order.",
+    "was": [
+      "When the host talks while working (an unboxing, a build), the best picture for a sentence is what they did around it: a long beat with no cutaway gets the quiet footage of its own recording nearest to it (between its sentences, else just after, else just before, within `quiet_near_s` seconds), never a stretch where something is said and never the host just facing the camera. A recording with almost nothing said (the machine running) goes over the remaining beats whose words are like what its frames show, in recording order."
+    ],
+    "numbers_were": {"youtube-edit/rough-cut.json": {"quiet_near_s": 90}}
   }
 ]
