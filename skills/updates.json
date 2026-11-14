@@ -1,0 +1,34 @@
+[
+  {
+    "id": "pace",
+    "date": "2026-11-01",
+    "file": "youtube-edit/rough-cut.md",
+    "section": "Rules",
+    "about": "Pace: calm or fast cutting",
+    "text": "**Pace.** `\"pace\": \"calm\"` uses the numbers in the file as they are. `\"pace\": \"fast\"` replaces `beat_min_s`, `beat_max_s`, `punch_hold_s`, `punch_flat_s`, `hook_total_s` and `cold_open_max_s` with a rhythm that changes the picture every few seconds (nothing unchanged for much over `beat_max_s`) and allows a longer hook while the picture keeps changing."
+  },
+  {
+    "id": "on-screen-text",
+    "date": "2026-11-05",
+    "file": "youtube-edit/rough-cut.md",
+    "section": "Rules",
+    "about": "On-screen text for corrections and details",
+    "text": "**On-screen text.** A slip of the tongue is fixed with a short correction on screen instead of a retake: `on_screen.text` of the beat, `[{\"text\": \"*0.4 mm nozzle, not 0.6\", \"kind\": \"correction\", \"at\": <seconds into the clip>, \"dur\": <about text_card_s>}]`. `kind` \"detail\" adds a short fact (a price, a model number). At most about 8 words, one per clip."
+  },
+  {
+    "id": "talking-while-working",
+    "date": "2026-11-14",
+    "file": "youtube-edit/rough-cut.md",
+    "section": "How a video is built",
+    "about": "A long recording of talking while working counts as talking",
+    "text": "A recording is a talking recording when it has at least `min_words` words at `min_words_per_s` or more over its whole length, or at least `talk_min_words` words however spread out they are (a long hands-on recording where the host talks while working is mostly quiet, but it is the video)."
+  },
+  {
+    "id": "quiet-footage-broll",
+    "date": "2026-11-14",
+    "file": "youtube-edit/rough-cut.md",
+    "section": "Rules",
+    "about": "What you do between sentences becomes B-roll",
+    "text": "When the host talks while working (an unboxing, a build), the best picture for a sentence is what they did around it: a long beat with no cutaway gets the quiet footage of its own recording nearest to it (between its sentences, else just after, else just before, within `quiet_near_s` seconds), never a stretch where something is said and never the host just facing the camera. A recording with almost nothing said (the machine running) goes over the remaining beats whose words are like what its frames show, in recording order."
+  }
+]

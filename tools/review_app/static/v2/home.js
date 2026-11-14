@@ -55,6 +55,25 @@ function card(v) {
     menu(v));
 }
 
+// The starter skills have rules or numbers the user's own copy of a skill lacks: say so, list them, and add them on request (nothing of theirs is changed).
+function skillNote(u, root) {
+  const n = u.count;
+  const add = async () => {
+    try {
+      const r = await api('/api/v2/skills/update', {});
+      say(`Added ${r.rules} rule${r.rules === 1 ? '' : 's'} and ${r.numbers} number${r.numbers === 1 ? '' : 's'} to your skills.`);
+      render(root);
+    } catch (e) { say(e.message); }
+  };
+  return h('div', { class: 'card', id: 'skillUpdates' },
+    h('p', {}, h('b', {}, `Your editing skills are missing ${n} newer rule${n === 1 ? '' : 's'} or number${n === 1 ? '' : 's'}.`)),
+    h('p', { class: 'muted' }, 'The app already cuts by them, but your own copy of the skills does not say so, and Claude reads your copy. Adding them changes nothing you wrote; the old file is kept next to it as .bak.'),
+    h('details', {}, h('summary', {}, 'What would be added'),
+      h('ul', {}, ...u.rules.map(r => h('li', {}, `${r.about} (${r.file})`)),
+        ...u.numbers.map(x => h('li', {}, `${x.key}: ${x.value} (${x.file})`)))),
+    h('div', { class: 'row' }, h('button', { class: 'main', id: 'skillUpdatesAdd', onclick: add }, 'Add them to my skills')));
+}
+
 async function newVideo() {
   const title = await ask('What is the video called?', { placeholder: 'My next video', okLabel: 'Create' });
   if (!title) return;
@@ -71,6 +90,7 @@ export async function render(root) {
     : [h('div', { class: 'card empty' }, h('p', {}, 'No videos yet.'), h('p', { class: 'muted' }, 'Start one to begin the outline.'))];
   root.replaceChildren(
     h('div', { class: 'headrow' }, h('h1', {}, 'Your videos'), h('button', { class: 'main', id: 'newVideo', onclick: newVideo }, '+ New video')),
+    ...(data.skill_updates && data.skill_updates.count ? [skillNote(data.skill_updates, root)] : []),
     ...list,
     ...(data.archived.length ? [h('details', { class: 'doneBox', id: 'archivedList' }, h('summary', {}, `Archived (${data.archived.length})`), ...data.archived.map(card))] : []));
   const use = await usageLine();

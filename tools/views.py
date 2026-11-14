@@ -171,7 +171,8 @@ def home(jobs: list[dict] | None = None) -> dict:
                     "thumb": _has_thumb(v["work"], name), "archived": shelf.is_archived(v["work"], name), "finished": f["finished"],
                     "renders": shelf.has_renders(v["work"])}
             (archived if card["archived"] else active).append(card)
-    return {"videos": active, "archived": archived, "job": job_sentence(running) if running else None}
+    import skillupdates
+    return {"videos": active, "archived": archived, "job": job_sentence(running) if running else None, "skill_updates": skillupdates.pending()}
 
 
 # ----------------------------------------------------------------------------- the review screen (rough cut and preview)

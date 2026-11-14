@@ -1917,6 +1917,12 @@ class Handler(BaseHTTPRequestHandler):
                 with _lock:
                     r = workflow.create(b.get("title", ""))
                 return self.send_json({"key": views.key_of(r["work"], r["name"])})
+            if u.path == "/api/v2/skills/update":            # add the rules and numbers the starter skills have and the user's own copy lacks
+                import skillupdates
+                with _lock:
+                    got = skillupdates.apply()
+                recut.reload_rules()
+                return self.send_json(got)
             if u.path in ("/api/v2/video/archive-preview", "/api/v2/video/archive", "/api/v2/video/unarchive", "/api/v2/video/delete"):
                 import shelf
                 work, name = views.split_key(b.get("key", ""))

@@ -28,6 +28,8 @@ See `docs/how-it-works.md` for the map of the code.
 - Add or change behaviour => add or change a test in `tests/`. Pure logic goes in a function a test can import.
 - The rough cut follows the `youtube-edit` skill: numbers in `skills/youtube-edit/rough-cut.json`, rules in `rough-cut.md` (`tools/skillrules.py` reads them; the user's copy in
   `~/.claude/skills` wins; Claude runs are given copies). When a note teaches something general, update the skill and the code together.
+  A rule added to a starter skill file also gets an entry in `skills/updates.json` with the same words, so a user who has their own copy of that file is offered it
+  (`tools/skillupdates.py`; a new number is found by itself).
 - Prompts say "the host" and "the channel"; `channel.prompt` puts the user's profile in front. A test fails if a string names a person.
 - Large models are never in the repository: `tools/engines.py` lists them, each pinned to one commit (`revision`), and downloads them on first use; loaders take the local path it returns, never a bare repo name, and never `trust_remote_code`.
   Only the two small face detectors in `models/` are kept in git (licences in `NOTICE.md`).

@@ -4,6 +4,7 @@ What changed in each release, written for the people who use the app. Newest fir
 
 ## Unreleased
 
+- New: when the app's starter skills get a rule or a number that your own copy of a skill does not have, the home screen says so, lists them, and adds them with one button. Nothing you wrote is changed, and the file as it was is kept next to it as `.bak`. Before this, a new rule never reached Claude for anyone with their own copy of the skill.
 - New: when you talk while working (an unboxing, a build), the rough cut uses what you were doing between your sentences as B-roll. A long beat with no cutaway gets the quiet footage of its own recording nearest to it, never a moment where something is said and never you just facing the camera. A recording with almost nothing said (the machine running) goes over the beats whose words match what its frames show, in order. On the xTool video the B-roll went from 39 s to 131 s of a 5-minute cut.
 - Fixed: a long hands-on recording where the host talks while working (an hour of setting up a machine, about 1,400 words) was taken for a screen recording with some talk, because its words were counted over its whole length. A recording with at least `talk_min_words` (400) words now counts as talking at any rate. When no recording has enough talking, the rough cut stops at once and says which recordings were left out and why, instead of going on to a cold open and a cut that fail on an empty plan.
 
