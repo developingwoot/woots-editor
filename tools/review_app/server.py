@@ -785,6 +785,8 @@ def start_rough_cut(work, name):
                 clipmap.build(work, name)                          # the per-line takes stay for "other takes" and the line view
                 built = recut.build_beats(work, name)              # the cut itself: whole recordings in outline order, mistakes taken out (ADR 0009)
                 found = shotmatch.match(work, name)
+            if not built["beats"]:                                 # nothing to cut: stop before the Claude steps, which would only fail on an empty plan
+                return fail("\n" + recut.empty_reason(built))
             if takes.load(work, name).get("v") != takes.VERSION:                # passages said more than once: the best take stays, the others become options
                 fd = WORK / work / "v2-run" / "takes"
                 claude_step("comparing takes of the same passage", fd, takes.brief(work, name, fd), "takes.json", lambda p, r: takes.apply_review(work, name, p), budget="0.6", kind="story")

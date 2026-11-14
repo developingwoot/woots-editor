@@ -33,6 +33,7 @@ import skillrules
 
 WORK = config.WORK
 MIN_WORDS, MIN_RATE = 60, 0.8   # set from the skill by reload_rules(): words, and words a second over the whole recording
+TALK_MIN_WORDS = 400            # this many words make a talking recording at any rate (talking while working: long quiet stretches)
 SAME_GRAMS = 0.25                # share of a recording's 4-word runs found in another one, or
 SAME_PLACE = 3                   # lines apart in the outline for two numbered takes to be the same thing
 SAME_CONTAINED = 0.6             # share of the SHORTER recording's content words found in the other: a retake of a part of it (a short intro attempt, then the long recording that starts again)
@@ -53,9 +54,10 @@ INTRO_OUTRO = ("intro", "outro")
 
 def reload_rules():
     """Take the numbers from the youtube-edit skill (rough-cut.json). Tests override a few with environment variables (their recordings are 3 s long)."""
-    global MIN_WORDS, MIN_RATE, REPEAT_N, REPEAT_WORDS, REPEAT_S, CHUNK_MIN, CHUNK_MAX, MIN_PIECE_S, SAID_TWICE, SAID_TWICE_FAR, SAID_TWICE_S, BROLL_MAX, MAX_PAUSE_S, BROLL_MIN_BEAT_S, SAME_CONTAINED
+    global MIN_WORDS, MIN_RATE, TALK_MIN_WORDS, REPEAT_N, REPEAT_WORDS, REPEAT_S, CHUNK_MIN, CHUNK_MAX, MIN_PIECE_S, SAID_TWICE, SAID_TWICE_FAR, SAID_TWICE_S, BROLL_MAX, MAX_PAUSE_S, BROLL_MIN_BEAT_S, SAME_CONTAINED
     r = skillrules.rules()
     MIN_WORDS, MIN_RATE = int(os.environ.get("WOOTS_MIN_WORDS", r["min_words"])), r["min_words_per_s"]
+    TALK_MIN_WORDS = int(r["talk_min_words"])
     REPEAT_N, REPEAT_WORDS, REPEAT_S = r["repeat_phrase_words"], r["repeat_phrase_within_words"], r["repeat_phrase_within_s"]
     CHUNK_MIN, CHUNK_MAX = r["beat_min_s"], r["beat_max_s"]
     MIN_PIECE_S = float(os.environ.get("WOOTS_MIN_PIECE", r["min_piece_s"]))
@@ -81,7 +83,10 @@ def series_of(rel: str) -> tuple[str, int]:
 
 def is_talking(an: dict) -> bool:
     dur = float(an.get("dur") or 0)
-    return (an.get("words") or 0) >= MIN_WORDS and dur > 0 and (an["words"] / dur) >= MIN_RATE and bool(an.get("list"))
+    words = an.get("words") or 0
+    if not an.get("list") or dur <= 0:
+        return False
+    return words >= TALK_MIN_WORDS or (words >= MIN_WORDS and words / dur >= MIN_RATE)
 
 
 def _grams(tokens: list, n: int = REPEAT_N) -> set:
@@ -430,6 +435,13 @@ def build_beats(work: str, name: str) -> dict:
     clipmap.write_json(p, data)
     return {"beats": len(beats), "recordings": [r["rel"] for r in pl["recordings"]], "left_out": pl["left_out"],
             "seconds": round(sum(b["dur"] for b in beats), 1)}
+
+
+def empty_reason(built: dict) -> str:
+    """The plain sentence for a plan with no clips (build_beats found no talking recording), naming each recording left out and why."""
+    left = "; ".join(f"{Path(x['rel']).name}: {x['why']}" for x in built.get("left_out") or [])
+    return ("None of the recordings has enough talking to make the rough cut from" + (f" ({left})" if left else "") +
+            ". Check that the footage folder has the recordings where you talk, and that the microphone was on.")
 
 
 # ----------------------------------------------------------------------------- b-roll over the speech

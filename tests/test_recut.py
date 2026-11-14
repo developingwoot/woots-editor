@@ -26,6 +26,8 @@ def test_a_talking_recording_has_enough_words_said_at_speaking_pace():
     assert recut.is_talking(an(" ".join(["word"] * 80), dur=60))
     assert not recut.is_talking(an(" ".join(["word"] * 30), dur=20))                    # too few
     assert not recut.is_talking(an(" ".join(["word"] * 80), dur=600))                   # a long screen recording with some talk
+    assert recut.is_talking(an(" ".join(["word"] * 1400), dur=3900))                   # an hour of setting up a machine, talking while working (xTool M2 unboxing)
+    assert not recut.is_talking(an(" ".join(["word"] * 76), dur=4300))                  # an hour of the machine working, a few words
 
 
 def test_the_latest_of_a_numbered_series_is_used_and_different_things_are_all_kept():
@@ -292,3 +294,10 @@ def test_a_stumble_inside_one_sentence_still_goes_without_touching_what_came_bef
     drop = recut.repeated_phrase_drops(w)
     kept = " ".join(x[0] for i, x in enumerate(w) if i not in drop)
     assert kept.startswith("First up is the baseline") and kept.count("And if I am doing something") == 1
+
+
+def test_a_plan_with_no_talking_recording_says_which_were_left_out_and_why():
+    """The xTool video: the plan came out empty and the cold open and the rough cut failed with no reason given."""
+    msg = recut.empty_reason({"beats": 0, "left_out": [{"rel": "sub/a.mkv", "why": "too little speech to be a talking recording"}]})
+    assert msg.startswith("None of the recordings has enough talking") and "a.mkv: too little speech" in msg and "sub/" not in msg
+    assert "microphone" in recut.empty_reason({"beats": 0, "left_out": []})

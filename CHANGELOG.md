@@ -4,6 +4,8 @@ What changed in each release, written for the people who use the app. Newest fir
 
 ## Unreleased
 
+- Fixed: a long hands-on recording where the host talks while working (an hour of setting up a machine, about 1,400 words) was taken for a screen recording with some talk, because its words were counted over its whole length. A recording with at least `talk_min_words` (400) words now counts as talking at any rate. When no recording has enough talking, the rough cut stops at once and says which recordings were left out and why, instead of going on to a cold open and a cut that fail on an empty plan.
+
 - Added: each video card on the home screen has a "⋯" menu with Archive and Delete. Archive on a finished video (final render, title and footage folder) runs the Final screen's Finish and archive; on any other video it deletes, for good, the renders, sound files and caches the app can make again, keeps every plan and any final render, and moves the video to an "Archived" list (Unarchive brings it back). Finished videos are listed there too. Delete, after a confirmation, moves the video's work folder to a trash folder in the workspace instead of erasing it; the footage folder is never touched.
 
 - Fixed: chapter names in the description all repeated the section title. Claude now names the chapters from what is said (it is given every place a chapter can start with the words said there); the times are moved onto real cuts, at least 10 seconds apart, and the section names are used only if Claude gives fewer than 3 usable chapters.

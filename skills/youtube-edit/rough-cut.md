@@ -4,6 +4,7 @@ The app builds the first cut from your recordings. It reads `rough-cut.json` (ev
 
 ## How a video is built from recordings
 - A recording is a section of the outline. The video is the talking recordings in outline order, each from its first complete take to its end, with mistakes removed.
+- A recording is a talking recording when it has at least `min_words` words at `min_words_per_s` or more over its whole length, or at least `talk_min_words` words however spread out they are (a long hands-on recording where the host talks while working is mostly quiet, but it is the video).
 - The outline is the plan; the recordings are what exists. A line with no recording of its own is usually said inside another recording.
 - The latest take of a section wins (Intro_3 beats Intro_1) unless it stops short or stumbles. When you say a passage twice in a row, the second time is nearly always the keeper.
 
