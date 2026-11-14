@@ -4,7 +4,7 @@ What changed in each release, written for the people who use the app. Newest fir
 
 ## Unreleased
 
-- Added: each video card on the home screen has a "⋯" menu with Hide and Delete. Hide moves the video to a "Hidden" list at the bottom (Unhide brings it back, nothing changes). Delete, after a confirmation, moves the video's work folder (outline, notes, plans) to a trash folder in the workspace instead of erasing it; the footage folder is never touched. A video whose folder holds another video too cannot be deleted, and a video with renders is warned about.
+- Added: each video card on the home screen has a "⋯" menu with Archive and Delete. Archive on a finished video (final render, title and footage folder) runs the Final screen's Finish and archive; on any other video it deletes, for good, the renders, sound files and caches the app can make again, keeps every plan and any final render, and moves the video to an "Archived" list (Unarchive brings it back). Finished videos are listed there too. Delete, after a confirmation, moves the video's work folder to a trash folder in the workspace instead of erasing it; the footage folder is never touched.
 
 - Fixed: chapter names in the description all repeated the section title. Claude now names the chapters from what is said (it is given every place a chapter can start with the words said there); the times are moved onto real cuts, at least 10 seconds apart, and the section names are used only if Claude gives fewer than 3 usable chapters.
 

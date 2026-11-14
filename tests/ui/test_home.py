@@ -91,20 +91,24 @@ def test_the_top_bar_says_all_shorts(screen):
     assert page.inner_text("#shortsLink") == "All shorts"
 
 
-def test_a_video_can_be_hidden_unhidden_and_deleted_from_its_card(screen):
-    """The host: ideas that never get recorded clutter the home screen. Hide parks one; Delete moves its work folder to the trash."""
+def test_a_video_can_be_archived_unarchived_and_deleted_from_its_card(screen):
+    """The host: ideas that never get recorded clutter the home screen. Archive cleans up and puts one away; Delete moves its work folder to the trash."""
     import config
     r = make_video("ui shelf video")
+    (config.WORK / r["work"] / f"{r['name']}.cut.mp4").write_bytes(b"x" * 2000)
     page = screen("/v2/")
     page.on("dialog", lambda d: (_ for _ in ()).throw(AssertionError("a browser dialog opened")))
     card = page.locator("#screen > .vcard", has_text="ui shelf video")
     card.locator(".vmenu summary").click()
-    card.locator("text=Hide").click()
+    card.locator("text=Archive").click()
+    expect(page.locator("#sureDialog")).to_contain_text("can make again")
+    page.click("#sureOk")
     expect(page.locator("#screen > .vcard", has_text="ui shelf video")).to_have_count(0)
-    page.click("#hiddenBox summary")
-    hidden = page.locator("#hiddenBox .vcard", has_text="ui shelf video")
-    hidden.locator(".vmenu summary").click()
-    hidden.locator("text=Unhide").click()
+    assert not (config.WORK / r["work"] / f"{r['name']}.cut.mp4").exists()
+    page.click("#archivedList summary")
+    put = page.locator("#archivedList .vcard", has_text="ui shelf video")
+    put.locator(".vmenu summary").click()
+    put.locator("text=Unarchive").click()
     expect(page.locator("#screen > .vcard", has_text="ui shelf video")).to_have_count(1)
     card = page.locator("#screen > .vcard", has_text="ui shelf video")
     card.locator(".vmenu summary").click()
@@ -112,7 +116,6 @@ def test_a_video_can_be_hidden_unhidden_and_deleted_from_its_card(screen):
     expect(page.locator("#sureDialog")).to_contain_text("footage is not touched")
     page.click("#sureCancel")
     assert (config.WORK / r["work"]).is_dir()
-    card.locator(".vmenu summary").click() if not card.locator(".vmenuList").is_visible() else None
     card.locator("text=Delete").click()
     page.click("#sureOk")
     expect(page.locator(".vcard", has_text="ui shelf video")).to_have_count(0)

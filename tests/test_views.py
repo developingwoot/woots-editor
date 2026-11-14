@@ -94,5 +94,5 @@ def test_home_lists_videos_by_stage_and_folds_finished_ones():
     h = views.home()
     cards = {c["title"]: c for c in h["videos"]}
     assert cards["Home Alpha"]["step"] == "footage" and cards["Home Alpha"]["button"] == "Add footage"
-    assert "Home Beta" not in cards and "Home Beta" in [c["title"] for c in h["done"]]
+    assert "Home Beta" not in cards and "Home Beta" in [c["title"] for c in h["archived"]]
     assert views.split_key(cards["Home Alpha"]["key"]) == (a["work"], a["name"])

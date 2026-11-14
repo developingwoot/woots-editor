@@ -1913,21 +1913,27 @@ class Handler(BaseHTTPRequestHandler):
                 with _lock:
                     r = workflow.create(b.get("title", ""))
                 return self.send_json({"key": views.key_of(r["work"], r["name"])})
-            if u.path in ("/api/v2/video/hide", "/api/v2/video/unhide", "/api/v2/video/delete"):
+            if u.path in ("/api/v2/video/archive-preview", "/api/v2/video/archive", "/api/v2/video/unarchive", "/api/v2/video/delete"):
                 import shelf
                 work, name = views.split_key(b.get("key", ""))
+                if u.path.endswith("/archive-preview"):
+                    return self.send_json(shelf.preview(work, name))
+                if u.path.endswith("/unarchive"):
+                    with _lock:
+                        shelf.unarchive(work, name)
+                    return self.send_json({"ok": True})
+                if not b.get("confirm"):
+                    raise ValueError("confirm it first")
+                if any(not j.get("done", True) and j.get("work") == work for j in _jobs.values()):
+                    raise ValueError("something is running for this video: wait for it to finish")
+                if u.path.endswith("/delete"):
+                    with _lock:
+                        return self.send_json(shelf.delete(work, name))
+                title, folder = shelf.finish_ready(work, name)
+                if title:                                               # finished: the Final screen's Finish and archive, as a job
+                    return self.send_json({"id": start_archive(work, name, title, folder)["id"]})
                 with _lock:
-                    if u.path.endswith("/hide"):
-                        shelf.hide(work, name)
-                        return self.send_json({"ok": True})
-                    if u.path.endswith("/unhide"):
-                        shelf.unhide(work, name)
-                        return self.send_json({"ok": True})
-                    if not b.get("confirm"):
-                        raise ValueError("confirm the delete first")
-                    if any(not j.get("done", True) and j.get("work") == work for j in _jobs.values()):
-                        raise ValueError("something is running for this video: wait for it to finish, then delete it")
-                    return self.send_json(shelf.delete(work, name))
+                    return self.send_json(shelf.archive_shelve(work, name))
             if u.path == "/api/dash/plan/refresh":              # one tiny Claude call (no tools) that reports the plan's limits; not under the global lock
                 usage.refresh_plan()
                 return self.send_json(usage.week_summary())
