@@ -280,3 +280,9 @@ ul.facts .quote { font-style: italic; }
 .nexttag { margin-left: 6px; padding: 1px 6px; border-radius: 8px; background: #e8f0fe; color: #1a3d7c; font-size: 11px; font-weight: 600; }
 .setNav { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3px solid #1a3d7c; outline-offset: 2px; }
+.vmenu { position: relative; }
+.vmenu summary { list-style: none; cursor: pointer; padding: 4px 10px; border-radius: var(--radius); color: var(--muted); font-size: 1.2em; }
+.vmenu summary::-webkit-details-marker { display: none; }
+.vmenu summary:hover { background: var(--line); }
+.vmenuList { position: absolute; right: 0; top: 100%; z-index: 5; display: flex; flex-direction: column; gap: 4px; background: var(--card);
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 6px; min-width: 120px; }

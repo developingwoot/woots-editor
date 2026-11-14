@@ -89,3 +89,32 @@ def test_the_settings_screen_chooses_the_model_and_effort_of_each_job(screen):
 def test_the_top_bar_says_all_shorts(screen):
     page = screen("/v2/")
     assert page.inner_text("#shortsLink") == "All shorts"
+
+
+def test_a_video_can_be_hidden_unhidden_and_deleted_from_its_card(screen):
+    """The host: ideas that never get recorded clutter the home screen. Hide parks one; Delete moves its work folder to the trash."""
+    import config
+    r = make_video("ui shelf video")
+    page = screen("/v2/")
+    page.on("dialog", lambda d: (_ for _ in ()).throw(AssertionError("a browser dialog opened")))
+    card = page.locator("#screen > .vcard", has_text="ui shelf video")
+    card.locator(".vmenu summary").click()
+    card.locator("text=Hide").click()
+    expect(page.locator("#screen > .vcard", has_text="ui shelf video")).to_have_count(0)
+    page.click("#hiddenBox summary")
+    hidden = page.locator("#hiddenBox .vcard", has_text="ui shelf video")
+    hidden.locator(".vmenu summary").click()
+    hidden.locator("text=Unhide").click()
+    expect(page.locator("#screen > .vcard", has_text="ui shelf video")).to_have_count(1)
+    card = page.locator("#screen > .vcard", has_text="ui shelf video")
+    card.locator(".vmenu summary").click()
+    card.locator("text=Delete").click()
+    expect(page.locator("#sureDialog")).to_contain_text("footage is not touched")
+    page.click("#sureCancel")
+    assert (config.WORK / r["work"]).is_dir()
+    card.locator(".vmenu summary").click() if not card.locator(".vmenuList").is_visible() else None
+    card.locator("text=Delete").click()
+    page.click("#sureOk")
+    expect(page.locator(".vcard", has_text="ui shelf video")).to_have_count(0)
+    assert not (config.WORK / r["work"]).exists() and any(p.name.startswith(r["work"]) for p in (config.EDITOR_DATA / "trash").iterdir())
+    assert clutter(visible_text(page)) == []

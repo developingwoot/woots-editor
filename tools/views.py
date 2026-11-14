@@ -161,15 +161,16 @@ def home(jobs: list[dict] | None = None) -> dict:
     """The video cards for the home screen: {'videos': [...], 'done': [...]}. Each card: key, title, sentence, step, button, thumb."""
     import workflow
     running = next((j for j in reversed(jobs or []) if j.get("pipeline") and not j.get("done")), None)
-    active, done = [], []
+    import shelf
+    active, done, hidden = [], [], []
     for v in workflow.list_videos():
         for name in v["names"]:
             f = facts(v["work"], name)
             s = step_of(f, running if running and (running.get("work"), running.get("name")) == (v["work"], name) else None)
             card = {"key": key_of(v["work"], name), "title": f["title"], "sentence": s["sentence"], "step": s["step"], "button": s["button"],
-                    "thumb": _has_thumb(v["work"], name)}
-            (done if f["finished"] else active).append(card)
-    return {"videos": active, "done": done, "job": job_sentence(running) if running else None}
+                    "thumb": _has_thumb(v["work"], name), "hidden": shelf.is_hidden(v["work"], name), "renders": shelf.has_renders(v["work"])}
+            (hidden if card["hidden"] else done if f["finished"] else active).append(card)
+    return {"videos": active, "done": done, "hidden": hidden, "job": job_sentence(running) if running else None}
 
 
 # ----------------------------------------------------------------------------- the review screen (rough cut and preview)

@@ -1913,6 +1913,21 @@ class Handler(BaseHTTPRequestHandler):
                 with _lock:
                     r = workflow.create(b.get("title", ""))
                 return self.send_json({"key": views.key_of(r["work"], r["name"])})
+            if u.path in ("/api/v2/video/hide", "/api/v2/video/unhide", "/api/v2/video/delete"):
+                import shelf
+                work, name = views.split_key(b.get("key", ""))
+                with _lock:
+                    if u.path.endswith("/hide"):
+                        shelf.hide(work, name)
+                        return self.send_json({"ok": True})
+                    if u.path.endswith("/unhide"):
+                        shelf.unhide(work, name)
+                        return self.send_json({"ok": True})
+                    if not b.get("confirm"):
+                        raise ValueError("confirm the delete first")
+                    if any(not j.get("done", True) and j.get("work") == work for j in _jobs.values()):
+                        raise ValueError("something is running for this video: wait for it to finish, then delete it")
+                    return self.send_json(shelf.delete(work, name))
             if u.path == "/api/dash/plan/refresh":              # one tiny Claude call (no tools) that reports the plan's limits; not under the global lock
                 usage.refresh_plan()
                 return self.send_json(usage.week_summary())
