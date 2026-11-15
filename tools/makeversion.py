@@ -95,7 +95,8 @@ def brief(work: str, name: str, stage: str, fd: Path) -> str:
     """Write the notes and the plan into fd and return the prompt. Claude answers in answer.json (see apply_answer)."""
     fd.mkdir(parents=True, exist_ok=True)
     notes = [({"id": n["id"], "time": "whole video", "until": None, "note": n["text"]} if n.get("whole") else
-              {"id": n["id"], "time": views.time_text(n["t"]), "until": views.time_text(n["t_end"]) if n.get("t_end") is not None else None, "note": n["text"]})
+              {"id": n["id"], "time": "not in this cut" if n.get("lost") else views.time_text(n["t"]), "until": views.time_text(n["t_end"]) if n.get("t_end") is not None else None, "note": n["text"],
+               **({"said_there": n["said"]} if n.get("said") else {}), **({"from_an_earlier_cut": True} if n.get("again") else {})})
              for n in plain_notes(work, name, stage)]
     (fd / "notes.json").write_text(json.dumps(notes, indent=1), encoding="utf-8")
     bm = read_json(WORK / work / f"{name}.beatmap.json")
@@ -117,6 +118,9 @@ def brief(work: str, name: str, stage: str, fd: Path) -> str:
         f"The host watched the {'rough cut' if stage == 'cut' else 'preview'} of the host's video and left notes (notes.json, times are minutes:seconds into the video).\n"
         "A note whose time is \"whole video\" is about the video as a whole (for example: too long, cut more, be pickier). Apply it across the plan: set `skip` on the weakest beats (never a beat the host marked good), "
         "shorten, or tighten as the note asks, and say in the summary what you did overall.\n"
+        "A note with `said_there` gives the words that were playing where the host wrote it: when the time and those words disagree, the words are right (find them in beats.json). "
+        "A note marked `from_an_earlier_cut` was applied to an earlier cut; the cut was then made again from the recordings, so apply it again here. "
+        "A note whose time is \"not in this cut\" was about words this cut no longer says: apply it only if beats.json shows where it belongs now, otherwise put it under `skipped` and say its place is gone.\n"
         "beats.json is a short list of every beat (id, section, where it starts in the video, seconds, what is said, `good` = the host marked it good, `skipped`): read it first. beatmap.json is the whole plan and is large.\n"
         "To take beats out of the video, list their ids in `skip_beats` (never one marked good) and do NOT send `beatmap`. Send `beatmap` only for a change `skip_beats` and `edits` cannot make, and then send the whole file.\n"
         "The app can also do these for you; list them in `edits` (times are minutes:seconds into the video, like the notes; use what is said in beats.json to put the time on the word the note means):\n"

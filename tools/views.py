@@ -287,6 +287,8 @@ def review(work: str, name: str, stage: str, version: int | None = None, running
                                  "frame": f"/api/v2/frame?key={quote(key)}&file={quote(cur['file'])}&t={mid:.1f}"})
     for n in sorted(notes, key=lambda x: (not x.get("whole"), x["t"])):
         when = "Whole video" if n.get("whole") else time_text(n["t"]) + (f"–{time_text(n['t_end'])}" if n.get("t_end") is not None else "")
+        if n.get("lost") and n.get("status") != "done":
+            when = "Not in this cut"                        # written on an earlier cut; the words it was about are not in this one (notereplay)
         out["notes"].append({"id": n["id"], "t": n["t"], "t_end": n.get("t_end"), "when": when, "text": n["text"], "done": n.get("status") == "done", "whole": bool(n.get("whole")),
                              "done_in": label(n["applied_in"]) if n.get("applied_in") else None, "clip_change": n.get("choice") is not None})
     nxt = (vs[-1]["n"] + 1) if vs else 1

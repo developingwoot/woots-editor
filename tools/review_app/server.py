@@ -781,7 +781,9 @@ def start_rough_cut(work, name):
             if job.get("stop"):
                 return fail(" Stopped.")
             job["step"] = 2
+            import notereplay
             with _lock:
+                carried = notereplay.reopen(work, name)            # the plan is built again: the notes earlier cuts applied are open again, each with the words it was about
                 clipmap.build(work, name)                          # the per-line takes stay for "other takes" and the line view
                 built = recut.build_beats(work, name)              # the cut itself: whole recordings in outline order, mistakes taken out (ADR 0009)
                 found = shotmatch.match(work, name)
@@ -874,6 +876,8 @@ def start_rough_cut(work, name):
             if shown:
                 changes.append(f"{len(shown)} cutaway{'' if len(shown) == 1 else 's'} left out where you are showing the thing yourself")
             changes += seen_lines
+            if carried["choices"]:
+                changes.append(f"{carried['choices']} exact clip choice{'' if carried['choices'] == 1 else 's'} (replace, remove, trim) of earlier cuts could not be carried over: the clips are new")
             if wrong:
                 changes.append(f"{len(wrong)} cutaway{'' if len(wrong) == 1 else 's'} of another program taken out")
             if found["nothing"]:
@@ -893,6 +897,8 @@ def start_rough_cut(work, name):
                 changes.append(f"Rule check could not run: {e}")
             import story
             v = makeversion.finish_cut(work, name, video, rows, {"changes": changes, "applied_ids": [], "suggestions": story.note_suggestions(work, name)})
+            with _lock:
+                notereplay.place(work, name)                       # each open note moves to where its words play in this cut; the version says which are open again
             job["log"] += f" Kept as {reviewnotes.label('cut', v['n'])}."
         except Exception as e:                      # noqa: BLE001 - report anything to the UI
             fail(f"\n{e}")
@@ -1720,7 +1726,9 @@ class Handler(BaseHTTPRequestHandler):
                 with _lock:
                     op = b["op"]
                     if op == "add":
-                        reviewnotes.add(work, name, b["stage"], b.get("text"), b.get("t", 0), b.get("t_end"), whole=bool(b.get("whole")))
+                        import notereplay
+                        said = "" if b.get("whole") else notereplay.anchor(work, name, b["stage"], float(b.get("t") or 0))
+                        reviewnotes.add(work, name, b["stage"], b.get("text"), b.get("t", 0), b.get("t_end"), whole=bool(b.get("whole")), said=said)
                     elif op == "edit":
                         reviewnotes.edit(work, name, b["stage"], int(b["id"]), b.get("text"))
                     elif op == "delete":

@@ -42,5 +42,13 @@
     "section": "Rules",
     "about": "Claude looks at every cutaway next to its words",
     "text": "**Every cutaway is looked at.** After the cutaways are placed, Claude looks at each one next to the words said over it and at the talking picture it covers. An automatic cutaway goes when the talking picture already shows what is said or when the cutaway shows something else; one the host placed stays and the version says what Claude saw."
+  },
+  {
+    "id": "notes-outlive-a-cut",
+    "date": "2026-11-14",
+    "file": "youtube-edit/rough-cut.md",
+    "section": "Rules",
+    "about": "Your notes are open again when the rough cut is made again",
+    "text": "**Notes outlive a cut made again.** Making the rough cut again builds the plan from the recordings, so each note remembers the words that were being said where it was written. The notes earlier cuts applied are open again in the new cut, each at the place its words play now, and Claude applies them with the next version; a note whose words the new cut no longer says is reported, not guessed at."
   }
 ]

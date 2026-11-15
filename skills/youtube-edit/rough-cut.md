@@ -25,6 +25,7 @@ The app builds the first cut from your recordings. It reads `rough-cut.json` (ev
   joins sentences minutes apart) and never from a stretch where something is said. A recording with almost nothing said (the machine running) goes over such beats
   when their words are like what its frames show, in recording order.
 - **Every cutaway is looked at.** After the cutaways are placed, Claude looks at each one next to the words said over it and at the talking picture it covers. An automatic cutaway goes when the talking picture already shows what is said or when the cutaway shows something else; one the host placed stays and the version says what Claude saw.
+- **Notes outlive a cut made again.** Making the rough cut again builds the plan from the recordings, so each note remembers the words that were being said where it was written. The notes earlier cuts applied are open again in the new cut, each at the place its words play now, and Claude applies them with the next version; a note whose words the new cut no longer says is reported, not guessed at.
 - **Transitions.** A cutaway comes in and goes out with a preset from `transitions.json` (a web page slides in with a whoosh, other B-roll is a plain cut, unless Settings say otherwise).
   To give one insert its own, put `"transition": "<preset id>"` on that insert in `on_screen.broll`. Use moves sparingly: a whoosh on every cutaway soon feels cheap.
 - **On-screen text.** A slip of the tongue is fixed with a short correction on screen instead of a retake: `on_screen.text` of the beat,

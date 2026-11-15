@@ -89,7 +89,7 @@ def open_notes(work: str, name: str, stage: str) -> list:
     return [n for n in notes(work, name, stage) if n.get("status") != "done"]
 
 
-def add(work: str, name: str, stage: str, text: str, t: float, t_end: float | None = None, clip=None, kind: str = "note", whole: bool = False) -> dict:
+def add(work: str, name: str, stage: str, text: str, t: float, t_end: float | None = None, clip=None, kind: str = "note", whole: bool = False, said: str = "") -> dict:
     """`whole`: a note about the whole video, not a moment in it (too long, tighter, more energy): it has no time and Claude applies it across the plan."""
     text = " ".join(str(text or "").split())
     if len(text) < 2:
@@ -102,6 +102,8 @@ def add(work: str, name: str, stage: str, text: str, t: float, t_end: float | No
                 "status": "open", "applied_in": None}
         if whole:
             note.update(t=0.0, t_end=None, whole=True)
+        elif said:
+            note["said"] = " ".join(str(said).split())[:300]      # the words playing where the note was written: its place in a cut made again (notereplay)
         lst.append(note)
         save(work, name, j)
     return note
