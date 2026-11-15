@@ -96,8 +96,12 @@ def brief(work: str, name: str, stage: str, fd: Path) -> str:
     fd.mkdir(parents=True, exist_ok=True)
     notes = [({"id": n["id"], "time": "whole video", "until": None, "note": n["text"]} if n.get("whole") else
               {"id": n["id"], "time": "not in this cut" if n.get("lost") else views.time_text(n["t"]), "until": views.time_text(n["t_end"]) if n.get("t_end") is not None else None, "note": n["text"],
-               **({"said_there": n["said"]} if n.get("said") else {}), **({"from_an_earlier_cut": True} if n.get("again") else {})})
+               **({"said_there": n["said"]} if n.get("said") else {}), **({"from_an_earlier_cut": True} if n.get("again") else {}),
+               **({"applied_in_cut": n["was_in"]} if n.get("again") and n.get("was_in") else {})})
              for n in plain_notes(work, name, stage)]
+    then = {v["n"]: [str(c)[:260] for c in v.get("changes") or []][:40] for v in reviewnotes.load(work, name)["versions"].get(stage, [])
+            if v["n"] in {n.get("was_in") for n in plain_notes(work, name, stage) if n.get("again")}}
+    (fd / "earlier_cuts.json").write_text(json.dumps(then, indent=1, ensure_ascii=False), encoding="utf-8")
     (fd / "notes.json").write_text(json.dumps(notes, indent=1), encoding="utf-8")
     bm = read_json(WORK / work / f"{name}.beatmap.json")
     if bm is not None:
@@ -119,7 +123,9 @@ def brief(work: str, name: str, stage: str, fd: Path) -> str:
         "A note whose time is \"whole video\" is about the video as a whole (for example: too long, cut more, be pickier). Apply it across the plan: set `skip` on the weakest beats (never a beat the host marked good), "
         "shorten, or tighten as the note asks, and say in the summary what you did overall.\n"
         "A note with `said_there` gives the words that were playing where the host wrote it: when the time and those words disagree, the words are right (find them in beats.json). "
-        "A note marked `from_an_earlier_cut` was applied to an earlier cut; the cut was then made again from the recordings, so apply it again here. "
+        "A note marked `from_an_earlier_cut` was applied to an earlier cut; the cut was then made again from the recordings, so apply it again here. Any time written inside such a note (\"cut 5:20 to 5:21\") is a time of that old cut and means nothing now: "
+        "earlier_cuts.json lists, for each earlier cut, exactly what was changed in it (for example the very words that were taken out); find the change that answered the note (`applied_in_cut`) and make the same change here, "
+        "on the same words. If you cannot tell what the note changed then, put it under `skipped` and say so; do not guess from the old times. "
         "A note whose time is \"not in this cut\" was about words this cut no longer says: apply it only if beats.json shows where it belongs now, otherwise put it under `skipped` and say its place is gone.\n"
         "beats.json is a short list of every beat (id, section, where it starts in the video, seconds, what is said, `good` = the host marked it good, `skipped`): read it first. beatmap.json is the whole plan and is large.\n"
         "To take beats out of the video, list their ids in `skip_beats` (never one marked good) and do NOT send `beatmap`. Send `beatmap` only for a change `skip_beats` and `edits` cannot make, and then send the whole file.\n"

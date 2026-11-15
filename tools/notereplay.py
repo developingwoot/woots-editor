@@ -32,6 +32,40 @@ def _words_around(beat: dict, off: float) -> str:
     return got or makeversion.kept_said(beat)[:200]
 
 
+def plan_at(work: str, name: str, n: int):
+    """The beats of the plan as it was when cut `n` was made (the version's history marker), or None when that is not kept."""
+    import json
+    import projectstore
+    wd = WORK / work
+    sha = ((projectstore._manifest(wd, name)["markers"].get(f"cut{n}") or {}).get("files") or {}).get(f"{name}.beatmap.json")
+    try:
+        return json.loads((wd / projectstore.HISTORY / f"{sha}.json").read_text(encoding="utf-8-sig")).get("beats", []) if sha else None
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def written_on(note: dict, notes: list, latest: int) -> int:
+    """The cut the host was watching when writing this note. A note applied in cut n was written on cut n-1. An open note was written on the latest cut,
+    unless a note written after it (a larger id) was applied in an earlier one: then it was already there, on that note's cut."""
+    if note.get("applied_in") or note.get("was_in"):
+        return max(1, int(note.get("applied_in") or note["was_in"]) - 1)
+    later = [int(x.get("applied_in") or x["was_in"]) - 1 for x in notes if x["id"] > note["id"] and (x.get("applied_in") or x.get("was_in"))]
+    return max(1, min(later)) if later else latest
+
+
+def anchor_in(work: str, name: str, n: int, t: float) -> str:
+    """What was said around time t of cut `n`: its clips and the plan as it was then ('' when that plan is not kept or nothing was said there)."""
+    v = next((x for x in reviewnotes.load(work, name)["versions"]["cut"] if x["n"] == n), None)
+    beats = plan_at(work, name, n)
+    if not v or beats is None:
+        return ""
+    by_id = {b.get("id"): b for b in beats}
+    for c in v.get("clips") or []:
+        if c.get("ref") in by_id and float(c["start"]) <= t < float(c["start"]) + float(c["dur"]):
+            return _words_around(by_id[c["ref"]], t - float(c["start"]))[:300]
+    return ""
+
+
 def anchor(work: str, name: str, stage: str, t: float) -> str:
     """What is said around time t of the latest video of this stage ('' when there is no video or nothing is said there)."""
     times = makeversion.clip_times(work, name, stage)
@@ -47,13 +81,16 @@ def reopen(work: str, name: str) -> dict:
     if not reviewnotes.versions(work, name, "cut"):
         return {"again": 0, "choices": 0}
     j = reviewnotes.load(work, name)
+    latest = max(v["n"] for v in j["versions"]["cut"])
     again = choices = 0
     for n in j["cut"]:
         if n.get("kind", "note") not in PLAIN:
             choices += n.get("status") == "done"
             continue
-        if not n.get("said") and not n.get("whole"):
-            n["said"] = anchor(work, name, "cut", float(n.get("t") or 0))
+        if not n.get("said") and not n.get("whole"):         # a note from before notes kept their words: the words of the cut it was written on, not of this one
+            on = written_on(n, j["cut"], latest)
+            n["said"] = anchor_in(work, name, on, float(n.get("t") or 0)) or (anchor(work, name, "cut", float(n.get("t") or 0)) if on == latest else "")
+            n["written_on"] = on
         if n.get("status") == "done":
             n.update(status="open", was_in=n.get("applied_in"), applied_in=None, again=True)
             again += 1

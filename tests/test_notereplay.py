@@ -81,3 +81,31 @@ def test_a_place_is_found_by_the_share_of_its_words():
     beats = [_beat("B01", 0.0, 5.0, "something else entirely"), _beat("B02", 5.0, 10.0, "grease these two rods now")]
     assert notereplay.find("we grease these rods", beats)["id"] == "B02"
     assert notereplay.find("nothing like any of it", beats) is None and notereplay.find("", beats) is None
+
+
+def test_an_old_note_gets_the_words_of_the_cut_it_was_written_on_not_of_the_latest(tmp_path):
+    import config
+    import projectstore
+    w, n = _video("nr old", OLD, OLD_CLIPS)
+    wd = config.WORK / w
+    projectstore.write_json(beatmap.path_of(w, n), {"beats": OLD})
+    projectstore.mark(wd, n, "cut1")                                                        # cut 1 was made from this plan
+    later = [_beat("B01", 300.0, 320.0, "something said much later in a quite different cut of the same video")]
+    projectstore.write_json(beatmap.path_of(w, n), {"beats": later})
+    j = reviewnotes.load(w, n)
+    j["versions"]["cut"] += [{"n": 2, "file": "b.mp4", "changes": ["Took out \"grease these two rods\" at 0:13"], "clips": [{"ref": "B01", "start": 0.0, "dur": 20.0}]},
+                             {"n": 3, "file": "c.mp4", "changes": [], "clips": [{"ref": "B01", "start": 0.0, "dur": 20.0}]}]
+    j["cut"] = [{"id": 1, "t": 13.0, "t_end": None, "text": "cut 0:13 to 0:14", "clip": None, "kind": "note", "status": "done", "applied_in": 2},
+                {"id": 2, "t": 2.0, "t_end": None, "text": "more energy here", "clip": None, "kind": "note", "status": "open", "applied_in": None},
+                {"id": 3, "t": 5.0, "t_end": None, "text": "a later note", "clip": None, "kind": "note", "status": "done", "applied_in": 2},
+                {"id": 4, "t": 5.0, "t_end": None, "text": "written on the latest", "clip": None, "kind": "note", "status": "open", "applied_in": None}]
+    reviewnotes.save(w, n, j)
+    assert [notereplay.written_on(x, j["cut"], 3) for x in j["cut"]] == [1, 1, 1, 3]         # note 2 is open but note 3, written after it, went into cut 2
+    assert notereplay.reopen(w, n)["again"] == 2
+    notes = {x["id"]: x for x in reviewnotes.load(w, n)["cut"]}
+    assert notes[1]["said"].startswith("we need to grease") and notes[1]["written_on"] == 1  # cut 1's words at 0:13, not cut 3's
+    assert notes[2]["said"].startswith("welcome to the unboxing") and "said much later" in notes[4]["said"]
+    fd = tmp_path / "run"
+    makeversion.brief(w, n, "cut", fd)
+    assert json.loads((fd / "earlier_cuts.json").read_text(encoding="utf-8")) == {"2": ["Took out \"grease these two rods\" at 0:13"]}
+    assert [r.get("applied_in_cut") for r in json.loads((fd / "notes.json").read_text(encoding="utf-8"))] == [2, None, 2, None]
