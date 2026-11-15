@@ -395,3 +395,25 @@ def test_a_silent_recording_goes_over_the_beat_whose_words_are_like_what_it_show
     assert recut.cover_from_silent(w, n) == 1
     got = _brolls(w, n)
     assert got["B01"] == [] and got["B02"][0]["file"] == "run.mkv" and got["B02"][0]["in"] == 40.0
+
+
+def _spoken(*runs):
+    """Word lists from (start second, 'words ...') runs: one word a second, half a second long."""
+    return [[w, float(t + i), t + i + 0.5] for t, text in runs for i, w in enumerate(text.split())]
+
+
+def test_what_the_host_says_to_the_editor_while_recording_is_done():
+    words = _spoken((0, "this first try went badly"), (6, "Editor, cut that."), (12, "the second take is the good one here"), (22, "editor keep that"), (30, "and on we go with the build"))
+    assert recut.markers(words) == [("cut", 5, 7), ("keep", 16, 18)]
+    cut, keep = recut.marker_spans(words)
+    assert cut == set(range(0, 8)) | {16, 17, 18} and keep == set(range(8, 16))
+    kept = {i for idx, _ in recut.cleaned(words) for i in idx}
+    assert not kept & cut and set(range(8, 16)) <= kept and set(range(19, 26)) <= kept
+    assert "cut that" in recut.marker_line([words]) and recut.marker_line([_spoken((0, "nothing said to anyone"))]) == ""
+
+
+def test_a_marker_reaches_back_to_the_last_pause_only_and_a_sentence_about_an_editor_is_not_one():
+    words = _spoken((0, "a good sentence that stays"), (10, "a bad one"), (14, "editor cut that"))
+    assert recut.marker_spans(words)[0] == {5, 6, 7, 8, 9, 10}                                # the good sentence, a pause before the bad one, stays
+    inside = [["in", 0.0, 0.3], ["the", 0.35, 0.5], ["editor", 0.55, 0.9], ["cut", 0.95, 1.2], ["that", 1.25, 1.5], ["edge", 1.55, 1.9]]
+    assert recut.markers(inside) == []

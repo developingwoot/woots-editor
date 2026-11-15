@@ -748,9 +748,11 @@ def start_rough_cut(work, name):
         import hashlib
         skipped = []
 
-        def claude_step(label, fd, prompt, *a, **kw):          # a step that fails does not stop the cut, but the host is told it was not done
+        told = {"markers": ""}
+
+        def claude_step(label, fd, prompt, *a, **kw):         # a step that fails does not stop the cut, but the host is told it was not done
             n = len(job["log"])
-            _claude_run(job, fd, videokind.line(recut.KIND) + prompt, *a, **kw)      # every run is told what kind of video this is
+            _claude_run(job, fd, videokind.line(recut.KIND) + told["markers"] + prompt, *a, **kw)      # every run is told what kind of video this is, and what the host said to the editor
             if not job.get("ok"):
                 skipped.append(f"Not done: {label} ({job['log'][n:].strip()[:140] or 'it did not finish'})")
             job["ok"] = True
@@ -790,6 +792,7 @@ def start_rough_cut(work, name):
                 clipmap.build(work, name)                          # the per-line takes stay for "other takes" and the line view
                 built = recut.build_beats(work, name)              # the cut itself: whole recordings in outline order, mistakes taken out (ADR 0009)
                 found = shotmatch.match(work, name)
+            told["markers"] = built.get("marker_line", "")
             if not built["beats"]:                                 # nothing to cut: stop before the Claude steps, which would only fail on an empty plan
                 return fail("\n" + recut.empty_reason(built))
             if takes.load(work, name).get("v") != takes.VERSION:                # passages said more than once: the best take stays, the others become options
@@ -862,6 +865,8 @@ def start_rough_cut(work, name):
             changes = [*skipped, f"Cut {len(built['recordings'])} recordings together in outline order", f"{found['ready']} of {found['total']} shots have footage"]
             if left:
                 changes.append("Left out earlier takes of: " + ", ".join(left))
+            if built.get("said_cut") or built.get("said_keep"):
+                changes.append(f"You told the editor while recording: {built.get('said_cut', 0)} take{'' if built.get('said_cut') == 1 else 's'} cut, {built.get('said_keep', 0)} kept")
             for g in takes.load(work, name).get("groups", []):
                 changes.append(f"Said more than once: \"{g['topic']}\" ({len(g['takes'])} takes, take {g['best'] + 1} used)")
             if coldopen.load(work, name).get("skip"):

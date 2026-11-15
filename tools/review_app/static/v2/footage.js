@@ -45,7 +45,9 @@ export async function render(root, key, setBusy) {
     const folderCard = h('div', { class: 'card' }, h('div', { class: 'rhead' }, h('b', {}, 'Footage folder'), change),
       folderText, d.folder.guessed ? h('span', { class: 'muted small' }, ' (matched to the video’s title)') : null,
       d.summary ? h('div', { class: 'muted small', id: 'footageSummary' }, d.summary) : null,
-      kindRow(d.kind));
+      kindRow(d.kind),
+      d.marker_word ? h('div', { class: 'muted small', id: 'markerHint', style: 'margin-top:8px' },
+        `While recording you can talk to the editor: after a bad take, pause and say “${d.marker_word}, cut that”; after one you like, “${d.marker_word}, keep that”.`) : null);
 
     const b = d.button;
     const go = h('button', { class: 'main', id: 'cutBtn', disabled: !b.enabled, onclick: async () => {

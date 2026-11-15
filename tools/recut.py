@@ -55,7 +55,7 @@ INTRO_OUTRO = ("intro", "outro")
 
 def reload_rules(kind: str = "talking"):
     """Take the numbers from the youtube-edit skill (rough-cut.json). Tests override a few with environment variables (their recordings are 3 s long)."""
-    global MIN_WORDS, MIN_RATE, TALK_MIN_WORDS, REPEAT_N, REPEAT_WORDS, REPEAT_S, CHUNK_MIN, CHUNK_MAX, MIN_PIECE_S, SAID_TWICE, SAID_TWICE_FAR, SAID_TWICE_S, BROLL_MAX, MAX_PAUSE_S, BROLL_MIN_BEAT_S, SAME_CONTAINED, QUIET_NEAR_S, KIND
+    global MIN_WORDS, MIN_RATE, TALK_MIN_WORDS, REPEAT_N, REPEAT_WORDS, REPEAT_S, CHUNK_MIN, CHUNK_MAX, MIN_PIECE_S, SAID_TWICE, SAID_TWICE_FAR, SAID_TWICE_S, BROLL_MAX, MAX_PAUSE_S, BROLL_MIN_BEAT_S, SAME_CONTAINED, QUIET_NEAR_S, KIND, MARKER_WORD, MARKER_BACK_S
     r =skillrules.rules()
     MIN_WORDS, MIN_RATE = int(os.environ.get("WOOTS_MIN_WORDS", r["min_words"])), r["min_words_per_s"]
     TALK_MIN_WORDS = int(r["talk_min_words"])
@@ -68,7 +68,8 @@ def reload_rules(kind: str = "talking"):
     BROLL_MIN_BEAT_S = r["broll_min_beat_s"]
     SAME_CONTAINED = r["retake_share"]
     QUIET_NEAR_S = r["quiet_near_s"]
-    KIND = kind if kind in ("talking", "hands-on", "screen") else "talking"
+    MARKER_WORD, MARKER_BACK_S = r["marker_word"].lower(), r["marker_back_s"]
+    KIND =kind if kind in ("talking", "hands-on", "screen") else "talking"
 
 
 reload_rules()
@@ -301,12 +302,66 @@ def stammer_drops(words: list, drop: set) -> set:
     return out
 
 
+MARKER_WORD = "editor"       # the word the host says to the editor while recording (set from the skill): "editor, cut that", "editor, keep that"
+MARKER_BACK_S = 60.0         # a marker never reaches further back than this
+MARKER_PAUSE_S = 1.5         # the take a marker is about starts after the last pause this long
+MARKER_LEAD_S = 0.4          # a marker starts after at least this much silence
+MARKER_GAP_S = 10.0         # the host may wait this long after the take before saying the marker
+MARKER_DO = {"cut": "cut", "delete": "cut", "scrap": "cut", "keep": "keep", "save": "keep"}
+MARKER_FILL = ("that", "this", "it", "one", "please", "the", "last", "take")
+
+
+def markers(words: list) -> list:
+    """[(what, first, last)]: each instruction the host spoke to the editor, `what` = "cut" or "keep", first..last = its own words in `words`."""
+    out, i = [], 0
+    tok = [clipmap.tokens_of(w[0]) for w in words]
+    while i < len(words) - 1:
+        fresh = i == 0 or words[i][1] - words[i - 1][2] >= MARKER_LEAD_S          # said after a breath, not inside a sentence ("in the editor cut that edge" is not a marker)
+        if fresh and tok[i] == [MARKER_WORD] and len(tok[i + 1]) == 1 and tok[i + 1][0] in MARKER_DO and words[i + 1][1] - words[i][2] < 2.0:
+            last = i + 1
+            while last + 1 < len(words) and last - i < 4 and len(tok[last + 1]) == 1 and tok[last + 1][0] in MARKER_FILL and words[last + 1][1] - words[last][2] < 1.0:
+                last += 1
+            out.append((MARKER_DO[tok[i + 1][0]], i, last))
+            i = last + 1
+        else:
+            i += 1
+    return out
+
+
+def marker_spans(words: list) -> tuple:
+    """(positions to take out, positions to keep whatever the rules say). "Editor, cut that" takes out the take just said: back to the last pause of
+    MARKER_PAUSE_S (the host may wait up to MARKER_GAP_S before saying it), never past another marker or MARKER_BACK_S. "Editor, keep that" protects the
+    same stretch from the repeat rules. The marker's own words always go."""
+    cut, keep = set(), set()
+    floor = 0
+    for what, first, last in markers(words):
+        j = first
+        if j - 1 >= floor and words[first][1] - words[j - 1][2] <= MARKER_GAP_S:
+            j -= 1
+            while j - 1 >= floor and words[j][1] - words[j - 1][2] < MARKER_PAUSE_S and words[first][1] - words[j - 1][1] <= MARKER_BACK_S:
+                j -= 1
+        (cut if what == "cut" else keep).update(range(j, first))
+        cut.update(range(first, last + 1))
+        floor = last + 1
+    return cut, keep - cut
+
+
+def marker_line(lists: list) -> str:
+    """What Claude is told when the host used markers in these recordings' word lists ('' when not)."""
+    if not any(markers(words) for words in lists):
+        return ""
+    return (f"While recording, the host speaks to the editor: \"{MARKER_WORD}, cut that\" means the take just said must not be in the video, and \"{MARKER_WORD}, keep that\" means the take just said "
+            "is one the host wants kept. Never put those instructions themselves in the cut, never bring back a passage the host told the editor to cut, and prefer a take the host told the editor to keep.\n")
+
+
 def cleaned(words: list, restart_at: list = ()) -> list:
     """[(kept word positions of one stretch, [source-second ranges])] in order. A stretch ends at a pause over PAUSE_SPLIT or where words were dropped.
     No range is shorter than MIN_PIECE_S; a stretch that short joins the one before it when only a pause lies between them."""
     drop = repeated_phrase_drops(words)
     drop |= repeated_sentence_drops(words, drop)
     drop |= stammer_drops(words, drop)
+    said_cut, said_keep = marker_spans(words)                    # what the host said to the editor while recording wins over the rules
+    drop = (drop - said_keep) | said_cut
     parts, cur = [], []
     for i, w in enumerate(words):
         if i in drop:
@@ -436,8 +491,10 @@ def build_beats(work: str, name: str) -> dict:
             "changes": [{"t": time.strftime("%Y-%m-%dT%H:%M:%S"), "who": "app", "what": "built from whole recordings",
                          "recordings": [r["rel"] for r in pl["recordings"]]}]}
     clipmap.write_json(p, data)
+    said = [m[0] for r in pl["recordings"] for m in markers(analysis[r["rel"]]["list"])]          # what the host told the editor while recording
     return {"beats": len(beats), "recordings": [r["rel"] for r in pl["recordings"]], "left_out": pl["left_out"],
-            "seconds": round(sum(b["dur"] for b in beats), 1)}
+            "seconds": round(sum(b["dur"] for b in beats), 1), "said_cut": said.count("cut"), "said_keep": said.count("keep"),
+            "marker_line": marker_line([analysis[r["rel"]]["list"] for r in pl["recordings"]])}
 
 
 def empty_reason(built: dict) -> str:

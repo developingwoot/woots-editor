@@ -566,7 +566,8 @@ def footage_view(work: str, name: str, running: bool = False, reading: bool = Fa
         steps.append("writes an outline from what you said")
     steps += ["matches your clips to the outline", "cuts them together"]
     import videokind
-    return {"key": key, "kind": videokind.view(work, name), "folder": {"path": rec["folder"], "short": " › ".join(__import__("pathlib").Path(rec["folder"]).parts[-2:]) if rec["folder"] else "",
+    import skillrules
+    return {"key": key, "kind": videokind.view(work, name), "marker_word": skillrules.rules()["marker_word"], "folder": {"path": rec["folder"], "short": " › ".join(__import__("pathlib").Path(rec["folder"]).parts[-2:]) if rec["folder"] else "",
                                    "guessed": rec["how"] == "guessed", "set": bool(rec["folder"])},
             "recordings": {k: rec[k] for k in ("total", "read", "unread", "looked", "ignored", "thin", "rows")}, "has_outline": has_outline, "sections": sections,
             "missing": miss,
