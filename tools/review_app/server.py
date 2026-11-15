@@ -1893,6 +1893,16 @@ class Handler(BaseHTTPRequestHandler):
                 with _lock:
                     job = start_score(work, name)
                 return self.send_json({"id": job["id"]})
+            if u.path == "/api/v2/retention/import":             # the audience-retention export of YouTube Studio for this video (retention.py)
+                import base64
+                import retention
+                work, name = views.split_key(b["key"])
+                raw = base64.b64decode(b["data"]) if b.get("data") else str(b.get("text") or "")
+                if len(raw) > 5_000_000:
+                    raise ValueError("that file is too large to be a retention export")
+                with _lock:
+                    retention.save(work, name, raw, source=Path(str(b.get("file") or "")).name)
+                return self.send_json(views.final(work, name))
             if u.path == "/api/v2/final/reveal":
                 import shootplan
                 work, name = views.split_key(b["key"])

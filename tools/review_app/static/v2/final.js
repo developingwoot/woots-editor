@@ -1,5 +1,6 @@
 import { h, api, say } from './util.js';
 import { factCheckCard, resolveCard } from './extras.js';
+import { retentionCard } from './retention.js';
 
 // The Final step: warnings and one render button, the finished video, the publishing details (each with a Copy button),
 // the thumbnail layout draft on a frame the creator picks, and "Finish and archive".
@@ -20,7 +21,8 @@ export async function render(root, key, setBusy) {
       root.replaceChildren(h('div', { class: 'card empty', id: 'archivedBox' },
         h('p', {}, 'This video is archived.'),
         h('p', { class: 'muted' }, `The final and the saved project are in the footage folder (${archive.done.date}).`),
-        h('button', { class: 'quiet', onclick: () => post('/api/v2/final/reveal') }, 'Open the folder')));
+        h('button', { class: 'quiet', onclick: () => post('/api/v2/final/reveal') }, 'Open the folder')),
+        ...[retentionCard(key, data.retention, draw)].filter(Boolean));      // the numbers come in after the video is out: an archived video still takes them
       return;
     }
 
@@ -125,7 +127,7 @@ export async function render(root, key, setBusy) {
           h('button', { class: 'quiet', onclick: async () => draw(await load()) }, 'Cancel')));
     }
 
-    root.replaceChildren(...[top, scoreCard, factCheckCard(key), publishCard, resolveCard(key), arch].filter(Boolean));
+    root.replaceChildren(...[top, scoreCard, factCheckCard(key), publishCard, resolveCard(key), retentionCard(key, data.retention, draw), arch].filter(Boolean));
   };
   const load = () => api(`/api/v2/final?key=${encodeURIComponent(key)}`);
   await draw(await load());

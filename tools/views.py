@@ -426,6 +426,8 @@ def final(work: str, name: str, running: bool = False) -> dict:
     if latest:
         out["latest"] = {"video": f"/media/{quote(work)}/{quote(latest['file'])}", "dur": time_text(latest["dur"]) if latest.get("dur") else ""}
     out["scorecard"] = scorecard_view(work, name, latest, running)
+    import retention
+    out["retention"] = retention.view(work, name)
     return out
 
 

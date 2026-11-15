@@ -12,6 +12,7 @@
 3. `recut.py`, `takes.py`, `cutreview.py`, `cutcheck.py`, `framing.py`, `coldopen.py`, `shotmatch.py`: the rough cut. The numbers come from `skills/youtube-edit/rough-cut.json`.
    `videokind.py` says what the talking picture shows (talking, hands-on, screen), which decides what a cutaway may cover; `cutawaycheck.py` has Claude look at each cutaway next to its words;
    `notereplay.py` keeps the host's notes when the cut is made again; `skillupdates.py` offers a user's own skill copy the rules and numbers the starter skills got later.
+   `retention.py` reads a YouTube audience-retention export for a finished video and lines up where viewers left or watched again with the final's transcript, chapters and timeline (Final screen, `retention.js`).
 4. `locks.py`: sentences the user marked good; no pass changes them.
 5. `cutview.py`, `makeversion.py`, `reviewnotes.py`, `watchnotes.py`: the review screen, versions (Cut 1, Cut 2, ...) and the notes Claude applies.
 6. `gfxplan.py`, `sections.py`, `builder.py`, `sectionrender.py`, `selfreview.py`: graphics, built in sections by background Claude runs; the preview.
