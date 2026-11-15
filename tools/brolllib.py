@@ -136,7 +136,47 @@ def state(work: str, name: str | None = None) -> dict:
     return {"total": len(every), "described": len(every) - len(missing), "missing": missing, "ready": bool(every) and not missing, "no_folder": False}
 
 
-def build(work: str, limit: int | None, name: str | None = None):
+CLOSE_S = 4.0                             # a closer look is skipped where the footage was already looked at within this many seconds
+
+
+def wanted_new(lib: dict, wanted: dict) -> dict:
+    """{rel: [t]} of `wanted` that still need a look: the recording was looked at, and no look of it (old or wanted earlier in the list) is within CLOSE_S."""
+    out = {}
+    for rel, times in (wanted or {}).items():
+        c = lib.get("clips", {}).get(rel) or {}
+        if not c.get("samples"):
+            continue
+        have = [float(s["t"]) for s in c["samples"]]
+        for t in sorted(float(x) for x in times):
+            if 0 <= t < float(c.get("dur") or 0) and all(abs(t - h) > CLOSE_S for h in have):
+                have.append(t)
+                out.setdefault(rel, []).append(round(t, 2))
+    return out
+
+
+def add_looks(lib: dict, folder: str, fdir: Path, wanted: dict, caption) -> int:
+    """Look at the footage at the wanted moments too (the rough cut asks for the moments it decides about: the frame every 30 s of a long talking
+    recording cannot say what is on screen during one sentence). The new looks join the recording's samples in time order. Returns how many were added."""
+    n = 0
+    for rel, times in wanted_new(lib, wanted).items():
+        src = str(Path(folder) / rel)
+        for t in times:
+            f = fdir / f"{tag_of(rel)}_{t:08.2f}.jpg"
+            try:
+                grab(src, t, f)
+                c = caption(f) if caption else {"what": Path(rel).stem, "subject": Path(rel).stem, "hands": False, "kind": "real footage", "sharp": True}
+            except Exception:                 # noqa: BLE001 - one frame that cannot be read is not a reason to stop
+                continue
+            if not isinstance(c, dict) or "raw" in c:
+                continue
+            c.update(t=t, frame=f.name, closer=True)
+            lib["clips"][rel]["samples"].append(c)
+            n += 1
+        lib["clips"][rel]["samples"].sort(key=lambda s: float(s["t"]))
+    return n
+
+
+def build(work: str, limit: int | None, name: str | None = None, closer: str | None = None):
     import numpy as np
     d, jp, ep, fdir = paths(work, name)
     fdir.mkdir(parents=True, exist_ok=True)
@@ -146,8 +186,12 @@ def build(work: str, limit: int | None, name: str | None = None):
     if limit:
         todo = todo[:limit]
     print(len(todo), "clips to describe", flush=True)
+    try:
+        wanted = wanted_new(lib, json.loads(Path(closer).read_text(encoding="utf-8"))) if closer else {}
+    except (OSError, ValueError):
+        wanted = {}
     caption = None
-    if todo and not fake():
+    if (todo or wanted) and not fake():
         import torch
         from transformers import AutoModelForImageTextToText, AutoProcessor, BitsAndBytesConfig
         vlm = engines.local_path(engines.chosen("vision"))          # the model the user picked in Settings (Qwen3-VL 8B unless changed), the pinned revision, from disk
@@ -188,6 +232,12 @@ def build(work: str, limit: int | None, name: str | None = None):
         tmp.write_text(json.dumps(lib, indent=1, ensure_ascii=False), encoding="utf-8")
         os.replace(tmp, jp)
         print(f"[{n}/{len(todo)}] {rel} {len(lib['clips'][rel]['samples'])} frames, {round((time.time() - t0) / 60, 1)} min", flush=True)
+    if wanted:
+        got = add_looks(lib, cfg["folder"], fdir, wanted, caption)
+        tmp = jp.with_suffix(".tmp")
+        tmp.write_text(json.dumps(lib, indent=1, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, jp)
+        print(f"[closer] {got} closer looks, {round((time.time() - t0) / 60, 1)} min", flush=True)
     if caption:
         import torch
         del model
@@ -335,5 +385,6 @@ if __name__ == "__main__":
     ap.add_argument("--name")
     ap.add_argument("--limit", type=int)
     ap.add_argument("--find")
+    ap.add_argument("--closer", help="a JSON file {recording: [seconds]}: look at these moments too")
     a = ap.parse_args()
-    find(a.work, a.find, name=a.name) if a.find else build(a.work, a.limit, a.name)
+    find(a.work, a.find, name=a.name) if a.find else build(a.work, a.limit, a.name, a.closer)

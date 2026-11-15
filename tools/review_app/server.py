@@ -335,6 +335,28 @@ def _look_at_footage(job, work, name) -> bool:
     return v.wait() == 0
 
 
+def _look_closer(job, work, name, wanted: dict) -> int:
+    """Have the vision library look at the wanted moments ({recording: [seconds]}) that it has not looked at yet. Returns how many it looked at;
+    a failure only means the cut is judged by the looks there are."""
+    import brolllib
+    try:
+        lib = json.loads(brolllib.paths(work, name)[1].read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return 0
+    new = brolllib.wanted_new(lib, wanted)
+    n = sum(len(v) for v in new.values())
+    if not n:
+        return 0
+    p = work_dir(work) / "v2-run" / "closer.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(new), encoding="utf-8")
+    v = subprocess.Popen([str(PY), str(TOOLS / "brolllib.py"), work, "--name", name, "--closer", str(p)], cwd=TOOLS, env=tool_env(),
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
+    for line in v.stdout:
+        if line.startswith("["):
+            job["log"] = (job["log"] + line)[-30000:]
+    return n if v.wait() == 0 else 0
+
 
 # ----------------------------------------------------------------------------- clips (script <-> takes)
 
@@ -827,6 +849,9 @@ def start_rough_cut(work, name):
                 recut.place_broll(work, name, shotmatch.load(work, name), shotmatch.plan(work, name))
                 recut.cover_with_footage(work, name)
                 recut.cover_by_name(work, name)
+                asked = recut.closer_times(work, name)
+            closer = _look_closer(job, work, name, asked)             # the moments this cut decides about are looked at closely first (a frame every 30 s cannot say what one sentence shows)
+            with _lock:
                 shown = recut.uncover_demonstrations(work, name)          # the host's own hands on the thing are the picture: nothing covers them
                 recut.cover_from_quiet(work, name)
                 recut.cover_from_silent(work, name)
@@ -884,6 +909,8 @@ def start_rough_cut(work, name):
             if shown:
                 changes.append(f"{len(shown)} cutaway{'' if len(shown) == 1 else 's'} left out where you are showing the thing yourself")
             changes += seen_lines
+            if closer:
+                changes.append(f"Looked closely at {closer} moment{'' if closer == 1 else 's'} of the footage where this cut decides what to show")
             if carried["choices"]:
                 changes.append(f"{carried['choices']} exact clip choice{'' if carried['choices'] == 1 else 's'} (replace, remove, trim) of earlier cuts could not be carried over: the clips are new")
             if wrong:

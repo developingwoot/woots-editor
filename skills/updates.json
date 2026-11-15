@@ -44,6 +44,14 @@
     "text": "**Every cutaway is looked at.** After the cutaways are placed, Claude looks at each one next to the words said over it and at the talking picture it covers. An automatic cutaway goes when the talking picture already shows what is said or when the cutaway shows something else; one the host placed stays and the version says what Claude saw."
   },
   {
+    "id": "closer-looks",
+    "date": "2026-11-14",
+    "file": "youtube-edit/rough-cut.md",
+    "section": "Rules",
+    "about": "The footage is looked at closely where the cut decides what to show",
+    "text": "**Closer looks.** A long talking recording is looked at only every half minute or so, which cannot say what is on screen during one sentence. Before the cutaways are judged, the app looks closely at the moments the cut decides about (the talking picture under each automatic cutaway or where one could go, and the quiet footage that could be used), at most `closer_looks_max` moments a cut. A look right at a moment judges it alone; looks further away only count where there is none."
+  },
+  {
     "id": "said-to-the-editor",
     "date": "2026-11-14",
     "file": "youtube-edit/rough-cut.md",

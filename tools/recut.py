@@ -55,7 +55,7 @@ INTRO_OUTRO = ("intro", "outro")
 
 def reload_rules(kind: str = "talking"):
     """Take the numbers from the youtube-edit skill (rough-cut.json). Tests override a few with environment variables (their recordings are 3 s long)."""
-    global MIN_WORDS, MIN_RATE, TALK_MIN_WORDS, REPEAT_N, REPEAT_WORDS, REPEAT_S, CHUNK_MIN, CHUNK_MAX, MIN_PIECE_S, SAID_TWICE, SAID_TWICE_FAR, SAID_TWICE_S, BROLL_MAX, MAX_PAUSE_S, BROLL_MIN_BEAT_S, SAME_CONTAINED, QUIET_NEAR_S, KIND, MARKER_WORD, MARKER_BACK_S
+    global MIN_WORDS, MIN_RATE, TALK_MIN_WORDS, REPEAT_N, REPEAT_WORDS, REPEAT_S, CHUNK_MIN, CHUNK_MAX, MIN_PIECE_S, SAID_TWICE, SAID_TWICE_FAR, SAID_TWICE_S, BROLL_MAX, MAX_PAUSE_S, BROLL_MIN_BEAT_S, SAME_CONTAINED, QUIET_NEAR_S, KIND, MARKER_WORD, MARKER_BACK_S, CLOSER_MAX
     r =skillrules.rules()
     MIN_WORDS, MIN_RATE = int(os.environ.get("WOOTS_MIN_WORDS", r["min_words"])), r["min_words_per_s"]
     TALK_MIN_WORDS = int(r["talk_min_words"])
@@ -69,6 +69,7 @@ def reload_rules(kind: str = "talking"):
     SAME_CONTAINED = r["retake_share"]
     QUIET_NEAR_S = r["quiet_near_s"]
     MARKER_WORD, MARKER_BACK_S = r["marker_word"].lower(), r["marker_back_s"]
+    CLOSER_MAX = int(r["closer_looks_max"])
     KIND =kind if kind in ("talking", "hands-on", "screen") else "talking"
 
 
@@ -737,6 +738,8 @@ QUIET_MIN_S = 4.0            # a quiet stretch shorter than this is a pause, not
 QUIET_PAD_S = 0.6            # kept clear of any word (a word cut out must not be heard or seen being said)
 QUIET_NEAR_S = 20.0          # how far from the very words it plays over the quiet footage may be (set from the skill)
 SAMPLE_REACH_S = 20.0        # frame-library samples this close to a piece judge what it shows
+CLOSE_REACH_S = 4.0          # ...unless the footage was looked at right there (a closer look): then only those looks judge it
+CLOSER_MAX = 30              # closer looks a rough cut may ask for (about 7 s each on the graphics card; set from the skill)
 PERSON = re.compile(r"\b(man|woman|person|people|host|guy|face|beard|presenter|speaker)\b", re.I)
 
 
@@ -760,8 +763,15 @@ def quiet_stretches(words: list, dur: float, used: list, min_s: float = 0.0, pad
 
 def _good_footage(samples: list, a: float, b: float) -> bool:
     """The frame library has looked at this piece (a sample near it) and every look shows work, at least one sharp."""
-    near = [s for s in samples if a - SAMPLE_REACH_S <= float(s["t"]) <= b + SAMPLE_REACH_S]
+    near = _near(samples, [[a, b]])
     return bool(near) and all(shows_work(s) for s in near) and any(s.get("sharp", True) for s in near)
+
+
+def _near(samples: list, spans: list) -> list:
+    """The looks that judge these stretches of a recording: the ones right at them (within CLOSE_REACH_S, a closer look asked for by closer_times)
+    when there are any, else the ones within SAMPLE_REACH_S."""
+    within = lambda reach: [s for s in samples if any(a - reach <= float(s["t"]) <= b + reach for a, b in spans)]     # noqa: E731
+    return within(CLOSE_REACH_S) or within(SAMPLE_REACH_S)
 
 
 QUIET_WHY = "what you were doing around these words"
@@ -784,8 +794,7 @@ def _talking_picture(beat: dict, at: float, dur: float, samples: list) -> tuple:
     """(pointing words are said under this window, the frame-library looks at the talking picture under it)."""
     spans = covered_source(beat, at, dur)
     said = " ".join(w[0] for w in beat["aroll"].get("words") or [] if any(a - 0.05 <= w[1] < b for a, b in spans))
-    near = [s for s in samples if any(a - SAMPLE_REACH_S <= float(s["t"]) <= b + SAMPLE_REACH_S for a, b in spans)]
-    return bool(POINTING.search(said)), near
+    return bool(POINTING.search(said)), _near(samples, spans)
 
 
 def is_demonstration(beat: dict, at: float, dur: float, samples: list) -> bool:
@@ -811,6 +820,53 @@ def _open_beats(data: dict, work: str, name: str) -> list:
 
 def _cover_beats(data: dict, work: str, name: str) -> list:
     return [b for b in _open_beats(data, work, name) if not b.setdefault("on_screen", {}).setdefault("broll", []) and b["dur"] >= BROLL_MIN_BEAT_S]
+
+
+def _free(data: dict, clips: dict, analysis: dict) -> dict:
+    """{recording: its quiet stretches no beat uses}, for the recordings the beats talk in."""
+    used: dict = {}
+    for b in data["beats"]:
+        if b.get("aroll"):
+            used.setdefault(b["aroll"]["rel"], []).extend(b["aroll"].get("keep") or [[b["aroll"]["in"], b["aroll"]["out"]]])
+    return {rel: quiet_stretches(analysis.get(rel, {}).get("list", []), float(analysis.get(rel, {}).get("dur") or clips[rel].get("dur") or 0), keeps, QUIET_MIN_S, QUIET_PAD_S)
+            for rel, keeps in used.items() if rel in clips and analysis.get(rel)}
+
+
+def _first_window(b: dict) -> tuple:
+    at = COVER_AFTER_S if b["dur"] >= MIN_PIECE_S + COVER_AFTER_S + 1 else 0.0
+    return at, min(BROLL_MAX, b["dur"] - at)
+
+
+def closer_times(work: str, name: str) -> dict:
+    """{recording: [seconds]}: the moments this cut decides about and so should be looked at closely (brolllib.add_looks): the talking picture under
+    each automatic cutaway and under the first place a long beat without one could get one, and the quiet footage right after it that could be used.
+    In the order the cut plays, at most CLOSER_MAX."""
+    data = clipmap.read_json(beatmap.path_of(work, name), None)
+    jp = brolllib.paths(work, name)[1]
+    cfg = clipmap.read_json(WORK / work / f"{name}.footage.json", {}) or {}
+    if not data or not jp.exists():
+        return {}
+    clips = json.loads(jp.read_text(encoding="utf-8")).get("clips", {})
+    free = _free(data, clips, cfg.get("analysis") or {})
+    want = []
+    for b in _open_beats(data, work, name):
+        rel = b["aroll"]["rel"]
+        on = (b.get("on_screen") or {}).get("broll") or []
+        windows = [(float(x.get("at") or 0), float(x.get("dur") or 0)) for x in on if x.get("auto")]
+        if not on and b["dur"] >= BROLL_MIN_BEAT_S:
+            windows.append(_first_window(b))
+        for at, dur in windows:
+            spans = covered_source(b, at, dur)
+            if not spans:
+                continue
+            want += [(rel, (a + z) / 2) for a, z in {tuple(spans[0]), tuple(spans[-1])}]
+            after = min((s for s in free.get(rel, []) if 0 <= s[0] - spans[-1][1] <= QUIET_NEAR_S and s[1] - s[0] >= MIN_PIECE_S), key=lambda s: s[0], default=None)
+            if after and not on:
+                want.append((rel, after[0] + min(dur, after[1] - after[0]) / 2))
+    out: dict = {}
+    for rel, t in want[:CLOSER_MAX]:
+        out.setdefault(rel, []).append(round(t, 2))
+    return out
 
 
 def uncover_demonstrations(work: str, name: str) -> list:
@@ -851,12 +907,7 @@ def cover_from_quiet(work: str, name: str) -> int:
     for b in _open_beats(data, work, name):
         on = b.setdefault("on_screen", {}).setdefault("broll", [])
         on[:] = [x for x in on if not (x.get("auto") and x.get("why") == QUIET_WHY)]
-    used: dict = {}
-    for b in data["beats"]:
-        if b.get("aroll"):
-            used.setdefault(b["aroll"]["rel"], []).extend(b["aroll"].get("keep") or [[b["aroll"]["in"], b["aroll"]["out"]]])
-    free = {rel: quiet_stretches(analysis.get(rel, {}).get("list", []), float(analysis.get(rel, {}).get("dur") or clips[rel].get("dur") or 0), keeps, QUIET_MIN_S, QUIET_PAD_S)
-            for rel, keeps in used.items() if rel in clips and analysis.get(rel)}
+    free = _free(data, clips, analysis)
     added = 0
     for b in _cover_beats(data, work, name):
         rel = b["aroll"]["rel"]

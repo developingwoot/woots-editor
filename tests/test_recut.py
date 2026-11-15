@@ -417,3 +417,21 @@ def test_a_marker_reaches_back_to_the_last_pause_only_and_a_sentence_about_an_ed
     assert recut.marker_spans(words)[0] == {5, 6, 7, 8, 9, 10}                                # the good sentence, a pause before the bad one, stays
     inside = [["in", 0.0, 0.3], ["the", 0.35, 0.5], ["editor", 0.55, 0.9], ["cut", 0.95, 1.2], ["that", 1.25, 1.5], ["edge", 1.55, 1.9]]
     assert recut.markers(inside) == []
+
+
+def test_closer_looks_are_asked_for_where_the_cut_decides_and_then_judge_alone(monkeypatch):
+    import json
+    import brolllib
+    w, n = _quiet_video("closer", [_WORK(30.0), _WORK(130.0)])
+    asked = recut.closer_times(w, n)                                                          # under the first window of each long beat, and the quiet footage after it
+    assert asked == {"talk.mkv": [7.0, 24.1, 107.0, 124.1]}
+    jp = brolllib.paths(w, n)[1]
+    lib = json.loads(jp.read_text(encoding="utf-8"))
+    assert brolllib.wanted_new(lib, {"talk.mkv": [7.0, 8.0, 29.0, 700.0], "unknown.mkv": [1.0]}) == {"talk.mkv": [7.0]}      # 8 is beside 7, 29 beside the look at 30, 700 past the end
+    monkeypatch.setattr(brolllib, "grab", lambda src, t, f: None)
+    assert brolllib.add_looks(lib, "nowhere", jp.parent, asked, lambda f: dict(_FACE(0.0))) == 4
+    assert [s["t"] for s in lib["clips"]["talk.mkv"]["samples"]] == [7.0, 24.1, 30.0, 107.0, 124.1, 130.0] and lib["clips"]["talk.mkv"]["samples"][0]["closer"] is True
+    beat = {"aroll": {"rel": "talk.mkv", "in": 0.0, "out": 20.0, "keep": [[0.0, 20.0]], "words": []}}
+    coarse = [_WORK(25.0)]                                                                    # 14 s from the window: hands, so a demonstration
+    assert recut.is_demonstration(beat, 3.0, 8.0, coarse)
+    assert not recut.is_demonstration(beat, 3.0, 8.0, coarse + [_FACE(7.0)])                  # a look right at it says a face: the far look no longer counts

@@ -24,6 +24,7 @@
   "quiet_near_s": 20,
   "marker_word": "editor",
   "marker_back_s": 60,
+  "closer_looks_max": 30,
   "retake_share": 0.6,
   "repeat_sentence_far_share": 0.7,
   "splice_min_words": 4,
