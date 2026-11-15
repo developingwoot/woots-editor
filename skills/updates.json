@@ -34,5 +34,13 @@
       "When the host talks while working (an unboxing, a build), the best picture for a sentence is what they did around it: a long beat with no cutaway gets the quiet footage of its own recording nearest to it (between its sentences, else just after, else just before, within `quiet_near_s` seconds), never a stretch where something is said and never the host just facing the camera. A recording with almost nothing said (the machine running) goes over the remaining beats whose words are like what its frames show, in recording order."
     ],
     "numbers_were": {"youtube-edit/rough-cut.json": {"quiet_near_s": 90}}
+  },
+  {
+    "id": "cutaways-looked-at",
+    "date": "2026-11-14",
+    "file": "youtube-edit/rough-cut.md",
+    "section": "Rules",
+    "about": "Claude looks at every cutaway next to its words",
+    "text": "**Every cutaway is looked at.** After the cutaways are placed, Claude looks at each one next to the words said over it and at the talking picture it covers. An automatic cutaway goes when the talking picture already shows what is said or when the cutaway shows something else; one the host placed stays and the version says what Claude saw."
   }
 ]

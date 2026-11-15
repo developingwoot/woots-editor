@@ -823,6 +823,19 @@ def start_rough_cut(work, name):
                 recut.cover_from_quiet(work, name)
                 recut.cover_from_silent(work, name)
                 wrong = recut.audit_cutaways(work, name)
+            import cutawaycheck                        # Claude looks at each cutaway next to the words under it: one that hides what the host is showing, or shows something else, goes
+            seen_lines = []
+            fd = WORK / work / "v2-run" / "cutaways"
+            with _lock:
+                look = cutawaycheck.brief(work, name, fd)
+
+            def looked(p, r):
+                ok, msg, lines = cutawaycheck.apply_answer(work, name, p)
+                seen_lines.extend(lines)
+                return ok, msg
+            if look:
+                claude_step("looking at each cutaway next to its words", fd, look, "check.json", looked, budget="1.0")
+                job["ok"] = True                       # cutaways nobody looked at are still cutaways
             lack = framing.missing(work, name, clipmap.read_json(beatmap.path_of(work, name), {"beats": []}))
             if lack:
                 fd = WORK / work / "v2-run" / "framing"
@@ -860,6 +873,7 @@ def start_rough_cut(work, name):
                 changes.append(f"{zoomed} punch-in zoom{'' if zoomed == 1 else 's'} on the talking head, eyes kept on one line")
             if shown:
                 changes.append(f"{len(shown)} cutaway{'' if len(shown) == 1 else 's'} left out where you are showing the thing yourself")
+            changes += seen_lines
             if wrong:
                 changes.append(f"{len(wrong)} cutaway{'' if len(wrong) == 1 else 's'} of another program taken out")
             if found["nothing"]:
