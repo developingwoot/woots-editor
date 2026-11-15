@@ -565,7 +565,8 @@ def footage_view(work: str, name: str, running: bool = False, reading: bool = Fa
     if not has_outline:
         steps.append("writes an outline from what you said")
     steps += ["matches your clips to the outline", "cuts them together"]
-    return {"key": key, "folder": {"path": rec["folder"], "short": " › ".join(__import__("pathlib").Path(rec["folder"]).parts[-2:]) if rec["folder"] else "",
+    import videokind
+    return {"key": key, "kind": videokind.view(work, name), "folder": {"path": rec["folder"], "short": " › ".join(__import__("pathlib").Path(rec["folder"]).parts[-2:]) if rec["folder"] else "",
                                    "guessed": rec["how"] == "guessed", "set": bool(rec["folder"])},
             "recordings": {k: rec[k] for k in ("total", "read", "unread", "looked", "ignored", "thin", "rows")}, "has_outline": has_outline, "sections": sections,
             "missing": miss,

@@ -44,6 +44,14 @@
     "text": "**Every cutaway is looked at.** After the cutaways are placed, Claude looks at each one next to the words said over it and at the talking picture it covers. An automatic cutaway goes when the talking picture already shows what is said or when the cutaway shows something else; one the host placed stays and the version says what Claude saw."
   },
   {
+    "id": "kind-of-video",
+    "date": "2026-11-14",
+    "file": "youtube-edit/rough-cut.md",
+    "section": "Rules",
+    "about": "The kind of video decides what a cutaway may cover",
+    "text": "**Kind of video.** The Footage screen says what the talking picture shows: the host talking to the camera, hands-on (the camera is on the work: an unboxing, a build, a repair) or talking over the screen; left on auto, the app decides from what the talking recordings show. In a hands-on or screen video the talking picture is the work, so an automatic cutaway stays only where the frames show the host facing the camera, and Claude is told that what the host does is the content."
+  },
+  {
     "id": "notes-outlive-a-cut",
     "date": "2026-11-14",
     "file": "youtube-edit/rough-cut.md",

@@ -47,14 +47,15 @@ SAID_TWICE, SAID_TWICE_FAR, SAID_TWICE_S = 0.5, 0.7, 60.0   # share of the short
 BROLL_MAX = 8.0
 SILENCE_PAD_S, SILENCE_LEAD_S = 0.3, 0.1      # of a cut silence this much stays after the speech (the quiet end of a word) and before the next word
 MAX_PAUSE_S = 0.5            # a silence longer than this is cut out (set from the skill)
+KIND = "talking"             # the kind of video being cut (videokind.py): in "hands-on" and "screen" the talking picture is the work, and only a face may be covered
 
 SERIES_RE = re.compile(r"^(.*?[A-Za-z])[\s_\-]*(\d{1,2})$")
 INTRO_OUTRO = ("intro", "outro")
 
 
-def reload_rules():
+def reload_rules(kind: str = "talking"):
     """Take the numbers from the youtube-edit skill (rough-cut.json). Tests override a few with environment variables (their recordings are 3 s long)."""
-    global MIN_WORDS, MIN_RATE, TALK_MIN_WORDS, REPEAT_N, REPEAT_WORDS, REPEAT_S, CHUNK_MIN, CHUNK_MAX, MIN_PIECE_S, SAID_TWICE, SAID_TWICE_FAR, SAID_TWICE_S, BROLL_MAX, MAX_PAUSE_S, BROLL_MIN_BEAT_S, SAME_CONTAINED, QUIET_NEAR_S
+    global MIN_WORDS, MIN_RATE, TALK_MIN_WORDS, REPEAT_N, REPEAT_WORDS, REPEAT_S, CHUNK_MIN, CHUNK_MAX, MIN_PIECE_S, SAID_TWICE, SAID_TWICE_FAR, SAID_TWICE_S, BROLL_MAX, MAX_PAUSE_S, BROLL_MIN_BEAT_S, SAME_CONTAINED, QUIET_NEAR_S, KIND
     r =skillrules.rules()
     MIN_WORDS, MIN_RATE = int(os.environ.get("WOOTS_MIN_WORDS", r["min_words"])), r["min_words_per_s"]
     TALK_MIN_WORDS = int(r["talk_min_words"])
@@ -67,6 +68,7 @@ def reload_rules():
     BROLL_MIN_BEAT_S = r["broll_min_beat_s"]
     SAME_CONTAINED = r["retake_share"]
     QUIET_NEAR_S = r["quiet_near_s"]
+    KIND = kind if kind in ("talking", "hands-on", "screen") else "talking"
 
 
 reload_rules()
@@ -490,7 +492,7 @@ def place_broll(work: str, name: str, shots: dict, plan_rows: list) -> int:
             dur = round(min(BROLL_MAX, b["dur"], room), 2)
             if dur < MIN_PIECE_S:
                 continue
-            b["on_screen"]["broll"].append({"file": hit["rel"], "in": float(hit["t"]), "dur": dur, "at": 0.0, "why": hit["what"][:120], "auto": True})
+            b["on_screen"]["broll"].append({"file": hit["rel"], "in": float(hit["t"]), "dur": dur, "at": 0.0, "why": hit["what"][:120], "auto": True, **({"by": "user"} if e.get("by") == "user" else {})})
             claimed[b["id"]] = True
             break
     clipmap.write_json(bp, data)
@@ -733,6 +735,8 @@ def is_demonstration(beat: dict, at: float, dur: float, samples: list) -> bool:
     """The talking picture under this window already is the picture: the host points at something ('these rods right here'), or the frames show
     hands at work or the screen being talked over. A cutaway there hides what is being shown. (A frame of the thing alone on the table is not
     a demonstration: a cutaway placed for another reason may stay there.)"""
+    if KIND in ("hands-on", "screen"):                      # the talking picture is the work unless the frames show the host facing the camera
+        return not face_only(beat, at, dur, samples)
     pointing, near = _talking_picture(beat, at, dur, samples)
     return pointing or any(s.get("hands") or s.get("kind") == "screen recording" for s in near)
 
@@ -765,7 +769,7 @@ def uncover_demonstrations(work: str, name: str) -> list:
     for b in _open_beats(data, work, name):
         was = (b.get("on_screen") or {}).get("broll") or []
         samples = (clips.get(b["aroll"]["rel"]) or {}).get("samples", [])
-        keep = [x for x in was if not (x.get("auto") and is_demonstration(b, float(x.get("at") or 0), float(x.get("dur") or 0), samples))]
+        keep = [x for x in was if not (x.get("auto") and x.get("by") != "user" and is_demonstration(b, float(x.get("at") or 0), float(x.get("dur") or 0), samples))]
         if len(keep) != len(was):
             out += [{"beat": b["id"], "file": x["file"]} for x in was if x not in keep]
             b["on_screen"]["broll"] = keep

@@ -627,7 +627,8 @@ def start_make_version(work, name, stage):
                 result["applied_ids"] += r["applied_ids"]
                 result["changes"] += r["changes"]
             if plain:
-                _claude_run(job, fd, makeversion.brief(work, name, stage, fd), "answer.json", apply, budget="1.0")
+                import videokind
+                _claude_run(job, fd, videokind.line(videokind.resolve(work, name)) + makeversion.brief(work, name, stage, fd), "answer.json", apply, budget="1.0")
                 if not job["ok"] and result["applied_ids"]:
                     job["ok"] = True                    # the exact choices were applied: go on without the free-text notes
             if job["ok"] and not job.get("stop"):
@@ -725,6 +726,7 @@ def start_rough_cut(work, name):
     import cutview
     import footageview
     import makeversion
+    import videokind
     rec = footageview.recordings(work, name)
     if not rec["folder"]:
         raise ValueError("choose the folder you recorded into first")
@@ -746,9 +748,9 @@ def start_rough_cut(work, name):
         import hashlib
         skipped = []
 
-        def claude_step(label, *a, **kw):                      # a step that fails does not stop the cut, but the host is told it was not done
+        def claude_step(label, fd, prompt, *a, **kw):          # a step that fails does not stop the cut, but the host is told it was not done
             n = len(job["log"])
-            _claude_run(job, *a, **kw)
+            _claude_run(job, fd, videokind.line(recut.KIND) + prompt, *a, **kw)      # every run is told what kind of video this is
             if not job.get("ok"):
                 skipped.append(f"Not done: {label} ({job['log'][n:].strip()[:140] or 'it did not finish'})")
             job["ok"] = True
@@ -781,6 +783,7 @@ def start_rough_cut(work, name):
             if job.get("stop"):
                 return fail(" Stopped.")
             job["step"] = 2
+            recut.KIND = videokind.resolve(work, name)             # what the talking picture shows (the host's choice, or from the looks at the footage): decides what may cover it
             import notereplay
             with _lock:
                 carried = notereplay.reopen(work, name)            # the plan is built again: the notes earlier cuts applied are open again, each with the words it was about
@@ -1780,6 +1783,12 @@ class Handler(BaseHTTPRequestHandler):
                     cfg = read_json(footage_file(work, name), {}) or {}
                     cfg["folder"] = str(f)
                     write_json(footage_file(work, name), cfg)
+                return self.send_json(views.footage_view(work, name))
+            if u.path == "/api/v2/footage/kind":                    # what kind of video this is (videokind.py): talking, hands-on, screen, or auto
+                import videokind
+                work, name = views.split_key(b["key"])
+                with _lock:
+                    videokind.set(work, name, str(b.get("kind")))
                 return self.send_json(views.footage_view(work, name))
             if u.path == "/api/v2/footage/ignore":
                 work, name = views.split_key(b["key"])

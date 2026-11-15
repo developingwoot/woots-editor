@@ -27,6 +27,15 @@ export async function render(root, key, setBusy) {
       it.status === 'ready' ? h('span', { class: 'muted small' }, `take found, ${it.len}`) : h('span', { class: 'chip warn' }, 'No take yet'));
   }
 
+  // What kind of video this is: it decides what a cutaway may cover (a talking head, never your hands on the thing) and what Claude is told.
+  function kindRow(k) {
+    if (!k) return null;
+    const sel = h('select', { id: 'videoKind', 'aria-label': 'Kind of video', onchange: async () => {
+      try { await draw(await post('/api/v2/footage/kind', { kind: sel.value })); } catch (e) { say(e.message); }
+    } }, ...k.options.map(o => h('option', { value: o.id, selected: o.id === k.value }, o.label)));
+    return h('div', { class: 'row', style: 'margin-top:10px' }, h('b', {}, 'Kind of video'), sel, h('span', { class: 'muted small', id: 'videoKindHint' }, k.hint));
+  }
+
   async function draw(d) {
     const folderText = d.folder.set ? h('span', { id: 'folderPath', title: d.folder.path }, d.folder.short) : h('span', { class: 'muted' }, 'No footage folder yet. Choose the folder you recorded into.');
     const change = h('button', { class: 'quiet', id: 'changeFolder', onclick: async () => {
@@ -35,7 +44,8 @@ export async function render(root, key, setBusy) {
     } }, d.folder.set ? 'Change folder' : 'Choose folder');
     const folderCard = h('div', { class: 'card' }, h('div', { class: 'rhead' }, h('b', {}, 'Footage folder'), change),
       folderText, d.folder.guessed ? h('span', { class: 'muted small' }, ' (matched to the video’s title)') : null,
-      d.summary ? h('div', { class: 'muted small', id: 'footageSummary' }, d.summary) : null);
+      d.summary ? h('div', { class: 'muted small', id: 'footageSummary' }, d.summary) : null,
+      kindRow(d.kind));
 
     const b = d.button;
     const go = h('button', { class: 'main', id: 'cutBtn', disabled: !b.enabled, onclick: async () => {
