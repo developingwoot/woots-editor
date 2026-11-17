@@ -6,7 +6,7 @@ numpy==2.5.4
 scipy==1.18.1
 pillow==13.0.0
 opencv-python-headless==5.0.0.93
-librosa==1.0.0
+librosa==1.0.1
 soundfile==0.14.0
 pyloudnorm==0.2.0
 mediapipe==1.1.1
